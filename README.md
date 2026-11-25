@@ -4,7 +4,7 @@
 
 ## 바로 실행하기
 
-개발 브랜치 `codex/starter-set`을 체크아웃한 뒤 그 폴더에서 `python -m http.server 8000 --bind 127.0.0.1`을 실행하고 브라우저에서 `http://127.0.0.1:8000`을 연다. Windows 전용 창은 아래 빌드 명령을 실행한 뒤 `dist/ArmageddonTable.exe`를 더블클릭한다. 64비트 Windows와 Microsoft Edge WebView2 Runtime이 필요하다.
+저장소를 복제하면 기본 브랜치 `main`에 검증된 게임 소스가 있다. 그 폴더에서 `python -m http.server 8000 --bind 127.0.0.1`을 실행하고 브라우저에서 `http://127.0.0.1:8000`을 연다. Windows 전용 창은 아래 빌드 명령을 실행한 뒤 `dist/ArmageddonTable.exe`를 더블클릭한다. 64비트 Windows와 Microsoft Edge WebView2 Runtime이 필요하다.
 
 ## 제품 배치 둘러보기
 
