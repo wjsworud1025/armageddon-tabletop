@@ -27,7 +27,7 @@ const server=createServer(async(req,res)=>{
   } catch (error) {console.error('Static file',req.url,error.message);res.writeHead(404);res.end();}
 });
 server.listen(0,'127.0.0.1');await once(server,'listening');
-const url='http://127.0.0.1:'+server.address().port;
+const url='http://127.0.0.1:'+server.address().port+(existsSync(join(root,'reference','starter-set.jpg'))?'/?studio=1':'');
 const profile=mkdtempSync(join(tmpdir(),'patrol-acceptance-'));
 const chrome=['C:/Program Files/Google/Chrome/Application/chrome.exe','C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe'].find(existsSync);
 assert.ok(chrome);

@@ -1,6 +1,7 @@
 // An original studio photo, when present, identifies the optional local art pack.
 // The public checkout uses procedural scenery and figures without external services.
 export async function findLocalArt(){
+  if(!document.querySelector('meta[name="local-studio-photos"]')&&new URLSearchParams(location.search).get('studio')!=='1')return null;
   const image=new Image();
   image.src='./reference/starter-set.jpg';
   try{await image.decode();return image}catch{return null}
