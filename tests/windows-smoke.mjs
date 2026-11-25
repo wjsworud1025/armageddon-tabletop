@@ -134,9 +134,11 @@ try{
   await click('[data-tab=battle]');
   await click('#training-start');await until(()=>js('tabletopView.stats().visiblePieces===2'));
   assert.equal(await js('tabletopView.pose("warboss-1").x<tabletopView.pose("captain-1").x'),true);
-  await screenshot('04-handbook-duel.png');await click('#training-roll');
+  assert.deepEqual(await js('(()=>{const s=tabletopView.stats();return [s.boardPanels,s.boardWidth,s.boardDepth]})()'),[1,30,22]);
+  await screenshot('04-handbook-duel.png');await click('#camera');await screenshot('04-handbook-board.png');await click('#training-roll');
   assert.equal((await state()).training.rolls.length,1);
   await click('#training-exit');assert.equal((await state()).training,undefined);
+  assert.deepEqual(await js('(()=>{const s=tabletopView.stats();return [s.boardPanels,s.boardWidth,s.boardDepth]})()'),[2,44,30]);
   await js('document.querySelector("#deployment").open=true');
   const beforePreview=await state(),diagrams=new Set();
   for(const map of ['B','C','A']){

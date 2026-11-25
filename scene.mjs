@@ -14,7 +14,7 @@ const up = new T.Vector3(0,1,0);
 const floor = new T.Plane(up,0);
 const clamp = T.MathUtils.clamp;
 export async function buildScene(canvas,api) {
-  const game=api.game();
+  const game=api.template;
   const renderer=new T.WebGLRenderer({canvas,antialias:true,powerPreference:'high-performance'});
   renderer.setPixelRatio(Math.min(devicePixelRatio||1,1.7));
   renderer.shadowMap.enabled=true;renderer.shadowMap.type=T.PCFSoftShadowMap;
@@ -38,14 +38,24 @@ export async function buildScene(canvas,api) {
     const geometry=new T.PlaneGeometry(game.width/2,game.depth);
     const uv=geometry.attributes.uv;for(let n=0;n<uv.count;n++)uv.setX(n,(uv.getX(n)+i)/2);
     const board=new T.Mesh(geometry,mat);board.rotation.x=-Math.PI/2;
-    board.position.x=(i-.5)*game.width/2;board.receiveShadow=true;scene.add(board);return {side,mat};
+    board.position.x=(i-.5)*game.width/2;board.receiveShadow=true;scene.add(board);return {side,mat,board};
   });
+  // Handbook p. 53 uses the right panel turned counter-clockwise. The top
+  // edge runs down the outer edge of the supplied right-hand print.
+  const drillGeometry=new T.PlaneGeometry(game.depth,game.width/2);
+  const drillUV=drillGeometry.attributes.uv;
+  for(let i=0;i<drillUV.count;i++)drillUV.setXY(i,.5+drillUV.getY(i)/2,1-drillUV.getX(i));
+  const drillBoard=new T.Mesh(drillGeometry,new T.MeshStandardMaterial({color:0xffffff,roughness:.95}));
+  drillBoard.rotation.x=-Math.PI/2;drillBoard.receiveShadow=true;drillBoard.visible=false;scene.add(drillBoard);
   const matFloor=new T.Mesh(new T.PlaneGeometry(400,400),new T.MeshStandardMaterial({color:0x363b38,roughness:1}));
   matFloor.rotation.x=-Math.PI/2;matFloor.position.y=-.34;matFloor.receiveShadow=true;scene.add(matFloor);
-  const gridPoints=[];
-  for(let x=-game.width/2;x<=game.width/2;x++)gridPoints.push(x,.025,-game.depth/2,x,.025,game.depth/2);
-  for(let z=-game.depth/2;z<=game.depth/2;z++)gridPoints.push(-game.width/2,.025,z,game.width/2,.025,z);
-  const lineGeom=new T.BufferGeometry();lineGeom.setAttribute('position',new T.Float32BufferAttribute(gridPoints,3));
+  function gridGeometry(width,depth){
+    const points=[];
+    for(let x=-width/2;x<=width/2;x++)points.push(x,.025,-depth/2,x,.025,depth/2);
+    for(let z=-depth/2;z<=depth/2;z++)points.push(-width/2,.025,z,width/2,.025,z);
+    const g=new T.BufferGeometry();g.setAttribute('position',new T.Float32BufferAttribute(points,3));return g;
+  }
+  const lineGeom=gridGeometry(game.width,game.depth),drillGrid=gridGeometry(game.depth,game.width/2);
   const grid=new T.LineSegments(lineGeom,new T.LineBasicMaterial({color:0xffedbb,transparent:true,opacity:.32}));scene.add(grid);grid.visible=false;
   let invalid=true;
   function dirty(){invalid=true}
@@ -60,9 +70,10 @@ export async function buildScene(canvas,api) {
     return tex;
   }
   const texture=await boardTexture(false);let reverse=null,reverseRequest;
+  drillBoard.material.map=texture;
   async function loadReverse(){if(reverse)return;reverseRequest??=boardTexture(true);
     try{reverse=await reverseRequest}finally{reverseRequest=null}}
-  if(['left','right','reverse'].includes(game.surface))await loadReverse();
+  if(['left','right','reverse'].includes(api.game().surface))await loadReverse();
   const objects=new Map(),painted=localArt?await paintedFigures(T,game.pieces):new Map();
   const studio=studioScene(T,scene,localArt?game.pieces:[],()=>sync());
   const initialYaw=new Map(api.template.pieces.map(p=>[p.id,p.yaw]));
@@ -99,8 +110,12 @@ export async function buildScene(canvas,api) {
   let ends=[],waypoints=[];
   function lookup(id){return api.game().pieces.find(p=>p.id===id)}
   function sync(){
-    for(const {side,mat} of panels){
-      const surface=api.game().surface,useBack=surface==='reverse'||surface===side;
+    const table=api.game(),drill=!!table.training;
+    drillBoard.visible=drill;grid.geometry=drill?drillGrid:lineGeom;
+    deck.scale.set((table.width+.15)/(game.width+.15),1,(table.depth+.15)/(game.depth+.15));
+    for(const {side,mat,board} of panels){
+      board.visible=!drill;
+      const surface=table.surface,useBack=surface==='reverse'||surface===side;
       const face=(useBack&&reverse)||texture;if(mat.map!==face){mat.map=face;mat.needsUpdate=true}
       if(useBack&&!reverse&&!reverseRequest)loadReverse().then(sync).catch(()=>{});
     }
@@ -143,7 +158,9 @@ export async function buildScene(canvas,api) {
   }
   function home(top=false){sightPair=null;eyeOffset=0;photo=!top;photoZoom=1;offsetX=offsetY=0;target.set(0,.4,0);yaw=top?0:-.24;pitch=top?Math.PI/2-.0001:.67;
     const aspect=canvas.clientWidth/Math.max(1,canvas.clientHeight);
-    if(api.game().training){photo=false;target.set(0,1.15,0);pitch=top?Math.PI/2-.0001:.34;half=Math.max(2.6,2.8/aspect);projection();return}
+    const table=api.game();
+    if(table.training){photo=false;target.set(0,top?0:1.15,0);pitch=top?Math.PI/2-.0001:.34;
+      half=top?Math.max(table.depth*.56,table.width*.56/aspect):Math.max(2.6,2.8/aspect);projection();return}
     half=Math.max(top?game.depth*.61:game.depth*.46,(game.width*Math.cos(yaw)+game.depth*Math.abs(Math.sin(yaw)))*.56/aspect);projection()}
   function resize(){renderer.setSize(canvas.clientWidth,canvas.clientHeight,false);projection()}
   new ResizeObserver(resize).observe(canvas);
@@ -244,6 +261,8 @@ export async function buildScene(canvas,api) {
       return visible?{x:obj.position.x,z:obj.position.z,elevation:obj.position.y,yaw:obj.rotation.y}:null;
     },
     stats(){return {pieces:objects.size,visiblePieces:[...objects.values(),...painted.values(),...studio.objects].filter(o=>o.visible).length,
+      boardPanels:panels.filter(p=>p.board.visible).length+Number(drillBoard.visible),
+      boardWidth:drillBoard.visible?drillGeometry.parameters.width:game.width,boardDepth:drillBoard.visible?drillGeometry.parameters.height:game.depth,
       drawCalls:renderer.info.render.calls,triangles:renderer.info.render.triangles,
       reconstructed:[...objects.values()].filter(o=>o.userData.reconstruction).length,
       studioVisible:studio.objects.filter(o=>o.visible).length}},

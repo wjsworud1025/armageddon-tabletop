@@ -27,6 +27,7 @@ let game=fresh(),active=null,scene,mode='pick',toastTimer;
 // The tutorial has a separate display table. A player's deployment, casualties
 // and in-progress Combat Patrol turn survive entering, saving and leaving it.
 const duelTable=structuredClone(template);
+Object.assign(duelTable,{width:template.depth,depth:template.width/2,surface:'front'});
 const duelists={orks:duelTable.pieces.find(p=>p.kind==='warboss'),marines:duelTable.pieces.find(p=>p.kind==='captain')};
 for(const p of duelTable.pieces)p.removed=true;
 for(const [team,p] of Object.entries(duelists)){

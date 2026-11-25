@@ -10,6 +10,7 @@ export async function checkTraining({save,upload,click,state,js,reload}){
   // An injured incumbent and a removed captain make an accidental change to
   // the live battle or reuse of its visible roster immediately observable.
   const fixture=structuredClone(save);
+  fixture.surface='reverse';
   fixture.rules=startBattle(newBattle(),'marines',5);
   fixture.rules.hp['warboss-1']=3;
   const captain=fixture.pieces.find(p=>p.id==='captain-1');
@@ -37,6 +38,7 @@ export async function checkTraining({save,upload,click,state,js,reload}){
   async function verifyDuelScene(){
     const scene=await draw();
     assert.equal(scene.count,2);
+    assert.deepEqual(await js('(()=>{const s=tabletopView.stats();return [s.boardPanels,s.boardWidth,s.boardDepth]})()'),[1,30,22]);
     assert.deepEqual(Object.keys(scene.poses).filter(id=>scene.poses[id]).sort(),participants);
     const [a,b]=participants.map(id=>scene.poses[id]);
     assert.ok(b.x<a.x&&Math.sin(a.yaw)<0&&Math.sin(b.yaw)>0,'Warboss starts on the left facing the Captain as pictured on p. 53');
@@ -93,6 +95,7 @@ export async function checkTraining({save,upload,click,state,js,reload}){
   async function checkReturned(){
     assert.ok(!(await unchanged()));
     assert.deepEqual(await draw(),oldScene);
+    assert.deepEqual(await js('(()=>{const s=tabletopView.stats();return [s.boardPanels,s.boardWidth,s.boardDepth]})()'),[2,44,30]);
   }
 
   await begin();
