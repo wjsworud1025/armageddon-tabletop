@@ -62,5 +62,11 @@ export function effectWeapon(state,piece,weapon,unit) {
   const rapid=state.patrol?.enhanced?.veterans && piece.kind==='intercessor' && weapon.name==='볼트 라이플';
   const crush=weapon.range===0 && tacticActive(state,'crush',unit);
   return {...weapon,rapid:rapid?1:weapon.rapid,strength:weapon.strength+Number(crush),
-    precision:weapon.precision || (weapon.range===0 && tacticActive(state,'precision',unit))};
+    precision:weapon.precision || (weapon.range===0 && (tacticActive(state,'precision',unit) ||
+      epicPrecisionForUnit(state,piece,unit)))};
+}
+
+export function epicPrecisionForUnit(state,piece,unit) {
+  return state.status==='playing' && state.step===4 && state.units?.[unit]?.epicChallengeModel===piece.id &&
+    tacticActive(state,'epicChallenge-'+piece.faction,unit);
 }

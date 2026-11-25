@@ -89,7 +89,7 @@ export function adjustHP(state,piece,delta) {
   return {...state,hp:{...state.hp,[piece.id]:hp}};
 }
 
-const character = p=>['captain','librarian','weirdboy','warboss'].includes(p.kind);
+export const character = p=>['captain','librarian','weirdboy','warboss'].includes(p.kind);
 
 // One test per selected weapon, including weapons that scored no hits.
 export function queueHazard(state,piece,copies) {
@@ -146,7 +146,7 @@ export function resolveHazard(state,pieces,preferred=null,random=Math.random) {
 
 // Resolve a single weapon profile. The defender chooses the order of models with
 // otherwise identical allocation priority. Each damage roll belongs to one attack.
-export function resolveAttack({weapon,targets,preferred,state,distance,cover=false,hitMod=0,
+export function resolveAttack({weapon,targets,preferred,precisionTarget=null,awaitAllocation=false,rolled=null,state,distance,cover=false,hitMod=0,
   woundMod=0,extraAttacks=0,copies=1,attackCount=null,lethal=false,sustained=false,ignorePenalties=false,random=Math.random}) {
   const living=targets.filter(p=>currentHP(state,p)>0);
   if (!living.length) throw new Error('생존한 표적이 없습니다.');
@@ -166,8 +166,8 @@ export function resolveAttack({weapon,targets,preferred,state,distance,cover=fal
   if (ignorePenalties) woundMod=Math.max(0,woundMod);
   const hitTarget=weapon.skill + Number(cover && weapon.range>0);
   const woundTarget=woundThreshold(weapon.strength,toughness);
-  const hitDice=[],woundDice=[],saves=[],devastating=[],damage=[];
-  let hits=0,wounds=0;
+  const hitDice=rolled?.hitDice??[],woundDice=rolled?.woundDice??[],saves=[],damage=[];
+  let hits=rolled?.hits??0,wounds=rolled?.wounds??0,devastating=rolled?.devastating??0;
   const woundOnce=autoWound=>{
     hits++;
     const die=autoWound ? null : roll(6,random);
@@ -175,16 +175,18 @@ export function resolveAttack({weapon,targets,preferred,state,distance,cover=fal
     const critical=die===6 || (weapon.antiVehicle && living.some(t=>t.kind==='landSpeeder') && die>=weapon.antiVehicle);
     if (die!==null && (die===1 || (!critical && die+clamp(woundMod,-1,1)<woundTarget))) return;
     wounds++;
-    if (weapon.devastating && critical) devastating.push(null);
-    else saves.push(roll(6,random));
+    if (weapon.devastating && critical) devastating++;
+    else if(!awaitAllocation)saves.push(roll(6,random));
   };
-  for (let i=0;i<count;i++) {
+  for (let i=0;!rolled&&i<count;i++) {
     const hit=weapon.torrent ? null : roll(6,random);
     if (hit!==null) hitDice.push(hit);
     if (hit!==null && (hit===1 || (hit!==6 && hit+clamp(hitMod,-1,1)<hitTarget))) continue;
     woundOnce(hit===6 && lethal);
     if (hit===6 && sustained) woundOnce(false);
   }
+  if(awaitAllocation && wounds)return {count,hits,wounds,hitDice,woundDice,devastating};
+  if(rolled)for(let i=0;i<wounds-devastating;i++)saves.push(roll(6,random));
   // A group with an already wounded non-character must take damage first.
   const groups=new Map();
   for (const p of defenders) {
@@ -193,7 +195,7 @@ export function resolveAttack({weapon,targets,preferred,state,distance,cover=fal
     groups.get(key).push(p);
   }
   function priority(group) {
-    if (weapon.precision && character(group[0]) && group[0].id===preferred) return -1;
+    if (weapon.precision && character(group[0]) && group[0].id===precisionTarget) return -1;
     return Number(character(group[0]))*4 + Number(!group.some(p=>p.hp<p.profile.wounds))*2
       + Number(!group.some(p=>p.id===preferred));
   }
@@ -201,7 +203,7 @@ export function resolveAttack({weapon,targets,preferred,state,distance,cover=fal
     group.sort((a,b)=>Number(a.hp===a.profile.wounds)-Number(b.hp===b.profile.wounds)
       || Number(b.id===preferred)-Number(a.id===preferred)));
   saves.sort((a,b)=>a-b);
-  for (const save of [...saves,...devastating]) {
+  for (const save of [...saves,...Array(devastating).fill(null)]) {
     const target=ordered.find(p=>p.hp>0);
     if (!target) break;
     if (save!==null && save!==1 &&
@@ -211,7 +213,7 @@ export function resolveAttack({weapon,targets,preferred,state,distance,cover=fal
     target.hp-=lost;
     damage.push({id:target.id,raw,lost,remaining:target.hp});
   }
-  return {count,hits,wounds,hitDice,woundDice,saves,devastating:devastating.length,damage,
+  return {count,hits,wounds,hitDice,woundDice,saves,devastating,damage,
     hp:Object.fromEntries(defenders.map(p=>[p.id,p.hp]))};
 }
 

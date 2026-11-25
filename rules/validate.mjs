@@ -1,6 +1,6 @@
 import {profiles,getProfile,unitId} from './profiles.mjs';
 import {validFightSequence} from '../fight-sequence.mjs';
-import {doctrines,enhancements,tactics} from './patrol.mjs';
+import {doctrines,enhancements,tactics,effectWeapon} from './patrol.mjs';
 
 const boolean = value => typeof value === 'boolean';
 const string = value => typeof value === 'string';
@@ -39,16 +39,22 @@ const rowFields={
   cover:boolean,lethal:boolean,sustained:boolean,ignore:boolean,guard:boolean,done:boolean
 };
 const validRow=fields({...rowFields,vehiclePenalty:int(0,2)},Object.keys(rowFields));
-const declaration=fields({unit:group,locked:boolean,didShoot:boolean,focus:nullable(group),rows:list(validRow,276)},['unit','locked','focus','rows']);
+const diceArray=list(int(1,6),40000);
+const precisionRoll=fields({index:int(0,275),count:int(1,20000),hits:int(1,40000),wounds:int(1,40000),
+  hitDice:diceArray,woundDice:diceArray,devastating:int(0,40000)},['index','count','hits','wounds','hitDice','woundDice','devastating']);
+const declaration=fields({unit:group,locked:boolean,didShoot:boolean,focus:nullable(group),rows:list(validRow,276),precisionRoll},['unit','locked','focus','rows']);
+const characterId=oneOf(['captain-1','librarian-1','warboss-1','weirdboy-1']);
 const unit = fields({
-  shocked:boolean,shockChecked:boolean,reinforcing:boolean,movementTracked:boolean,movement:oneOf(['normal','advance','fallback','remain']),
+  shocked:boolean,shockChecked:boolean,epicChallengeModel:characterId,reinforcing:boolean,movementTracked:boolean,movement:oneOf(['normal','advance','fallback','remain']),
   order:string,charge:int(0,12),chargeTracked:boolean,charged:boolean,rerolled:boolean,attacks,finishedAttack:attackStep,
   counterCharge:boolean,reaction:boolean,reactionTracked:boolean,fightsFirst:boolean,shotAt:boolean,suppressedEnemy:boolean,hitTargets:list(group,12),suppressionTargets:list(group,12)
 });
 const doctrine=oneOf(Object.keys(doctrines)),tactic=oneOf(Object.keys(tactics));
+const coreKeys=['marines','orks'].flatMap(team=>['insaneBravery-'+team,'epicChallenge-'+team]);
+const tacticKey=oneOf([...Object.keys(tactics),'heroicIntervention',...coreKeys]);
 const patrol=fields({
   doctrine:nullable(doctrine),usedDoctrines:list(doctrine,3),waaagh:int(0,2),waaaghUsed:boolean,
-  enhanced:map(oneOf(Object.keys(enhancements)),boolean),tactics:map(oneOf([...Object.keys(tactics),'heroicIntervention']),string),spent:map(oneOf([...Object.keys(tactics),'heroicIntervention']),string),
+  enhanced:map(oneOf(Object.keys(enhancements)),boolean),tactics:map(tacticKey,string),spent:map(tacticKey,string),
   suppressed:nullable(group),warcryUsed:boolean,grotReturned:boolean
 });
 const objective=fields({name:string,home:nullable(team),owner:nullable(team),secured:nullable(team),
@@ -82,6 +88,20 @@ export function validateRulesState(value) {
   if (value==null) return true;
   if (fields({hp},['hp'])(value)) return true;
   if(!battle(value) || value.round>value.rounds)return false;
+  const modelGroup=id=>value.attachments?.[id]||unitId(models.get(id));
+  for(const key of coreKeys){
+    const stamp=value.patrol?.spent?.[key],target=value.patrol?.tactics?.[key];
+    if(stamp===undefined&&target===undefined)continue;
+    const [round,active,step]=(stamp??'').split('-'),[ability,team]=key.split('-');
+    const unit=target?.split('/')[1];
+    if(!group(unit)||groupTeam(unit)!==team||target!==stamp+'/'+unit||
+      !int(1,value.round)(Number(round))||String(Number(round))!==round||!['marines','orks'].includes(active)||
+      stamp!==[round,active,step].join('-')||(ability==='insaneBravery'?(active!==team||step!=='0'):step!=='4'))return false;
+  }
+  for(const [unit,flags] of Object.entries(value.units??{})){
+    const id=flags.epicChallengeModel;
+    if(id&&(modelGroup(id)!==unit||!value.patrol?.tactics?.['epicChallenge-'+faction(id)]?.endsWith('/'+unit)))return false;
+  }
   const wartrakk=value.units?.wartrakk;
   if(wartrakk?.suppressionTargets?.length&&
     (value.status!=='playing'||value.active!=='orks'||value.step!==2||wartrakk.finishedAttack!==2||value.declaration||value.reactionPlan||
@@ -141,8 +161,15 @@ export function validateRulesState(value) {
   const plan=value.declaration;
   if(!plan)return true;
   if(value.hazard||!plan.rows.length||!plan.rows.some(r=>!r.done)||(!plan.locked&&plan.rows.some(r=>r.done)))return false;
-  const modelGroup=id=>value.attachments?.[id]||unitId(models.get(id));
   if(plan.focus && (!plan.locked||!plan.rows.some(r=>r.target===plan.focus&&!r.done)))return false;
+  if(plan.precisionRoll){
+    const r=plan.precisionRoll,entry=plan.rows[r.index];
+    if(!plan.locked||!entry||entry.done||entry.target!==plan.focus||r.hits>2*r.count||r.wounds>r.hits||
+      r.devastating>r.wounds||r.hitDice.length>r.count||r.woundDice.length>r.hits)return false;
+    const p={...models.get(entry.actor),id:entry.actor,faction:faction(entry.actor)};
+    const weapon=getProfile(p).weapons[entry.weapon];
+    if(!weapon||!effectWeapon(value,p,weapon,plan.unit).precision)return false;
+  }
   return plan.rows.every(r=>{
     const weapon=getProfile(models.get(r.actor)).weapons[r.weapon];
     return weapon && !!weapon.range===(value.step===2) && modelGroup(r.actor)===plan.unit && modelGroup(r.preferred)===r.target &&

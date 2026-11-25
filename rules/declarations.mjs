@@ -1,5 +1,5 @@
 import {getProfile} from './profiles.mjs';
-import {currentHP,groupId,weaponSlot,diceValue,resolveAttack,queueHazard} from './battle.mjs';
+import {character,currentHP,groupId,weaponSlot,diceValue,resolveAttack,queueHazard} from './battle.mjs';
 import {effectWeapon} from './patrol.mjs';
 
 const unitOrder=(s,id)=>s.units[id]||{};
@@ -78,21 +78,26 @@ export function attackPackets(state,pieces) {
     const packet=packets.get(key);
     packet.indices.push(i);packet.names.add(w.name);
   }
-  return [...packets.values()];
+  const all=[...packets.values()];
+  return plan.precisionRoll?all.filter(p=>p.index===plan.precisionRoll.index):all;
 }
 
-export function resolvePacket(state,pieces,index,preferred=null,random=Math.random) {
+export function resolvePacket(state,pieces,index,preferred=null,random=Math.random,precisionTarget=undefined) {
   const packet=attackPackets(state,pieces).find(p=>p.index===index);
   if(!packet)return null;
   const plan=state.declaration,rows=plan.rows.slice(),first=rows[index],actor=item(pieces,first.actor);
   const defenders=pieces.filter(p=>getProfile(p) && groupId(state,p)===first.target && currentHP(state,p)>0);
   const base=weaponFor(state,actor,first.weapon);
   const w=first.guard?{...base,ap:Math.min(0,base.ap+1)}:base;
-  let count=0;
+  const rolled=plan.precisionRoll;
+  if(rolled && precisionTarget===undefined)return null;
+  if(precisionTarget!=null && (!rolled||!w.precision||!defenders.some(p=>character(p)&&p.id===precisionTarget)))return null;
+  const awaitAllocation=!rolled && w.precision && defenders.length>1 && defenders.some(character);
+  let count=rolled?.count??0;
   const order=unitOrder(state,plan.unit),attacks={...order.attacks};
   for(const i of packet.indices){
     const r=rows[i],p=item(pieces,r.actor),weapon=weaponFor(state,p,r.weapon);
-    if(defenders.length && currentHP(state,p)>0) {
+    if(!rolled && defenders.length && currentHP(state,p)>0) {
       const split=rows.some((s,j)=>j!==i&&s.actor===r.actor&&s.weapon===r.weapon);
       const half=weapon.range && r.distance<=weapon.range/2;
       const bonus=(weapon.blast||0)+(split?0:weapon.cleave||0);
@@ -103,15 +108,21 @@ export function resolvePacket(state,pieces,index,preferred=null,random=Math.rand
     const list=attacks[p.id]||[],slot=weaponSlot(weapon);
     if(!list.some(a=>a.slot===slot)) attacks[p.id]=[...list,{slot,ranged:!!weapon.range,pistol:!!weapon.pistol}];
   }
-  const result=count?resolveAttack({weapon:w,targets:defenders,state,preferred:preferred||first.preferred,distance:first.distance,
+  const result=count&&defenders.length?resolveAttack({weapon:w,targets:defenders,state,preferred:preferred||first.preferred,precisionTarget,awaitAllocation,rolled,distance:first.distance,
     attackCount:count,hitMod:first.hit-(first.vehiclePenalty||0),woundMod:first.wound,cover:first.cover,lethal:first.lethal,
     sustained:first.sustained,ignorePenalties:first.ignore,random}):null;
+  if(awaitAllocation&&result?.wounds){
+    const precisionRoll={index,...result};
+    return {state:{...state,declaration:{...plan,focus:first.target,precisionRoll}},precisionRoll,
+      actor,target:item(pieces,first.preferred),packet,removed:{},finished:false,shootingEvent:null};
+  }
   const hitTargets=[...new Set([...(order.hitTargets||[]),...(result?.hits?[first.target]:[])])];
   const updated={...order,attacks,hitTargets};
   let next={...state,hp:{...state.hp,...result?.hp},units:{...state.units,[plan.unit]:updated}};
   const finished=rows.every(r=>r.done);
   const didShoot=state.step===2&&(count>0||(plan.didShoot??plan.rows.some(r=>r.done)));
   next.declaration=finished?null:{...plan,rows,...(state.step===2?{didShoot}:{}),focus:rows.some(r=>!r.done&&r.target===first.target)?first.target:null};
+  if(next.declaration)delete next.declaration.precisionRoll;
   if(finished){
     const dangerous=new Set();
     for(const r of rows){

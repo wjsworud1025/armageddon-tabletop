@@ -5,10 +5,11 @@ import {createFightControls} from './fight-controls.mjs';
 import {reinforcementOptions,expiringReserves,reserveCapacity} from './reinforcements.mjs';
 import {attachForDeployment} from './reinforcement-session.mjs';
 import {openShootingReaction,shootingReactionOptions} from './shooting-reaction.mjs';
+import {useInsaneBravery,useEpicChallenge} from './core-stratagems.mjs';
 import {coherency,travelCost,moveLimit} from '../movement.mjs';
 import {newBattle,startBattle,advance,opposite,steps,teams,roll,currentHP,unitMembers,
   groupId,changeUnit,needsShock,shockTest,adjustHP,controlObjective,engaged,modelProfile,
-  hazardCandidates,resolveHazard} from './battle.mjs';
+  character,hazardCandidates,resolveHazard} from './battle.mjs';
 import {draftRestriction,appendDeclaration,lockDeclaration,attackPackets,resolvePacket,chooseSuppression} from './declarations.mjs';
 import {doctrines,enhancements,tactics,selectOrder,useTactic,inDoctrine,hasWaaagh,effectWeapon} from './patrol.mjs';
 import {patrolMissions,recordLosses,objectiveSnapshot,missionAward} from './missions.mjs';
@@ -148,7 +149,7 @@ export function mountRules(container,api) {
     const allocated=(state.declaration?.rows||[]).filter(r=>r.actor===actor.id).reduce((n,r)=>n+r.assigned,0);
     const availableAttacks=weapon.range?0:Math.max(1,weapon.attacks+Number(choices.extra)-allocated);
     return chunk('무기 공격',select('weapon','선택한 모델의 무기',options.map(({w,i})=>opt(String(i),w.name,choices.weapon)).join(''))+
-      select('target','표적 분대 · 우선 피해 배정 모델',candidates.map(p=>opt(p.id,pieceLabel(p),choices.target)).join(''))+
+      select('target','공격할 분대의 모델',candidates.map(p=>opt(p.id,pieceLabel(p),choices.target)).join(''))+
       '<p class="br-sub">거리 '+dist.toFixed(1)+'″ · 사거리 '+range+' · A '+weapon.attacks+' · S '+weapon.strength+
       ' · AP '+weapon.ap+' · D '+weapon.damage+'</p>'+
       (weapon.range ? '<label><input data-field="cover" type="checkbox"'+(choices.cover?' checked':'')+'> 표적 분대에 엄폐 적용</label>' : '')+
@@ -172,14 +173,23 @@ export function mountRules(container,api) {
         row(btn('lock','분대 전체 선언 확정')+btn('cancel-plan','선언 취소')));
     }
     const groups=attackPackets(state,all);
+    const rolled=plan.precisionRoll;
     return chunk(header,'<p>동일 판정은 함께 굴립니다. 한 표적을 골랐다면 그 표적의 남은 공격부터 해결하세요.</p>'+
       groups.map(p=>{
         const r=plan.rows[p.index],defenders=living(state).filter(t=>groupId(state,t)===p.target);
         const label=unitLabel(getPiece(r.preferred))+' · '+[...p.names].join(' / ')+' × '+p.indices.length;
         const pref=defenders.some(t=>t.id===choices['allocate-'+p.index])?choices['allocate-'+p.index]:r.preferred;
-        return (defenders.length?select('allocate-'+p.index,'방어 측 우선 배정',defenders.map(t=>opt(t.id,pieceLabel(t),pref)).join('')):'')+
-          btn('resolve-'+p.index,label+(defenders.length?' 판정':' · 전멸한 표적 공격 종료'));
-      }).join('')+(!plan.rows.some(r=>r.done)?detail('target-exception','표적 적격성 변경',
+        let precision='';
+        if(rolled){
+          const attackers=[...new Set(p.indices.map(i=>plan.rows[i].actor))].map(getPiece).filter(m=>currentHP(state,m)>0);
+          precision='<p>명중 '+rolled.hits+' · 상처 '+rolled.wounds+' · 방어 굴림 전 정밀 공격 배정</p>'+
+            '<p>공격 측이 다음 모델 중 하나의 시야를 확인하세요. '+esc(attackers.map(pieceLabel).join(', '))+'</p>'+
+            select('precision-target','그 모델에서 보이는 적 캐릭터',opt('','정밀 배정 생략','')+
+              defenders.filter(character).map(t=>opt(t.id,pieceLabel(t)+' · 시야 확인','')).join(''));
+        }
+        return precision+(defenders.length?select('allocate-'+p.index,'방어 측 일반 배정 우선순위',defenders.map(t=>opt(t.id,pieceLabel(t),pref)).join('')):'')+
+          btn('resolve-'+p.index,rolled?'배정 확정 · 방어 및 피해 판정':label+(defenders.length?' 판정':' · 전멸한 표적 공격 종료'));
+      }).join('')+(!rolled&&!plan.rows.some(r=>r.done)?detail('target-exception','표적 적격성 변경',
         '<p>상대 반응 이동 등으로 기존 표적을 선택할 수 없게 되면 양측 확인 후 선언을 수정하세요.</p>'+btn('reopen','적격성 변경 · 선언 다시 열기')):''));
   }
   function selectedTactic(state,key,actor){
@@ -232,10 +242,17 @@ export function mountRules(container,api) {
       }
     }
     const flags=[unit.shocked?'전장 충격':'',unit.order||'',unit.charge?'돌격 굴림 '+unit.charge+'″':'',
+      unit.epicChallengeModel===actor.id&&state.step===4?'영웅적 도전 · 근접 정밀':'',
       state.patrol.suppressed===groupId(state,actor)?'제압됨':''].filter(Boolean);
     let attack='';
     if (state.status==='playing' && ((state.step===2 && mine) || state.step===4)) attack=renderAttack(state,actor);
     const available=Object.entries(tactics).filter(([key])=>selectedTactic(state,key,actor));
+    if(state.step===0&&mine&&useInsaneBravery(state,contents(),groupId(state,actor)))
+      action+=btn('insane-bravery','불굴의 용기 · 1 CP · 전장 충격 자동 통과');
+    if(state.step===4)for(const model of alive.filter(character)){
+      if(useEpicChallenge(state,contents(),model.id))
+        action+=btn('epic-'+model.id,'영웅적 도전 · 1 CP · '+model.name+'의 근접 무기에 정밀');
+    }
     const tacticsMenu=available.length ? detail('tactics','분대 전술 · 각 1 CP',available.map(([key,t])=>'<p>'+esc(t.rule)+'</p>'+btn('tactic-'+key,t.name)).join('')):'';
     if (state.status==='playing' && state.step===0 && mine && actor.kind==='warboss' && state.patrol.enhanced.warcry &&
       !state.patrol.warcryUsed && members.some(p=>p.kind==='boy' && !currentHP(state,p)) && alive.some(p=>p.kind==='boy')) {
@@ -411,6 +428,10 @@ export function mountRules(container,api) {
       if (state.step===0 && state.active==='orks') orders=btn('order-waaagh','와아! 선포',p.waaaghUsed);
       if (flags || orders) army=chunk('패트롤 명령',orders+(flags?'<p>'+esc(flags)+'</p>':''));
     }
+    if(state.declaration?.precisionRoll){
+      root.innerHTML=renderDeclaration(state,all);
+      return;
+    }
     root.innerHTML=top+army+renderDeclaration(state,all)+selector+(actor?renderActor(state,actor):'')+
       (state.status!=='setup'?renderObjectives(state):'')+
       chunk('주사위',row(number('rollCount','D6 개수',1,60,choices.rollCount)+btn('dice','굴리기')))+
@@ -428,6 +449,7 @@ export function mountRules(container,api) {
     if (!action) return;
     const state=read();
     const actor=getPiece(choices.fighter);
+    if(state.declaration?.precisionRoll&&action!=='resolve-'+state.declaration.precisionRoll.index)return;
     const val=id=>field(id)?.value??choices[id];
     const integer=(id,min,max)=>Math.max(min,Math.min(max,Math.trunc(Number(val(id)))||0));
     if(state.units.wartrakk?.suppressionTargets?.length){
@@ -557,9 +579,11 @@ export function mountRules(container,api) {
     }
     if(action.startsWith('resolve-')){
       const index=Number(action.slice(8));
-      const resolved=resolvePacket(state,contents(),index,val('allocate-'+index)||null);
+      const precisionTarget=state.declaration?.precisionRoll?(field('precision-target')?.value||null):undefined;
+      const resolved=resolvePacket(state,contents(),index,val('allocate-'+index)||null,Math.random,precisionTarget);
       if(!resolved)return;
       const {result,packet,actor,target}=resolved;
+      if(resolved.precisionRoll)return commit(resolved.state,unitLabel(actor)+' · 정밀 공격 배정 대기 · 상처 '+resolved.precisionRoll.wounds);
       if(resolved.shootingEvent){
         const game={...api.getTable(),rules:resolved.state};
         resolved.state.shootingReaction=openShootingReaction(game,resolved.shootingEvent);
@@ -665,7 +689,20 @@ export function mountRules(container,api) {
       return;
     }
     if (action==='status') return commit(changeUnit(state,actor,{shocked:!unit.shocked}),unitLabel(actor)+(unit.shocked?' · 충격 해제':' · 전장 충격'));
+    if(action==='insane-bravery'){
+      const next=useInsaneBravery(state,contents(),groupId(state,actor));
+      if(next)commit(next,unitLabel(actor)+' · 불굴의 용기 (1 CP) · 전장 충격 자동 통과');
+      return;
+    }
+    if(action.startsWith('epic-')){
+      const model=getPiece(action.slice(5));
+      if(!model||groupId(state,model)!==groupId(state,actor))return;
+      const next=useEpicChallenge(state,contents(),model.id);
+      if(next)commit(next,model.name+' · 영웅적 도전 (1 CP) · 이번 근접전 단계에 정밀');
+      return;
+    }
     if (action==='shock') {
+      if(state.status!=='playing'||state.step!==0||actor.faction!==state.active||unit.shockChecked||!needsShock(state,members))return;
       const test=shockTest(state,members);
       return commit(changeUnit(state,actor,{shocked:!test.passed,shockChecked:true}),
         unitLabel(actor)+' · '+diceText(test.dice)+' / Ld '+test.target+'+ · '+(test.passed?'통과':'전장 충격'));
