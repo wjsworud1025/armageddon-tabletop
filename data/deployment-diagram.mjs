@@ -1,4 +1,23 @@
 import {layoutGeometry} from '../layouts.mjs';
+import {pieceGeometry} from '../assets/pieces.mjs';
+import * as THREE from '../vendor/three.module.min.js';
+
+// Keep the open yard of an L-shaped ruin visible in the diagram. Project the
+// upper faces of the same cast that the board uses for placement.
+const silhouettes=new WeakMap();
+function footprint(piece){
+  const geometry=pieceGeometry(THREE,piece);
+  if(silhouettes.has(geometry))return silhouettes.get(geometry);
+  const path=new Path2D(),points=geometry.getAttribute('position'),indices=geometry.index;
+  for(let i=0;i<indices.count;i+=3){
+    const a=indices.getX(i),b=indices.getX(i+1),c=indices.getX(i+2);
+    const ax=points.getX(a),az=points.getZ(a),bx=points.getX(b),bz=points.getZ(b),cx=points.getX(c),cz=points.getZ(c);
+    if((bx-ax)*(cz-az)-(bz-az)*(cx-ax)>=0)continue;
+    path.moveTo(ax,az);path.lineTo(bx,bz);path.lineTo(cx,cz);path.closePath();
+  }
+  silhouettes.set(geometry,path);
+  return path;
+}
 
 // Use the same x/z coordinates as deployment. One cell is one tabletop inch.
 export function drawDeploymentDiagram(canvas,code,blueFaction,table){
@@ -28,7 +47,11 @@ export function drawDeploymentDiagram(canvas,code,blueFaction,table){
     ctx.strokeStyle=stroke;ctx.lineWidth=.08;ctx.stroke();
   }
   polygon(layout.blue,'#345879','#83bfff');polygon(layout.red,'#794c43','#ffaa97');
-  for(const area of layout.areas)polygon(area.polygon,'#7a7353','#f4d882');
+  const colors={};
+  for(const area of layout.terrainAreas){
+    polygon(area.polygon,area.objective?'#71694b':'#666b66',area.objective?'#ffe494':'#c9d0c8');
+    Object.assign(colors,area.featureColors);
+  }
   for(let axis=0;axis<2;axis++){
     const span=axis===0?table.width:table.depth;
     for(let i=0;i<=span;i++){
@@ -39,25 +62,24 @@ export function drawDeploymentDiagram(canvas,code,blueFaction,table){
       ctx.strokeStyle=i%5===0?'#f5edce66':'#f5edce22';ctx.lineWidth=i%5===0?.055:.035;ctx.stroke();
     }
   }
-  ctx.fillStyle='#302e29';ctx.strokeStyle='#efdfc1';ctx.lineWidth=.085;
   for(const pose of layout.terrain){
     const piece=table.pieces.find(p=>p.id===pose.id);
-    const w=piece.baseWidth,d=piece.baseDepth;
     ctx.save();ctx.translate(pose.x,pose.z);ctx.rotate(-pose.yaw);
-    ctx.fillRect(-w/2,-d/2,w,d);ctx.strokeRect(-w/2,-d/2,w,d);
+    ctx.fillStyle=colors[pose.id]==='yellow'?'#f4cd61':'#8fc189';
+    ctx.fill(footprint(piece));
     ctx.restore();
   }
   ctx.restore();
   ctx.strokeStyle='#e6d9ba';ctx.lineWidth=1.5;ctx.strokeRect(left,top,width,height);
   const marines=blueFaction==='marines';
   const legend=[['#578ec1',marines?'마린 배치':'오크 배치'],['#b67765',marines?'오크 배치':'마린 배치'],
-    ['#a69862','거점 구역'],['#302e29','지형 외곽']];
-  ctx.textAlign='left';ctx.font='18px "Malgun Gothic",sans-serif';
+    ['#a69862','거점'],['#909890','일반 지형 구역'],['#8fc189','녹색 기물'],['#f4cd61','황색 기물']];
+  ctx.textAlign='left';ctx.font='15px "Malgun Gothic",sans-serif';
   legend.forEach(([color,label],i)=>{
-    const x=left+width*i/4,y=top+height+26;
+    const x=left+width*i/legend.length,y=top+height+26;
     ctx.fillStyle=color;ctx.fillRect(x,y,18,14);ctx.strokeRect(x,y,18,14);
     ctx.fillStyle='#eee7d1';ctx.fillText(label,x+26,y+14);
   });
   canvas.setAttribute('aria-label','지도 '+code+', 44 × 30인치. 청색은 '+(marines?'스페이스 마린':'오크')+
-    ', 적색은 '+(marines?'오크':'스페이스 마린')+' 배치 구역. 거점 4곳 및 지형 '+layout.terrain.length+'개. 격자 한 칸은 1인치.');
+    ', 적색은 '+(marines?'오크':'스페이스 마린')+' 배치 구역. 지형 구역 10곳 중 거점 4곳, 기물 '+layout.terrain.length+'개. 격자 한 칸은 1인치.');
 }

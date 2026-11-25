@@ -102,7 +102,7 @@ export async function buildScene(canvas,api) {
   function updateZones(){
     const table=api.game();
     const code=table.training?.scenario===4?'training-four-'+(table.training.phase==='deployment'?'setup':'battle'):
-      table.training?.scenario===3&&table.training.phase==='deployment'?'training-three':table.layout?.map??null;
+      table.training?.scenario===3&&table.training.phase==='deployment'?'training-three':(!table.training&&table.layout?.map)||null;
     zones.visible=api.zones()&&!!code;
     if(code===drawnMap)return;drawnMap=code;
     for(const obj of [...zones.children]){obj.geometry.dispose();obj.material.dispose();zones.remove(obj)}
@@ -111,6 +111,7 @@ export async function buildScene(canvas,api) {
       const mesh=new T.Mesh(new T.ShapeGeometry(shape),new T.MeshBasicMaterial({color,transparent:true,opacity,depthWrite:false,side:T.DoubleSide}));
       mesh.rotation.x=-Math.PI/2;mesh.position.y=y;mesh.renderOrder=-3;zones.add(mesh);
       const edge=new T.LineLoop(new T.BufferGeometry().setFromPoints(polygon.map(([x,z])=>new T.Vector3(x,y+.01,z))),new T.LineBasicMaterial({color}));zones.add(edge);
+      return mesh;
     }
     if(code?.startsWith('training-four-')){
       for(const area of trainingFourAreas){
@@ -131,7 +132,11 @@ export async function buildScene(canvas,api) {
     }
     const data=layoutGeometry(code);if(!data)return;
     patch(data.blue,0x3c9bee,.25,.035);patch(data.red,0xe46b50,.25,.035);
-    for(const area of data.areas)patch(area.polygon,area.side?'#ffe295':'#98e2c6',.36,.05);
+    for(const {id,side,objective,polygon} of data.terrainAreas){
+      const color=objective?(side?'#ffe295':'#98e2c6'):'#c4c9c5';
+      const face=patch(polygon,color,objective ? .36 : .20,.05);
+      face.userData.area={id,objective};
+    }
   }
   const label=document.createElement('output');
   Object.assign(label.style,{position:'absolute',pointerEvents:'none',background:'#232823',color:'#ffe39e',border:'1px solid #a39059',font:'bold 13px Consolas,monospace',padding:'3px 6px',borderRadius:'4px',transform:'translate(-50%,-120%)'});
@@ -387,6 +392,7 @@ export async function buildScene(canvas,api) {
       boardPanels:panels.filter(p=>p.board.visible).length+Number(drillBoard.visible),
       boardSurface:drillBoard.visible?(reverse&&drillBoard.material.map===reverse?'reverse':'front'):api.game().surface,
       boardWidth:drillBoard.visible?drillGeometry.parameters.width:game.width,boardDepth:drillBoard.visible?drillGeometry.parameters.height:game.depth,
+      terrainAreas:zones.visible?zones.children.filter(obj=>obj.userData.area).map(obj=>({...obj.userData.area})):[],
       drawCalls:renderer.info.render.calls,triangles:renderer.info.render.triangles,
       reconstructed:[...objects.values()].filter(o=>o.userData.reconstruction).length,
       studioVisible:studio.objects.filter(o=>o.visible).length}},

@@ -30,6 +30,8 @@
 4. 시야가 애매하면 **사수 시점 → 두 표면점으로 시선 확인**에서 두 미니어처를 각각 돌려 표면점을 찍는다. 게임이 그 두 점을 잇는 지름 1mm의 직선에 걸린 기물을 보여 준다. 다른 점과 지형 효과까지 살펴보고 **보임** 또는 **가림**을 눌러 그 사수와 적 모델의 판정을 저장한다. 엄폐는 별도로 표시한다. **전체 보기**로 전장에 돌아간다. [기본 규칙 06.01, 24쪽](https://assets.warhammer-community.com/eng_01-06_warhammer40k_new40k_core_rules-was6fbu1ix-hfewhmxyiy.pdf#page=24)
 5. **대전 → 팩션 룰북과 스타터 규칙**에서 [스페이스 마린 코덱스](https://www.warhammer.com/shop/codex-space-marines-2026-eng), [오크 코덱스](https://www.warhammer.com/shop/codex-orks-2026-eng)와 [공식 무료 컴뱃 패트롤 규칙 안내](https://www.warhammer-community.com/en-gb/articles/2akzkx92/combat-patrol-is-now-live-in-your-app/)를 열 수 있다. 이 세트로 대전할 때 사용할 편성 이름은 **Assault Force**와 **’Ardmob**다.
 
+**배치 구역·지형 구역·거점 표시**를 켜면 A·B·C 전장에서 각 지형 매트의 경계를 볼 수 있다. 10곳 중 본진 2곳과 중립 거점 2곳에서만 점수를 얻는다. **배치도 보기**에서 기물의 위치와 방향을 확인한다. [지도별 거점과 지형 목록](data/PATROL-TERRAIN-AREAS.md)
+
 매 변경 사항은 이 PC에 자동 저장된다. 다른 PC에서 이어 하려면 **저장 파일 ↓**로 JSON을 받아 새 전장의 **불러오기**에서 연다.
 
 **폐허 상판에서 사격하기** — 이동을 선언하고 모델을 상판 아래 위치로 옮긴 뒤 **편성**에서 해당 높이의 **상판으로** 버튼을 누른다. 수직 이동도 경로에 기록된다. 사격 때 그 사수에게 보이는 표적 분대에 지상 모델이 있고 사수의 베이스가 3″ 이상인 지형 상판에 놓여 있으면, 사수 목록과 공격 버튼에 **고지 사격**과 적용 BS가 표시된다. 예를 들어 1번 폐허 3.37″ 상판에서 인터세서가 엄폐 없는 지상 표적을 쏘면 볼트 라이플의 BS가 3+에서 2+가 된다. [공식 고지 사격 예시](https://www.warhammer-community.com/en-gb/articles/xlppkx5s/new40k-take-cover-with-updated-terrain-rules/)

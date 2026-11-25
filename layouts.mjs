@@ -1,4 +1,5 @@
 import {groupId} from './rules/battle.mjs';
+import {patrolTerrainAreas} from './data/patrol-terrain-areas.mjs';
 
 // Board edges in the 1535 x 1961 reference diagrams. Rotate the portrait sheet
 // onto the long horizontal axis of the digital table.
@@ -42,12 +43,13 @@ const originalPlants={
   B:{'shockArray-1':[355,1092,90],'capacitorStack-1':[1177,854,90],'generatorShrine-1':[1177,905,90]},
   C:{'shockArray-1':[766,1323,90],'capacitorStack-1':[768,622,90],'generatorShrine-1':[769,679,90]}
 };
+const terrainAreas=Object.fromEntries(Object.entries(layouts).map(([code,data])=>[code,patrolTerrainAreas(code,data.areas,world)]));
 export function layoutGeometry(code,version=2){
   const data=layouts[code];if(!data)return null;
   const blue=points(data.zone),red=blue.map(([x,z])=>[-x,-z]);
   const positions=Object.fromEntries(ids.map((id,i)=>[id,data.positions[i]]));
   if(version===1)Object.assign(positions,originalPlants[code]);
-  return {blue,red,areas:data.areas,terrain:Object.entries(positions).map(([id,[u,v,deg]])=>{
+  return {blue,red,areas:data.areas,terrainAreas:terrainAreas[code],terrain:Object.entries(positions).map(([id,[u,v,deg]])=>{
     const [x,z]=world([u,v]);return {id,x,z,yaw:deg*Math.PI/180}
   })};
 }

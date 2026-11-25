@@ -13,6 +13,7 @@ import {checkPatrolSetup} from '../rules/browser-patrol-setup.mjs';
 import {checkRuinSight} from './browser-ruin-sight.mjs';
 import {checkShooterSight} from './browser-shooter-sight.mjs';
 import {checkPlungingFire} from './browser-plunging-fire.mjs';
+import {checkTerrainAreas} from './browser-terrain-areas.mjs';
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 // --public-exe <file> exercises a clean distribution using the same native host.
 const publicFlag=process.argv.indexOf('--public-exe');
@@ -58,6 +59,7 @@ try{
   const shootingTools={save:await state(),upload,state,js,click,screenshot,reload:async()=>{
     await send('Page.reload');await until(()=>js('!!window.tabletopView'));await click('[data-tab=battle]');
   }};
+  await checkTerrainAreas({...shootingTools,until});
   await checkShooterSight(shootingTools);
   await checkPlungingFire(shootingTools);
   await screenshot('01-table.png');
