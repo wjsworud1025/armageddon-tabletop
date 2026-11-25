@@ -30,10 +30,11 @@ const hp = map(model,(n,id)=>int(0,getProfile(models.get(id)).wounds)(n));
 const totals = fields({marines:int(0),orks:int(0)},['marines','orks']);
 const attacks = map(model,list(fields({slot:string,ranged:boolean,pistol:boolean},['slot','ranged']),6));
 const attackStep=oneOf([2,4]);
-const hazardFields=fields({unit:group,reason:oneOf(['escape']),count:int(1,276),dice:list(int(1,6),276),remaining:int(1,828)},['unit','count']);
+const hazardDice=list(int(1,6),276);
+const hazardFields=fields({unit:group,reason:oneOf(['escape']),count:int(1,276),dice:hazardDice,commandDice:hazardDice,remaining:int(1,828)},['unit','count']);
 const hazard=value=>hazardFields(value) && (value.dice===undefined
-  ? value.remaining===undefined
-  : value.dice.length===value.count && int(1,value.dice.filter(d=>d<=2).length*3)(value.remaining));
+  ? value.remaining===undefined&&(!value.commandDice||value.commandDice.length===value.count)
+  : !value.commandDice&&value.dice.length===value.count && int(1,value.dice.filter(d=>d<=2).length*3)(value.remaining));
 const rowFields={
   actor:model,weapon:int(0,8),target:group,preferred:model,distance:n=>Number.isFinite(n)&&n>=0&&n<=200,
   size:int(1,46),assigned:int(0,45),hit:int(-2,1),wound:int(-2,1),extra:int(0,30),
@@ -89,6 +90,7 @@ export function validateRulesState(value) {
   if (value==null) return true;
   if (fields({hp},['hp'])(value)) return true;
   if(!battle(value) || value.round>value.rounds)return false;
+  if(value.hazard?.commandDice&&!canCommandReroll(value,value.hazard.unit,groupTeam(value.hazard.unit)))return false;
   const modelGroup=id=>value.attachments?.[id]||unitId(models.get(id));
   const stamp=value.patrol?.spent?.counteroffensive,target=value.patrol?.tactics?.counteroffensive;
   if(stamp!==undefined||target!==undefined){

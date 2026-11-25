@@ -113,13 +113,15 @@ export function hazardCandidates(state,pieces) {
 
 // Roll the entire pool before applying losses. Forced allocations resolve
 // together; the controlling player chooses between equally eligible models.
-export function resolveHazard(state,pieces,preferred=null,random=Math.random) {
+export function resolveHazard(state,pieces,preferred=null,random=Math.random,rolledDice=null) {
   const pending=state.hazard;
-  if (!pending) return null;
+  if (!pending||pending.commandDice) return null;
+  if(rolledDice&&(pending.dice||!Array.isArray(rolledDice)||rolledDice.length!==pending.count||
+    !rolledDice.every(n=>Number.isInteger(n)&&n>=1&&n<=6)))return null;
   let {dice,remaining}=pending;
   if (dice && preferred && !hazardCandidates(state,pieces).some(p=>p.id===preferred)) return null;
   if (!dice) {
-    dice=Array.from({length:pending.count},()=>roll(6,random));
+    dice=rolledDice??Array.from({length:pending.count},()=>roll(6,random));
     const alive=pieces.filter(p=>groupId(state,p)===pending.unit && currentHP(state,p)>0);
     // The Land Speeder is the only MONSTER/VEHICLE in this set. The Wartrakk is MOUNTED.
     const severity=alive.length && alive.every(p=>p.kind==='landSpeeder')?3:1;

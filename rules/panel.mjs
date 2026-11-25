@@ -7,6 +7,7 @@ import {attachForDeployment} from './reinforcement-session.mjs';
 import {openShootingReaction,shootingReactionOptions} from './shooting-reaction.mjs';
 import {useInsaneBravery,useEpicChallenge} from './core-stratagems.mjs';
 import {acceptMovementRoll} from './command-reroll.mjs';
+import {rollHazardPool,finishHazardPool} from './hazard-reroll.mjs';
 import {rerollMove} from '../move-session.mjs';
 import {rerollCharge} from '../charge-session.mjs';
 import {coherency,travelCost,moveLimit} from '../movement.mjs';
@@ -408,6 +409,14 @@ export function mountRules(container,api) {
       const hazard=state.hazard;
       const unit=all.find(p=>groupId(state,p)===hazard.unit);
       const title=(unit?unitLabel(unit):hazard.unit)+(hazard.reason==='escape'?' · 필사적 탈출 모델 ':' · 위험 무기 ')+hazard.count+'개';
+      if(hazard.commandDice){
+        const firstFailure=Math.max(0,hazard.commandDice.findIndex(n=>n<=2));
+        root.innerHTML=chunk(esc(title),' <p>위험 D6 ['+diceText(hazard.commandDice)+'] · 1과 2는 실패입니다.</p>'+
+          select('hazard-die','다시 굴릴 주사위',hazard.commandDice.map((n,i)=>
+            opt(String(i),(i+1)+'번 · '+n,String(firstFailure))).join(''))+
+          row(btn('hazard-command','지휘 재굴림 · 1 CP')+btn('hazard-keep','현재 위험 굴림 확정')));
+        return;
+      }
       if (!hazard.dice) {
         top+=chunk(esc(title),(hazard.reason==='escape'?'<p>모델을 옮기기 전에 분대 전원의 위험 주사위를 굴리세요.</p>':'<p>이 분대의 다른 무기 공격을 모두 마친 뒤 굴리세요.</p>')+
           btn('hazard-roll',hazard.reason==='escape'?'이동 전 위험 판정':'분대 공격 종료 · 위험 판정'));
@@ -465,6 +474,7 @@ export function mountRules(container,api) {
     const actor=getPiece(choices.fighter);
     if(state.declaration?.precisionRoll&&action!=='resolve-'+state.declaration.precisionRoll.index)return;
     if(state.fightSequence?.counterAfter&&!(state.hazard?action.startsWith('hazard-'):action.startsWith('fight-counter-')))return;
+    if(state.hazard?.commandDice&&!['hazard-command','hazard-keep'].includes(action))return;
     const val=id=>field(id)?.value??choices[id];
     const integer=(id,min,max)=>Math.max(min,Math.min(max,Math.trunc(Number(val(id)))||0));
     if(action==='command-reroll'||action==='command-keep'){
@@ -622,18 +632,25 @@ export function mountRules(container,api) {
           ' · '+unitLabel(contents().find(p=>groupId(state,p)===resolved.state.patrol.suppressed))+' 제압':'')+
         (resolved.state.hazard?' · 위험 D6 × '+resolved.state.hazard.count:''),resolved.removed);
     }
-    if (action==='hazard-roll' || action==='hazard-end' || action.startsWith('hazard-wound-')) {
-      if (!state.hazard || (action==='hazard-roll')===!!state.hazard.dice) return;
+    if (action.startsWith('hazard-')) {
+      if (!state.hazard)return;
       const id=action.startsWith('hazard-wound-')?action.slice('hazard-wound-'.length):null;
-      const result=resolveHazard(state,contents(),id);
+      let result,reroll='';
+      if(action==='hazard-roll')result=rollHazardPool(state,contents());
+      else if(action==='hazard-command'||action==='hazard-keep'){
+        const index=action==='hazard-command'?Number(field('hazard-die')?.value):null;
+        result=finishHazardPool(state,contents(),index);
+        if(result&&index!==null)reroll=' · 지휘 재굴림 (1 CP) · '+(index+1)+'번 '+state.hazard.commandDice[index]+' → '+result.dice[index];
+      }else if(state.hazard.dice&&(id||action==='hazard-end'))result=resolveHazard(state,contents(),id);
       if (!result) return;
+      if(result.awaitingChoice)return commit(result.state,'위험 굴림 D6 ['+diceText(result.dice)+'] · 재굴림 선택');
       if(!result.state.hazard&&result.state.shootingReaction&&
         !shootingReactionOptions({...api.getTable(),rules:result.state},result.state.shootingReaction).length)
         result.state.shootingReaction=null;
       const member=contents().find(p=>groupId(state,p)===state.hazard.unit);
       const label=member?unitLabel(member):state.hazard.unit;
       const hits=result.dice.filter(n=>n<=2).length;
-      const message=action==='hazard-roll'?' · 위험 D6 ['+diceText(result.dice)+'] · 실패 '+hits+' · 모탈 운드 '+result.total:
+      const message=!id&&action!=='hazard-end'?reroll+' · 위험 D6 ['+diceText(result.dice)+'] · 실패 '+hits+' · 모탈 운드 '+result.total:
         (id?' · '+getPiece(id).name+'에 위험 피해 배정':' · 위험 판정 종료');
       return commit(result.state,label+message+' · 남은 배정 '+result.remaining+
         (Object.keys(result.removed).length?' · 제거 '+Object.keys(result.removed).length:''),result.removed);

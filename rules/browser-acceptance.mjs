@@ -208,6 +208,19 @@ try {
   await js('let hazardDice=[.01,.4];Math.random=()=>hazardDice.shift()??.9');
   await click(button('hazard-roll'));
   await js('Math.random=window.acceptanceRandom');
+  const hazardOffer=await state();assert.deepEqual(hazardOffer.rules.hazard.commandDice,[1,3]);
+  assert.equal(hazardOffer.pieces.find(p=>p.id===bombers[1].id).removed,false);
+  const badHazard=structuredClone(hazardOffer);badHazard.rules.hazard.commandDice[0]='invalid';
+  await upload(badHazard);assert.deepEqual(await state(),hazardOffer);
+  await send('Page.reload');await until(()=>js('!!window.tabletopView'));await click('[data-tab=battle]');
+  assert.deepEqual((await state()).rules.hazard.commandDice,[1,3]);
+  await choose('hazard-die','0');await js('window.acceptanceRandom=Math.random;Math.random=()=>.99');
+  await click(button('hazard-command'));await js('Math.random=window.acceptanceRandom');
+  s=await state();assert.equal(s.rules.hazard,null);assert.equal(s.rules.cp.orks,hazardOffer.rules.cp.orks-1);
+  assert.equal(s.pieces.find(p=>p.id===bombers[1].id).removed,false);
+  assert.match(s.rules.last,/1번 1 → 6/);
+  await click('#undo');assert.deepEqual((await state()).rules.hazard.commandDice,[1,3]);
+  await click(button('hazard-keep'));assert.equal((await state()).rules.cp.orks,hazardOffer.rules.cp.orks);
   assert.deepEqual((await state()).rules.hazard.dice,[1,3]);
   await send('Page.reload');await until(()=>js('!!window.tabletopView'));
   await click('[data-tab=battle]');
@@ -269,6 +282,12 @@ try {
   assert.equal(await disabled('move-finish'),true);
   await js('window.acceptanceRandom=Math.random;{const dice=[.01,.8];Math.random=()=>dice.shift()??.8}');
   await click(button('hazard-roll'));await js('Math.random=window.acceptanceRandom');
+  assert.deepEqual((await state()).rules.hazard.commandDice,[1,5]);
+  assert.equal((await state()).rules.movePlan.desperateEscapeResolved,false);
+  await choose('hazard-die','0');await js('Math.random=()=>.20');
+  await click(button('hazard-command'));await js('Math.random=window.acceptanceRandom');
+  assert.deepEqual((await state()).rules.hazard.dice,[2,5]);
+  assert.equal((await state()).rules.cp.orks,0);
   await click(button('hazard-wound-'+bombers[0].id));
   s=await state();assert.equal(s.rules.movePlan.desperateEscapeResolved,true);
   assert.equal(s.pieces.find(p=>p.id===bombers[0].id).removed,true);
@@ -442,5 +461,6 @@ try {
     localArt,movementDrag:true,movementRange:true,movementUndoReload:true,desperateEscape:true,endTurnCoherency:true,
     chargeDrag:true,chargeFailure:true,chargeUndoReload:true,chargeReactions:3,fightDrag:true,fightUndoReload:true,
     fightTurns:2,fightLocked:true,fightConsolidation:true,fightEndTurn:true,corruptFightRejected:true,
-    ingressAttached:true,ingressDistance:true,ingressCancelUndoReload:true,ingressCommitted:true,ingressMovementLocked:true,...reactionChecks}));
+    ingressAttached:true,ingressDistance:true,ingressCancelUndoReload:true,ingressCommitted:true,ingressMovementLocked:true,
+    hazardReroll:true,escapeHazardReroll:true,...reactionChecks}));
 } finally {ws?.close();browser.kill();server.closeAllConnections();server.close();}

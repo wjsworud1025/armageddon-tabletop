@@ -40,7 +40,10 @@ export async function checkShootingReactions({movementFixture,upload,choose,clic
   await act('resolve-'+s.rules.declaration.rows.findIndex(r=>!r.done),.01);
   s=await state();assert.equal(s.rules.hazard.count,1);
   assert.equal(await available('reaction-start'),false);assert.equal(await available('next'),false);
-  await act('hazard-roll',.98);s=await state();
+  await act('hazard-roll',.01);s=await state();assert.deepEqual(s.rules.hazard.commandDice,[1]);
+  assert.equal(await available('reaction-start'),false);
+  await act('hazard-command',.98);s=await state();
+  assert.equal(s.rules.cp.orks,0);
   assert.deepEqual(s.rules.units.gretchin.hitTargets,[]);assert.equal(s.rules.hazard,null);
   assert.ok(s.rules.shootingReaction.targets.includes('vanguard'));assert.equal(s.rules.shootingReaction.shooter,'gretchin');
   assert.equal(await available('next'),false);assert.equal(await available('attack'),false);
