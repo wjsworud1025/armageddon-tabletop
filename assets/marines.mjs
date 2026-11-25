@@ -1,10 +1,11 @@
 import {paint as p} from './sculpt.mjs';
+import {sculptMarinePose} from './marine-poses-sculpt.mjs';
 
-function helmet(s, color, bare = false) {
+function helmet(s, color, bare = false, complexion = p.flesh) {
   if (bare) {
-    s.oval(p.flesh,[0,.008,.012],[.102,.143,.098]);
+    s.oval(complexion,[0,.008,.012],[.102,.143,.098]);
     s.oval(0x674a3f,[0,.106,-.005],[.106,.054,.096]);
-    s.box(p.flesh,[0,-.013,.102],[.032,.052,.037]);
+    s.box(complexion,[0,-.013,.102],[.032,.052,.037]);
     for (const sign of [-1,1]) s.box(p.iron,[sign*.045,.033,.102],[.035,.010,.009],[0,sign*.16,0]);
     return;
   }
@@ -74,19 +75,6 @@ function sword(s, x, y, z, yaw, chainsaw = false, roll = -.14) {
   }
 }
 
-function boltgun(s, position, rotation, pistol) {
-  const g = s.child(position,rotation);
-  const length = pistol ? .28 : .49;
-  g.box(p.black,[0,0,0],[.092,.105,length]);
-  g.box(p.iron,[0,.051,.007],[.11,.046,length*.87]);
-  g.box(p.steel,[0,-.001,length*.41],[.096,.09,.082]);
-  g.cylinder(p.iron,[0,.014,length*.57],.042,.043,.10,10,[Math.PI/2,0,0]);
-  g.cylinder(p.black,[0,.014,length*.57+.053],.024,.023,.006,10,[Math.PI/2,0,0]);
-  g.box(p.iron,[0,-.082,.016],[.07,.113,.095],[-.15,0,0]);
-  g.box(p.brass,[.052,.01,-.043],[.011,.027,.08]);
-  g.box(p.black,[0,.094,length*.32],[.031,.062,.037]);
-}
-
 function shield(s) {
   const g=s.child([.37,.86,.212],[-.11,.24,.12]);
   const outline=[[-.17,.24],[-.105,.30],[.12,.29],[.18,.20],[.153,-.13],[0,-.27],[-.15,-.15]];
@@ -103,15 +91,18 @@ function shield(s) {
 }
 
 export function marine(s, kind, variant = 0) {
-  const jump = kind==='vanguard', captain = kind==='captain', psyker = kind==='librarian';
+  if(kind==='intercessor'||kind==='vanguard'){
+    sculptMarinePose(s,kind,variant,helmet,wings);
+    return;
+  }
+  const captain = kind==='captain', psyker = kind==='librarian';
   const stride = [-.085,.10,-.135,.045,.15][variant%5];
   if(captain||psyker) {
     s.plate(p.stone,[[-.46,0],[.38,0],[.48,.125],[.52,.205],[.31,.13],[-.09,.141],[-.34,.22],[-.29,.118]],.31,[0,.006,0],[-.03,-.28,0]);
   }
-  const body = s.child([0,jump?.24:captain||psyker?.13:0,0],[0,[-.16,.13,.0,-.22,.23][variant%5],0]);
-  if(jump) s.plate(p.stone,[[-.18,0],[.16,0],[.06,.20],[.01,.34],[-.09,.24]],.19,[-.14,-.01,-.005]);
+  const body = s.child([0,.13,0],[0,[-.16,.13,.0,-.22,.23][variant%5],0]);
   leg(body,-.17,-stride,-1,0);
-  leg(body,.19,stride,1,jump?.16:0);
+  leg(body,.19,stride,1,0);
   const torso=body.child([0,0,0],[.035,variant%2===0?.09:-.10,0]);
   torso.oval(p.black,[0,.716,0],[.22,.14,.14]);
   torso.oval(p.blueShade,[0,.85,.016],[.207,.18,.16]);
@@ -130,15 +121,15 @@ export function marine(s, kind, variant = 0) {
     if(sign>0) badge.plate(p.cream,omega,.009);
     const captainArm=captain && sign<0;
     const elbow=captainArm?[-.413,1.063,.035]:[sign*.319,.855,.079];
-    const end = captainArm?[-.505,1.081,.14]:captain?[.322,.89,.202]:sign < 0 && (jump||psyker) ? [-.33,.86,.21] : [sign*.183,.865,.26];
+    const end = captainArm?[-.505,1.081,.14]:captain?[.322,.89,.202]:sign < 0 ? [-.33,.86,.21] : [sign*.183,.865,.26];
     torso.link(p.blueShade,[sign*.294,1.007,0],elbow,.102,.087);
     torso.link(p.blue,elbow,end,.090,.077);
     torso.oval(p.blueShade,end,[.080,.071,.078]);
     for(let n=0;n<3;n++) torso.oval(p.blue,[end[0]+sign*.054,end[1]-.021+n*.028,end[2]+.026],[.034,.016,.041]);
   }
   const head=torso.child([0,1.27,.017],[0,[-.14,.15,-.27,.04,.18][variant%5],0]);
-  helmet(head, jump ? p.cream : p.blue, psyker || captain || (kind==='intercessor' && variant%5===0));
-  pack(torso.child([0,1.055,-.125]),jump);
+  helmet(head,p.blue,true);
+  pack(torso.child([0,1.055,-.125]),false);
   if(captain || psyker) {
     torso.plate(psyker?p.cream:p.red,[[-.2,.34],[.17,.32],[.23,-.18],[.32,-.37],[.08,-.31],[-.10,-.43],[-.3,-.32]],.035,[0,.75,-.19],[.20,0,.08]);
     torso.plate(p.cream,[[-.104,.21],[.100,.2],[.138,-.245],[.02,-.19],[-.08,-.265]],.031,[0,.635,.169],[-.24,0,.09]);
@@ -166,13 +157,6 @@ export function marine(s, kind, variant = 0) {
     }
     torso.oval(p.blueShade,[0,1.30,-.075],[.17,.202,.106]);
     for(const sign of [-1,1]) torso.link(p.gold,[sign*.12,1.23,.015],[sign*.158,1.017,.145],.025,.025);
-  } else if(jump) {
-    sword(torso,-.34,.88,.24,-.25,variant===3,[.06,-.85,-1.21,.64,2.35][variant%5]);
-    boltgun(torso,[.19,.90,.32],[.11,.33,0],true);
-    if(variant===0) for(let i=0;i<5;i++) torso.box(p.teal,[.19+i*.011,.961,.31+i*.031],[.095,.022,.011],[0,.33,0]);
-  } else {
-    boltgun(torso,[.041,.90,.267],[-.10,-.86+variant%3*.28,0],false);
-    if(variant===1) torso.cylinder(p.iron,[-.037,.844,.378],.052,.052,.20,10,[Math.PI/2,-.58,0]);
   }
 }
 
