@@ -36,6 +36,13 @@ const layouts={
   }
 };
 const ids=['largeRuin-1','largeRuin-2','largeRuin-3','largeRuin-4', 'smallRuin-1','smallRuin-2','smallRuin-3','smallRuin-4','generatorShrine-1','capacitorStack-1','barricade-1','barricade-2','pylon-1','pylon-2'];
+// The first eight IDs are the four large and four small ruins. Their cast
+// origins do not coincide with the centres of their printed L-shaped icons.
+const registeredRuins={
+  A:[[893,418,180],[622,1520,270],[362,744,270],[1168,1216,90],[1202,324,0],[1177,497,270],[362,1470,90],[359,1664,270]],
+  B:[[495,455,180],[1020,1481,270],[456,1465,0],[1078,500,180],[806,364,0],[781,531,270],[757,1428,90],[747,1630,270]],
+  C:[[1147,582,270],[381,1413,0],[1172,1273,0],[366,692,180],[1032,286,180],[1221,289,0],[314,1665,180],[475,1701,270]]
+};
 // Earlier official-setup saves recorded all three industrial pieces. Keep
 // their original positions and headings when resuming those tables.
 const originalPlants={
@@ -44,10 +51,11 @@ const originalPlants={
   C:{'shockArray-1':[766,1323,90],'capacitorStack-1':[768,622,90],'generatorShrine-1':[769,679,90]}
 };
 const terrainAreas=Object.fromEntries(Object.entries(layouts).map(([code,data])=>[code,patrolTerrainAreas(code,data.areas,world)]));
-export function layoutGeometry(code,version=2){
+export function layoutGeometry(code,version=3){
   const data=layouts[code];if(!data)return null;
   const blue=points(data.zone),red=blue.map(([x,z])=>[-x,-z]);
-  const positions=Object.fromEntries(ids.map((id,i)=>[id,data.positions[i]]));
+  const ruins=version===3?registeredRuins[code]:[];
+  const positions=Object.fromEntries(ids.map((id,i)=>[id,ruins[i]??data.positions[i]]));
   if(version===1)Object.assign(positions,originalPlants[code]);
   return {blue,red,areas:data.areas,terrainAreas:terrainAreas[code],terrain:Object.entries(positions).map(([id,[u,v,deg]])=>{
     const [x,z]=world([u,v]);return {id,x,z,yaw:deg*Math.PI/180}

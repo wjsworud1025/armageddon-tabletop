@@ -133,7 +133,7 @@ function officialStateOK(r,records){
     if(Object.keys(enhanced).length!==drafts.length||drafts.some(x=>enhanced[x.enhancement]!==true))return false;
     if(records?.some(p=>{
       const omitted=models.has(p.id)?reserved.has(attachments[p.id]??unitId(models.get(p.id))):
-        p.id==='shockArray-1'&&s.version===2&&s.layoutDie!==null;
+        p.id==='shockArray-1'&&s.version>=2&&s.layoutDie!==null;
       return Boolean(p.removed)!==omitted;
     }))return false;
   }

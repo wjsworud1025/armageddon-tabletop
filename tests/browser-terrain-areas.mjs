@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import {createTable} from '../data/catalog.mjs';
+import {layoutGeometry} from '../layouts.mjs';
 import {newBattle,startBattle} from '../rules/battle.mjs';
 
 const objectives=['blue-home','red-home','neutral-1','neutral-2'];
@@ -50,6 +51,13 @@ export async function checkTerrainAreas({save,upload,state,js,click,until,screen
     await select('map',map);await click('#apply-map');
     assert.equal((await state()).layout.map,map);
     await expectFaces(map);
+    const ruins=layoutGeometry(map).terrain.filter(p=>p.id.includes('Ruin-'));
+    const visible=await js(JSON.stringify(ruins.map(p=>p.id))+'.map(id=>tabletopView.pose(id))');
+    for(const [i,ruin] of ruins.entries()){
+      const pose=visible[i];
+      assert.ok(pose&&Math.hypot(pose.x-ruin.x,pose.z-ruin.z)<1e-6,map+' '+ruin.id+' centre');
+      assert.ok(Math.abs(Math.sin((pose.yaw-ruin.yaw)/2))<1e-6,map+' '+ruin.id+' orientation');
+    }
     await screenshot('04-terrain-areas-'+map+'.png');
     const before=await state();
     await click('#zones');

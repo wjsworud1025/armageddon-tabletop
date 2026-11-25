@@ -81,7 +81,7 @@ export function restore(template, save) {
     piece.elevation = clamp(record.elevation??0,0,20);
     place(piece,record.x,record.z,game);
     const former=originalPlantBases[piece.kind];
-    if(former&&!save.training&&save.rules?.officialSetup?.version!==2&&
+    if(former&&!save.training&&(save.rules?.officialSetup?.version??1)===1&&
       (record.x!==piece.x||record.z!==piece.z)){
       const legacy={...piece,baseWidth:former[0],baseDepth:former[1]};
       place(legacy,record.x,record.z,game);
@@ -108,7 +108,8 @@ export function restore(template, save) {
       }
     }
     if(save.terrainRevision!==undefined&&save.terrainRevision!==2)throw Error('알 수 없는 패트롤 지형 판본입니다.');
-    if(!validPlacedPatrolUnits(game)&&(save.terrainRevision!==undefined||!recoverPreviousRuinDeployment(game)))
+    const previousRuin=game.rules.officialSetup.version<=2&&save.terrainRevision===undefined;
+    if(!validPlacedPatrolUnits(game)&&(!previousRuin||!recoverPreviousRuinDeployment(game)))
       throw Error('이미 배치한 분대의 구역과 위치를 확인하세요.');
   }
   return game;

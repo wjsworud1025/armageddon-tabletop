@@ -20,7 +20,7 @@ function at(ruin,x,z,elevation){
   return {x:ruin.x+c*x+s*z,z:ruin.z-s*x+c*z,elevation};
 }
 function beforeSecondRuinChange(map){
-  let g={...createTable(),rules:{...newBattle(),officialSetup:newPatrolSetup()},logs:[]};
+  let g={...createTable(),rules:{...newBattle(),officialSetup:{...newPatrolSetup(),version:2}},logs:[]};
   const step=(act,args={},dice=[])=>{g=advanceOfficialSetup(g,{act,...args},()=>dice.shift());};
   step('official-roll-layout',{},[{A:1,B:3,C:5}[map]]);
   step('official-roll-role',{},[1,6]);
@@ -60,7 +60,7 @@ for(const map of ['A','C']){
   });
 }
 test('the registered second ruin is outside both deployment zones of layout B, including its closest outer corner',()=>{
-  const table=createTable(),base=find(table,'gretchin-1'),ruin=layoutGeometry('B').terrain.find(p=>p.id==='largeRuin-2');
+  const table=createTable(),base=find(table,'gretchin-1'),ruin=layoutGeometry('B',2).terrain.find(p=>p.id==='largeRuin-2');
   for(const side of ['orks','marines']){
     const g={...table,layout:{map:'B',blue:side}};
     for(const x of [-2.60,2.60])for(const z of [-2.05,2.05])

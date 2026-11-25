@@ -7,6 +7,7 @@ import {groupId,newBattle} from './battle.mjs';
 import {advanceOfficialSetup,officialPreparing,patrolPlacementError,remainingPatrolUnits,visiblePatrolPiece} from './official-deployment.mjs';
 import {newPatrolSetup,patrolSetupView} from './patrol-setup.mjs';
 import {patrolTerrainPlacement} from './patrol-terrain-placement.mjs';
+import {createTrainingOne} from './training-one.mjs';
 
 const fresh=()=>({...createTable(),logs:[],layout:null,surface:'front',rules:{...newBattle(),officialSetup:newPatrolSetup()}});
 const stage=game=>patrolSetupView(game.rules.officialSetup).stage;
@@ -91,6 +92,16 @@ for(const map of ['A','B','C']){
     assert.deepEqual(game.rules.officialSetup.firstRolls,[[2,2],[1,4]]);
     assert.deepEqual(game.rules.officialSetup.roleRolls,[[5,5],[6,2]]);
     assert.ok(game.rules.reserves.intercessor.every(id=>piece(game,id).removed));
+    const activeSave=snapshot(game);
+    Object.assign(piece(activeSave,'captain-1'),{x:1.7,z:1.9,yaw:.27});
+    Object.assign(piece(activeSave,'largeRuin-1'),{x:1.7,z:1.9,yaw:-.76});
+    for(const version of [1,2,3]){
+      activeSave.rules.officialSetup.version=version;
+      piece(activeSave,'shockArray-1').removed=version!==1;
+      assert.deepEqual(snapshot(restore(createTable(),activeSave)),activeSave,'Restore the ongoing battle in place, including overlapping pieces');
+      const handbook={...activeSave,training:createTrainingOne()};
+      assert.deepEqual(snapshot(restore(createTable(),handbook)),handbook,'Preserve the underlying patrol poses while a handbook mission is open');
+    }
   });
 }
 
@@ -115,9 +126,9 @@ test('saved map, defender, turn, terrain and revealed reserve records agree with
 });
 
 test('the box shows all 15 terrain pieces before the draw; each saved map version restores its own structures and resumes through placement',()=>{
-  for(const version of [1,2])for(const [map,die] of [['A',1],['B',3],['C',5]]){
+  assert.equal(fresh().rules.officialSetup.version,3);
+  for(const version of [1,2,3])for(const [map,die] of [['A',1],['B',3],['C',5]]){
     let game=fresh();game.rules.officialSetup.version=version;
-    assert.equal(fresh().rules.officialSetup.version,2);
     assert.equal(game.pieces.filter(p=>visiblePatrolPiece(game.rules,p)).length,15);
     const tooEarly=snapshot(game);piece(tooEarly,'shockArray-1').removed=true;
     assert.throws(()=>restore(createTable(),tooEarly));
@@ -128,22 +139,50 @@ test('the box shows all 15 terrain pieces before the draw; each saved map versio
     assert.throws(()=>restore(createTable(),switched));
     piece(switched,'shockArray-1').removed=version===1;
     assert.throws(()=>restore(createTable(),switched),'other layout poses also differ');
+    if(version>=2){
+      const wrongRuins=snapshot(game);
+      wrongRuins.rules.officialSetup.version=version===2?3:2;
+      assert.throws(()=>restore(createTable(),wrongRuins),'v2 and v3 share removal flags but place their ruins differently');
+    }
     const tampered=snapshot(game);piece(tampered,'shockArray-1').removed=version===1;
     assert.throws(()=>restore(createTable(),tampered));
-    const unsupported=snapshot(game);unsupported.rules.officialSetup.version=3;
+    const unsupported=snapshot(game);unsupported.rules.officialSetup.version=4;
     assert.throws(()=>restore(createTable(),unsupported));
     game=step(step(game,'official-roll-role',{},[1,4]),'official-defend');
     game=step(game,'form-enhance',{team:'marines',enhancement:'veterans'});
     game=step(step(game,'form-lock',{team:'marines'}),'form-open',{team:'orks'});
     game=step(game,'form-enhance',{team:'orks',enhancement:'warcry'});
     game=checkpoint(step(game,'form-lock',{team:'orks'}));
-    game=checkpoint(step(step(game,'official-select',{unit:'warboss'}),'official-place'));
+    game=step(game,'official-select',{unit:'warboss'});
+    piece(game,'warboss-1').yaw=.27;
+    game=checkpoint(step(game,'official-place'));
     assert.deepEqual(game.rules.deployment.placed,['warboss']);
+    assert.equal(piece(game,'warboss-1').yaw,.27,'a committed player rotation survives reload');
     for(const at of layoutGeometry(map,version).terrain){
       const model=piece(game,at.id);
       assert.equal(model.removed,false);
       assert.ok(Math.hypot(model.x-at.x,model.z-at.z)<1e-7);
       assert.ok(Math.abs(Math.sin((model.yaw-at.yaw)/2))<1e-7);
+    }
+  }
+});
+
+test('pre-correction saves still use their eight recorded ruin positions and rotations on every map',()=>{
+  // Older releases registered the centres in these coordinates on the
+  // portrait diagram. Each row is [u, v, degrees], large 1–4 then small 1–4.
+  const published={
+    A:[[933,454,0],[600,1505,180],[348,776,180],[1130,1203,90],[1200,301,0],[1200,496,90],[341,1465,180],[342,1662,270]],
+    B:[[539,496,0],[1010,1465,180],[473,1471,180],[1071,518,0],[798,347,0],[798,530,90],[738,1430,180],[739,1623,270]],
+    C:[[1171,561,90],[339,1424,270],[1187,1260,180],[362,717,0],[1034,281,180],[1222,268,0],[314,1680,270],[491,1705,90]]
+  };
+  for(const version of [1,2])for(const [map,ruins] of Object.entries(published)){
+    const terrain=layoutGeometry(map,version).terrain;
+    for(const [index,[u,v,degrees]] of ruins.entries()){
+      const id=(index<4?'large':'small')+'Ruin-'+(1+index%4);
+      const pose=terrain.find(p=>p.id===id);
+      assert.ok(Math.abs(pose.x-((v-154)*44/1654-22))<1e-9,map+' '+id+' v'+version+' x');
+      assert.ok(Math.abs(pose.z-(15-(u-203)*30/1129))<1e-9,map+' '+id+' v'+version+' z');
+      assert.ok(Math.abs(pose.yaw-degrees*Math.PI/180)<1e-9,map+' '+id+' v'+version+' yaw');
     }
   }
 });
@@ -193,6 +232,7 @@ test('a pending group can be saved while being adjusted but cannot be committed 
   assert.ok(patrolPlacementError(game));
   assert.throws(()=>step(game,'official-place'));
   game=checkpoint(game);
+  assert.equal(piece(game,'captain-1').elevation,11,'an unfinished adjustment remains where the player saved it');
   piece(game,'captain-1').elevation=0;
   assert.equal(patrolPlacementError(game),'');
   assert.equal(step(game,'official-place').rules.deployment.placed[0],'captain');
@@ -203,8 +243,9 @@ test('two legal elevations on the same landing cannot conceal overlapping bases 
   game=step(game,'official-select',{unit:'warboss'});
   const ruin=piece(game,'largeRuin-2');
   // Local (−1.12, +0.56) is inside the broken landing with clearance for
-  // either 50 mm base. Map A rotates this particular ruin by 180 degrees.
-  const position={x:ruin.x+1.12,z:ruin.z-.56};
+  // either 50 mm base, measured in the ruin's local axes.
+  const c=Math.cos(ruin.yaw),s=Math.sin(ruin.yaw);
+  const position={x:ruin.x-1.12*c+.56*s,z:ruin.z+1.12*s+.56*c};
   const first=piece(game,'warboss-1');
   Object.assign(first,position,{elevation:2.30});
   assert.equal(patrolTerrainPlacement(first,[ruin]).error,'','the landing independently supports the first base');

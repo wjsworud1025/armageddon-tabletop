@@ -73,7 +73,7 @@ export function drawDeploymentDiagram(canvas,code,blueFaction,table){
   ctx.strokeStyle='#e6d9ba';ctx.lineWidth=1.5;ctx.strokeRect(left,top,width,height);
   const marines=blueFaction==='marines';
   const legend=[['#578ec1',marines?'마린 배치':'오크 배치'],['#b67765',marines?'오크 배치':'마린 배치'],
-    ['#a69862','거점'],['#909890','일반 지형 구역'],['#8fc189','녹색 기물'],['#f4cd61','황색 기물']];
+    ['#a69862','거점'],['#909890','일반 구역'],['#8fc189','녹색 기물'],['#f4cd61','황색 기물']];
   ctx.textAlign='left';ctx.font='15px "Malgun Gothic",sans-serif';
   legend.forEach(([color,label],i)=>{
     const x=left+width*i/legend.length,y=top+height+26;

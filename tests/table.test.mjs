@@ -98,8 +98,30 @@ test('on all three diagrams the shrine and capacitor each occupy their own print
     const direction=[Math.sin(capacitor.yaw),Math.cos(capacitor.yaw)].map(n=>Math.round(n)||0);
     assert.deepEqual(direction,map==='A'?[0,1]:[1,0]);
     assert.equal(terrain.some(p=>p.id==='shockArray-1'),false);
-    const unchanged=poses=>poses.filter(p=>!['generatorShrine-1','capacitorStack-1','shockArray-1'].includes(p.id));
-    assert.deepEqual(unchanged(terrain),unchanged(layoutGeometry(map,1).terrain));
+    const previous=layoutGeometry(map,2).terrain;
+    const withoutPlants=poses=>poses.filter(p=>!['generatorShrine-1','capacitorStack-1','shockArray-1'].includes(p.id));
+    assert.deepEqual(withoutPlants(previous),withoutPlants(layoutGeometry(map,1).terrain));
+    const withoutRuins=poses=>poses.filter(p=>!p.id.includes('Ruin-'));
+    assert.deepEqual(withoutRuins(terrain),withoutRuins(previous));
+  }
+});
+test('printed walls and open courtyards on the three patrol maps align with the projected casts',()=>{
+  const marks=[
+    ['A','largeRuin-1',[874,507],[896,386]],
+    ['B','largeRuin-2',[1104,1413],[1078,1511]],
+    ['C','largeRuin-1',[1237,630],[1130,516]]
+  ];
+  const down=new T.Vector3(0,-1,0);
+  for(const [map,id,wall,yard] of marks){
+    const model=createPiece(T,board.pieces.find(p=>p.id===id));
+    const at=layoutGeometry(map).terrain.find(p=>p.id===id);
+    model.position.set(at.x,0,at.z);model.rotation.y=at.yaw;model.updateMatrixWorld(true);
+    function surface([u,v]){
+      const origin=new T.Vector3((v-154)*44/1654-22,12,15-(u-203)*30/1129);
+      return new T.Raycaster(origin,down).intersectObject(model,true)[0]?.point.y;
+    }
+    assert.ok(surface(wall)>3,map+' printed wall must intersect a tall part of the miniature');
+    assert.equal(surface(yard),undefined,map+' courtyard must be clear');
   }
 });
 test('a saved custom table retains industrial terrain centres that touched the board edge with the former footprints',()=>{
