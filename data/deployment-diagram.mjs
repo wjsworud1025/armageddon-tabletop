@@ -2,7 +2,7 @@ import {layoutGeometry} from '../layouts.mjs';
 
 // Use the same x/z coordinates as deployment. One cell is one tabletop inch.
 export function drawDeploymentDiagram(canvas,code,blueFaction,table){
-  const layout=layoutGeometry(code);
+  const layout=layoutGeometry(code,table.rules?.officialSetup?.version);
   const ctx=canvas.getContext('2d');
   const cell=17,left=45,top=40;
   const width=table.width*cell,height=table.depth*cell;
@@ -59,5 +59,5 @@ export function drawDeploymentDiagram(canvas,code,blueFaction,table){
     ctx.fillStyle='#eee7d1';ctx.fillText(label,x+26,y+14);
   });
   canvas.setAttribute('aria-label','지도 '+code+', 44 × 30인치. 청색은 '+(marines?'스페이스 마린':'오크')+
-    ', 적색은 '+(marines?'오크':'스페이스 마린')+' 배치 구역. 거점 4곳 및 지형 15개. 격자 한 칸은 1인치.');
+    ', 적색은 '+(marines?'오크':'스페이스 마린')+' 배치 구역. 거점 4곳 및 지형 '+layout.terrain.length+'개. 격자 한 칸은 1인치.');
 }

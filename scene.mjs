@@ -1,6 +1,7 @@
 import * as T from 'three';
 import {photoCamera} from './photo-camera.mjs';
 import {createPiece} from './assets/pieces.mjs';
+import {sightHiddenPieces} from './assets/sight-units.mjs';
 import {paintedFigures} from './painted.mjs';
 import {layoutGeometry} from './layouts.mjs';
 import {trainingThreePlan,trainingThreeWorldPoint} from './data/training-three-layout.mjs';
@@ -133,6 +134,10 @@ export async function buildScene(canvas,api) {
   function lookup(id){return api.game().pieces.find(p=>p.id===id)}
   function sync(){
     const table=api.game(),drill=!!table.training;
+    if(sightPair&&sightPair.some(id=>!table.pieces.some(p=>p.id===id&&!p.removed))){
+      sightPair=null;eyeOffset=0;projection();return;
+    }
+    const hidden=sightHiddenPieces(table,sightPair);
     drillBoard.visible=drill;grid.geometry=drill?drillGrid:lineGeom;
     if(drill){
       const map=table.surface==='reverse'&&reverse?reverse:texture;
@@ -146,7 +151,7 @@ export async function buildScene(canvas,api) {
       if(useBack&&!reverse&&!reverseRequest)loadReverse().then(sync).catch(()=>{});
     }
     updateZones();
-    for(const p of api.game().pieces){
+    for(const p of table.pieces){
       const obj=objects.get(p.id),portrait=painted.get(p.id);
       const matchingPose=Math.abs(Math.sin((p.yaw-initialYaw.get(p.id))/2))<.001;
       if(portrait)portrait.visible=!p.removed&&photo&&usePaint&&matchingPose&&!sightPair;
@@ -154,11 +159,11 @@ export async function buildScene(canvas,api) {
       const pos=photo?promo.camera.position:orbitCamera.position;
       const dist=Math.hypot(pos.x-p.x,pos.y-(p.elevation||0),pos.z-p.z);
       const stereo=studio.update(p,viewYaw,photo ? .32 : pitch,dist,usePaint&&!sightPair&&!portrait?.visible&&!obj.userData.reconstruction);
-      obj.visible=!p.removed&&!portrait?.visible&&!stereo&&p.id!==sightPair?.[0];obj.position.set(p.x,p.elevation||0,p.z);obj.rotation.y=p.yaw;
+      obj.visible=!p.removed&&!portrait?.visible&&!stereo&&!hidden.has(p.id);obj.position.set(p.x,p.elevation||0,p.z);obj.rotation.y=p.yaw;
       if(portrait){portrait.position.copy(obj.position);portrait.renderOrder=200-promo.camera.position.distanceTo(obj.position)}
     }
     const p=lookup(selected);
-    ringRoot.visible=!!p&&!p.removed;
+    ringRoot.visible=!!p&&!p.removed&&!sightPair;
     if(p){ringRoot.position.set(p.x,(p.elevation||0)+.05,p.z);ringRoot.rotation.y=p.yaw;halo.scale.set(p.baseWidth*.52,p.baseDepth*.52,1)}
     dirty();
   }
@@ -173,7 +178,8 @@ export async function buildScene(canvas,api) {
         const eye=Math.max(.1,high(a)*.72+eyeOffset);
         camera.position.set(a.x,(a.elevation||0)+eye,a.z);
         camera.lookAt(b.x,(b.elevation||0)+high(b)*.55,b.z);camera.updateProjectionMatrix();camera.updateMatrixWorld();
-        api.sightInfo(a.name+' → '+b.name+' · 시점 높이 '+eye.toFixed(2)+'″ · 휠로 높이 조절 · 전체 보기로 복귀');dirty();return;
+        const unitHint=a.faction!=='terrain'&&b.faction!=='terrain'?' · 양쪽 분대의 다른 모델 숨김':'';
+        api.sightInfo(a.name+' → '+b.name+unitHint+' · 시점 높이 '+eye.toFixed(2)+'″ · 휠로 높이 조절 · 전체 보기로 복귀');dirty();return;
       }
       sightPair=null;sync();
     }
@@ -228,6 +234,7 @@ export async function buildScene(canvas,api) {
   }
   function start(e){
     if(gesture||![0,1,2].includes(e.button))return;
+    if(sightPair&&mode!=='sight')return;
     const pan=e.shiftKey||e.button===1,orbit=e.button===2;
     const id=pan||orbit?null:pick(e),g=ground(e);
     gesture={type:pan?'pan':orbit?'orbit':mode==='ruler'?'measure':mode==='sight'?'sight':mode==='path'?'path':id?'move':'orbit',id,g,sx:e.clientX,sy:e.clientY,angle:yaw,pitch,target:target.clone(),offsetX,offsetY,drag:false,pointer:e.pointerId};
@@ -274,7 +281,7 @@ export async function buildScene(canvas,api) {
     if(photo){const prev=photoZoom;photoZoom=clamp(prev/scale,.55,12);const ratio=photoZoom/prev,r=canvas.getBoundingClientRect();
       offsetX=ratio*offsetX+(1-ratio)*(e.clientX-r.left-r.width/2);offsetY=ratio*offsetY+(1-ratio)*(e.clientY-r.top-r.height/2)}
     else half=clamp(half*scale,1.2,55);projection()},{passive:false});
-  function focus(id){sightPair=null;const p=lookup(id);if(!p||p.removed)return;
+  function focus(id){const p=lookup(id);if(!p||p.removed)return;sightPair=null;
     target.set(p.x,(p.elevation||0)+1,p.z);half=Math.max(2.1,p.baseWidth*1.2,p.baseDepth*1.2);
     if(photo){photoZoom=Math.min(8,17/Math.max(p.baseWidth,2));offsetX=offsetY=0;projection();
       const v=target.clone().project(camera);offsetX=-v.x*canvas.clientWidth/2;offsetY=v.y*canvas.clientHeight/2}
@@ -283,6 +290,7 @@ export async function buildScene(canvas,api) {
   function render(){if(invalid){invalid=false;paintMeasure();renderer.render(scene,camera)}requestAnimationFrame(render)}
   resize();home();sync();render();
   return {sync,loadReverse,select(id){if(selected!==id)waypoints=[];selected=id;sync()},home,focus,top(){home(pitch<1.55);return pitch>1.55},
+    inSight(){return !!sightPair},
     lookFrom(from,to){if(from!==to&&lookup(from)&&lookup(to)){sightPair=[from,to];eyeOffset=0;projection()}},
     backPoint(){waypoints.pop();dirty()},walk(){const p=lookup(selected);if(p&&!p.removed&&waypoints.length&&api.route(p,[{x:p.x,z:p.z},...waypoints])){waypoints=[];dirty()}},
     togglePaint(){if(!photo&&pitch>=65*Math.PI/180){usePaint=true;home()}else{usePaint=!usePaint;projection()}},

@@ -106,7 +106,10 @@ export async function checkTrainingThree({save,upload,click,state,js,reload,send
   await click(action('shoot-target')+'[data-target="gretchin"]');
   await click('#training-three-options fieldset button');
   assert.match(await js('document.querySelector("#hint").textContent'),/시점 높이/);
+  assert.equal(await js('tabletopView.pose("gretchin-2")'),null);
+  assert.ok(await js('tabletopView.pose("gretchin-1")'));
   await click('#home');
+  assert.ok(await js('tabletopView.pose("gretchin-2")'));
   for(const id of sequence('gretchin',5)){
     await click(action('shoot-sight')+'[data-id="'+id+'"][data-visibility="partial"]');
   }

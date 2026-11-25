@@ -13,7 +13,7 @@ const layouts={
       shape('red-home','red','298,1431 730,1431 730,1694 680,1694 662,1706 647,1704 620,1715 604,1713 595,1695 563,1694 543,1703 508,1697 471,1710 451,1706 426,1694 298,1694'),
       shape('neutral-1',null,'242,680 468,680 468,720 480,734 488,750 482,766 484,777 468,795 468,829 372,829 354,836 341,833 325,842 308,839 289,837 285,829 242,829'),
       shape('neutral-2',null,'1067,1132 1158,1132 1179,1124 1194,1125 1211,1118 1237,1122 1247,1132 1292,1132 1292,1281 1067,1281 1067,1248 1051,1232 1047,1215 1053,1196 1050,1185 1067,1165')],
-    positions:[[933,454,0],[600,1505,180],[348,776,180],[1130,1203,90],[1200,301,0],[1200,496,90],[341,1465,180],[342,1662,270],[845,860,0],[697,1097,0],[1137,754,90],[391,1208,90],[671,1097,0],[575,453,90],[966,1505,90]]
+    positions:[[933,454,0],[600,1505,180],[348,776,180],[1130,1203,90],[1200,301,0],[1200,496,90],[341,1465,180],[342,1662,270],[850,861,0],[693.5,1099,0],[1137,754,90],[391,1208,90],[575,453,90],[966,1505,90]]
   },
   B:{
     zone:'203,154 1332,154 1332,757',
@@ -22,7 +22,7 @@ const layouts={
       shape('red-home','red','692,1394 736,1394 763,1381 784,1381 805,1371 823,1376 831,1394 861,1394 877,1387 904,1392 947,1377 977,1383 995,1394 1126,1394 1126,1656 692,1656'),
       shape('neutral-1',null,'242,1019 467,1019 467,1056 482,1072 486,1091 477,1112 466,1136 466,1168 374,1168 351,1176 339,1173 322,1182 306,1179 293,1176 286,1168 242,1168'),
       shape('neutral-2',null,'1067,794 1160,794 1180,786 1196,787 1212,780 1236,783 1246,794 1293,794 1293,943 1067,943 1067,903 1051,887 1047,870 1052,853 1050,843 1067,827')],
-    positions:[[539,496,0],[1010,1465,180],[473,1471,180],[1071,518,0],[798,347,0],[798,530,90],[738,1430,180],[739,1623,270],[355,1092,90],[1177,854,90],[574,754,90],[959,1207,90],[1177,905,90],[652,1060,0],[880,907,0]]
+    positions:[[539,496,0],[1010,1465,180],[473,1471,180],[1071,518,0],[798,347,0],[798,530,90],[738,1430,180],[739,1623,270],[353,1090,90],[1187,871,90],[574,754,90],[959,1207,90],[652,1060,0],[880,907,0]]
   },
   C:{
     zone:'768,154 1332,154 1332,981 768,568',
@@ -31,16 +31,32 @@ const layouts={
       shape('red-home','red','279,1300 542,1300 542,1347 555,1368 548,1389 554,1401 543,1427 543,1456 550,1475 543,1509 560,1548 555,1573 543,1594 543,1733 279,1733'),
       shape('neutral-1',null,'279,567 429,567 429,793 391,793 374,804 355,810 341,805 324,806 306,793 279,793 279,698 273,681 273,664 265,648 271,622 279,611'),
       shape('neutral-2',null,'1108,1168 1150,1168 1166,1154 1186,1147 1202,1154 1214,1151 1233,1168 1257,1168 1257,1258 1266,1278 1264,1294 1273,1311 1267,1335 1257,1348 1257,1394 1108,1394')],
-    positions:[[1171,561,90],[339,1424,270],[1187,1260,180],[362,717,0],[1034,281,180],[1222,268,0],[314,1680,270],[491,1705,90],[766,1323,90],[768,622,90],[545,377,90],[994,1582,90],[769,679,90],[646,940,90],[908,1015,90]]
+    positions:[[1171,561,90],[339,1424,270],[1187,1260,180],[362,717,0],[1034,281,180],[1222,268,0],[314,1680,270],[491,1705,90],[767,1319,90],[770,642,90],[545,377,90],[994,1582,90],[646,940,90],[908,1015,90]]
   }
 };
-const ids=['largeRuin-1','largeRuin-2','largeRuin-3','largeRuin-4', 'smallRuin-1','smallRuin-2','smallRuin-3','smallRuin-4','shockArray-1','capacitorStack-1','barricade-1','barricade-2','generatorShrine-1','pylon-1','pylon-2'];
-export function layoutGeometry(code){
+const ids=['largeRuin-1','largeRuin-2','largeRuin-3','largeRuin-4', 'smallRuin-1','smallRuin-2','smallRuin-3','smallRuin-4','generatorShrine-1','capacitorStack-1','barricade-1','barricade-2','pylon-1','pylon-2'];
+// Earlier official-setup saves recorded all three industrial pieces. Keep
+// their original positions and headings when resuming those tables.
+const originalPlants={
+  A:{'shockArray-1':[845,860,0],'capacitorStack-1':[697,1097,0],'generatorShrine-1':[671,1097,0]},
+  B:{'shockArray-1':[355,1092,90],'capacitorStack-1':[1177,854,90],'generatorShrine-1':[1177,905,90]},
+  C:{'shockArray-1':[766,1323,90],'capacitorStack-1':[768,622,90],'generatorShrine-1':[769,679,90]}
+};
+export function layoutGeometry(code,version=2){
   const data=layouts[code];if(!data)return null;
   const blue=points(data.zone),red=blue.map(([x,z])=>[-x,-z]);
-  return {blue,red,areas:data.areas,terrain:data.positions.map(([u,v,deg],i)=>{
-    const [x,z]=world([u,v]);return {id:ids[i],x,z,yaw:deg*Math.PI/180}
+  const positions=Object.fromEntries(ids.map((id,i)=>[id,data.positions[i]]));
+  if(version===1)Object.assign(positions,originalPlants[code]);
+  return {blue,red,areas:data.areas,terrain:Object.entries(positions).map(([id,[u,v,deg]])=>{
+    const [x,z]=world([u,v]);return {id,x,z,yaw:deg*Math.PI/180}
   })};
+}
+export function layoutScenery(game,geo){
+  const poses=new Map(geo.terrain.map(at=>[at.id,at]));
+  return game.pieces.filter(p=>p.faction==='terrain').map(p=>{
+    const at=poses.get(p.id);
+    return [p,at?{...at,elevation:0,removed:false}:{removed:true}];
+  });
 }
 function inside(x,z,poly){
   let odd=false;
@@ -167,10 +183,10 @@ function arrange(team,zone,yaw,terrain,rules){
   throw Error('배치 구역에 분대 전체를 놓을 수 없습니다.');
 }
 export function applyLayout(game,map,blue){
-  const geo=layoutGeometry(map);
+  const geo=layoutGeometry(map,game.rules?.officialSetup?.version);
   if(!geo||!['orks','marines'].includes(blue))throw Error('지원하지 않는 배치입니다.');
-  const scenery=geo.terrain.map(pose=>[game.pieces.find(p=>p.id===pose.id),{...pose,elevation:0,removed:false}]);
-  const obstacles=scenery.map(([p,pose])=>footprint({...p,...pose}));
+  const scenery=layoutScenery(game,geo);
+  const obstacles=scenery.filter(([,pose])=>!pose.removed).map(([p,pose])=>footprint({...p,...pose}));
   const placements=[...scenery];
   for(const faction of ['marines','orks']){
     const army=game.pieces.filter(p=>p.faction===faction&&!p.removed);

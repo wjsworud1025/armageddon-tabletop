@@ -10,6 +10,10 @@
 | 패트롤 모델의 무장·수치·부대별 특수 능력, 임무별 승점 조건 | [Assault Force 앱 2.7.1 자료 전사본](https://wahapedia.ru/wh40k11ed_cp/factions/assault-force/), [’Ardmob 앱 2.7.1 자료 전사본](https://wahapedia.ru/wh40k11ed_cp/factions/ardmob/), [Combat Patrol Archive의 별도 앱 채록본](https://combat-patrol-companion.pages.dev/). 전용 프로필은 두 채록본을 비교했다. 공식 앱을 이 PC에서 직접 열어 대조한 상태는 아니다. |
 | 44″×30″ 전장, A/B/C 배치도, 수비 측 선배치, 선공 대결, 5라운드 | [앱 임무 순서와 배치도 전사본](https://wahapedia.ru/wh40k11ed_cp/the-rules/combat-patrol-mission/) |
 
+## 배치도의 발전 설비
+
+세 도면에서 상부 전선이 두 탑을 잇는 기물은 발전기 성소다. 원형 탱크 두 개와 조작대는 축전기 한 점이다. A에서는 조작대가 도면 왼쪽으로, B·C에서는 아래쪽으로 돌출된다. 세 도면 모두 폐허 8점, 바리케이드 2점, 송전 첨탑 2점, 성소와 축전기로 총 14점을 사용한다. 축전기의 4.2 × 2.86인치 외곽은 도면 눈금에서 환산했다. [배치도 A·B·C](https://wahapedia.ru/wh40k11ed_cp/the-rules/combat-patrol-mission/) · [성소의 회전 사진 비교](../assets/GENERATOR-SHRINE.md)
+
 ## 수치 판본
 
 ### 2026년 두 팩션의 코덱스
@@ -87,3 +91,9 @@ A/B/C 맵에서는 게임이 상대 배치 구역을 검사한다. 제품 전장
 위험 무기와 필사적 탈출도 위험 굴림을 사용한다. 주사위를 모두 굴린 뒤, 분대 소유자가 1 CP를 써서 그중 D6 하나를 다시 굴리거나 원래 결과를 확정한다. 최종 결과가 1 또는 2인 주사위 수에 따라 모탈 운드를 배정한다. 위험 피해 배정이 모두 끝나야 사격 반응이나 탈출 이동을 진행할 수 있다. [공식 기본 규칙 06.03, 09.07, 15.02, 24.15](https://assets.warhammer-community.com/eng_01-06_warhammer40k_new40k_core_rules-was6fbu1ix-hfewhmxyiy.pdf)
 
 공격을 단계별로 판정하면 공격 측은 무기별 무작위 공격 횟수, 명중, 상처, 피해량 굴림에서, 방어 측은 방어 굴림에서 주사위 하나를 선택할 수 있다. 양쪽이 재굴림 기회를 생략하기로 합의하면 기존 일괄 판정도 사용할 수 있다. 자동 명중·자동 상처와 고정 수치에는 굴림이 없다. 방어 주사위는 재굴림을 마친 뒤 낮은 결과부터 처리한다. 피해를 받을 모델을 정한 뒤 해당 공격의 피해량을 굴리며, 멜타 보너스는 최종 주사위 결과에 더한다. 정밀 공격자의 실제 시야는 두 플레이어가 확인한다. [공식 기본 규칙 04.03, 05.01–05.04, 15.02, 24.28](https://assets.warhammer-community.com/eng_01-06_warhammer40k_new40k_core_rules-was6fbu1ix-hfewhmxyiy.pdf) · [앱 부록 02.02.03 무작위 수치](https://wahapedia.ru/wh40k11ed_cp/the-rules/rules-appendix/#Random-Characteristics)
+
+## 사수 시점과 모델 가시성
+
+기본 규칙 06.01은 관측 모델과 표적 모델의 임의 지점 사이에 폭 1mm의 직선을 그을 수 있는지 확인한다. 양 끝 모델이 속한 두 분대의 나머지 모델은 이때 무시한다. 게임의 사수 시점에서도 같은 분대원과 합류 지휘관을 잠시 숨긴다. 표적 본체, 별도 분대, 지형은 화면에 남는다. 사수의 보는 높이를 조절해도 완전·부분 가시성과 지형의 특수 효과는 플레이어가 확인한다. [공식 코어 규칙 06.01, 13.07](https://assets.warhammer-community.com/eng_01-06_warhammer40k_new40k_core_rules-was6fbu1ix-hfewhmxyiy.pdf#page=24)
+
+훈련 3·4의 시점은 각 훈련의 인쇄 편성을 사용한다. 핸드북 65쪽은 보이는 모델과 엄폐를 설명하며, 게임은 위 코어 규칙에 따라 두 분대의 다른 모델을 숨겨 그 판단을 돕는다. 시점 열기와 닫기는 플레이어가 선택한 가시성이나 엄폐를 변경하지 않는다. [훈련 3 가시성 및 엄폐](TRAINING-THREE-SHOOTING.md) · [훈련 4 사격](TRAINING-FOUR-SHOOTING.md)

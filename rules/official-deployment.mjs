@@ -1,6 +1,6 @@
 import {groupId,opposite,startBattle} from './battle.mjs';
 import {coherency,sweptGap} from '../movement.mjs';
-import {applyLayout,layoutGeometry,validDeployment} from '../layouts.mjs';
+import {applyLayout,layoutGeometry,layoutScenery,validDeployment} from '../layouts.mjs';
 import {applyPatrolSetup,patrolSetupView} from './patrol-setup.mjs';
 import {newPatrolFormations,actPatrolFormation} from './patrol-formations.mjs';
 import {patrolTerrainPlacement} from './patrol-terrain-placement.mjs';
@@ -17,8 +17,8 @@ export function pendingPatrolPiece(r,p){
   return !!(p&&!p.removed&&p.faction!=='terrain'&&r?.deployment?.pending&&groupId(r,p)===r.deployment.pending);
 }
 export function visiblePatrolPiece(r,p){
-  return p.faction==='terrain'||!p.removed&&r.deployment&&
-    (pendingPatrolPiece(r,p)||r.deployment.placed.includes(groupId(r,p)));
+  return !p.removed&&(p.faction==='terrain'||!!r.deployment&&
+    (pendingPatrolPiece(r,p)||r.deployment.placed.includes(groupId(r,p))));
 }
 export function patrolPlacementError(game){
   const r=game.rules,d=r.deployment,all=fighters(game),unit=all.filter(p=>pendingPatrolPiece(r,p));
@@ -94,9 +94,7 @@ export function advanceOfficialSetup(original,action,d6){
   r.officialSetup=applyPatrolSetup(r.officialSetup,input,d6);
   const after=patrolSetupView(r.officialSetup);
   if(input.type==='roll-layout'){
-    for(const pose of layoutGeometry(after.map).terrain){
-      Object.assign(game.pieces.find(p=>p.id===pose.id),pose,{elevation:0,removed:false});
-    }
+    for(const [p,pose] of layoutScenery(game,layoutGeometry(after.map,r.officialSetup.version)))Object.assign(p,pose);
   }
   if(choose){
     game.layout={map:after.map,blue:after.blue};

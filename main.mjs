@@ -402,7 +402,7 @@ function renderFieldBattle(state){
     const inRange=view.shooting.visibility.find(v=>v.id===id).range;
     legend.textContent=target.name+' · '+baseDistance(from,target).toFixed(1)+'″ · '+(inRange?'사거리 안':'사거리 밖');row.append(legend);
     const inspect=document.createElement('button');inspect.type='button';inspect.textContent='사수 시점';
-    inspect.onclick=()=>{scene?.lookFrom(shooter,id)};row.append(inspect);
+    inspect.onclick=()=>inspectSight(shooter,id);row.append(inspect);
     for(const [value,label] of Object.entries(labels)){
       const choice=choices.find(a=>a.visibility===value);
       const button=choice?actionButton(choice,label):document.createElement('button');
@@ -437,7 +437,7 @@ $('show-map').onclick=()=>{
   $('map-title').textContent='컴뱃 패트롤 배치도 '+code;
   function showDiagram(){
     image.hidden=true;diagram.hidden=false;
-    drawDeploymentDiagram(diagram,code,$('blue').value,template);
+    drawDeploymentDiagram(diagram,code,$('blue').value,game);
   }
   if(original){
     diagram.hidden=true;image.hidden=false;image.onerror=showDiagram;
@@ -449,8 +449,8 @@ document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>switchTab(b.dat
 $('search').oninput=roster;$('pick').onclick=()=>setMode('pick');$('ruler').onclick=()=>setMode('ruler');
 $('path').onclick=()=>setMode('path');$('back-point').onclick=()=>scene?.backPoint();$('walk').onclick=()=>scene?.walk();
 $('undo').onclick=()=>undo();$('redo').onclick=()=>undo(true);$('grid').onclick=()=>{if(scene)$('grid').setAttribute('aria-pressed',scene.toggleGrid())};
-$('camera').onclick=()=>{reference(false);if(mode==='sight')setMode('pick');if(scene)$('camera').textContent=scene.top()?'전시 시점':'탑뷰'};
-$('home').onclick=()=>{reference(false);if(mode==='sight')setMode('pick');scene?.home();$('camera').textContent='탑뷰'};$('focus').onclick=()=>{reference(false);if(mode==='sight')setMode('pick');scene?.focus(active)};
+$('camera').onclick=()=>{reference(false);exitSight();if(scene)$('camera').textContent=scene.top()?'전시 시점':'탑뷰'};
+$('home').onclick=()=>{reference(false);exitSight();scene?.home();$('camera').textContent='탑뷰'};$('focus').onclick=()=>{reference(false);exitSight();scene?.focus(active)};
 $('rotate').onclick=rotate;$('remove').onclick=()=>{const p=piece(active);if(p)remove(p.id,!p.removed)};
 $('sight').onclick=()=>{reference(false);setMode('sight');$('hint').textContent='시선을 확인할 상대 기물을 클릭하세요.'};
 $('studio-view').onclick=()=>{const p=piece(active);if(p)openStudioViewer(p)};
@@ -465,7 +465,10 @@ document.addEventListener('keydown',e=>{if(e.target.closest('input,select,textar
   if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){e.preventDefault();undo(e.shiftKey)}
   else if(e.key==='Escape'){setMode('pick');select(null)}
   else if(e.key.toLowerCase()==='r')rotate()});
+function inspectSight(from,to){reference(false);setMode('pick');scene?.lookFrom(from,to)}
+function exitSight(){if(mode==='sight'||scene?.inSight())setMode('pick')}
 const api={
+  inspectSight,exitSight,
   getTable:()=>game,
   officialCommand(action){
     let next;

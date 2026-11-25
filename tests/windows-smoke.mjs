@@ -52,6 +52,11 @@ try{
   if(publicFlag!==-1)assert.equal(studioInstalled,false,'Public executable must run without the studio pack');
   if(studioInstalled)await click('#appearance');
   await delay(400);const meshes=await js('tabletopView.stats()');assert.ok(meshes.triangles>10000);await screenshot('01b-meshes.png');
+  await js('document.querySelector("#search").value="발전기 성소";document.querySelector("#search").dispatchEvent(new Event("input"))');
+  await click('[aria-label$="generatorShrine-1"]');await click('#focus');
+  assert.match(await js('document.querySelector("#piece-name").textContent'),/발전기 성소/);
+  await screenshot('01c-generator-shrine.png');
+  await click('#home');await js('document.querySelector("#search").value="";document.querySelector("#search").dispatchEvent(new Event("input"))');
   if(publicFlag!==-1)assert.equal(meshes.reconstructed,0);
   else if(studioInstalled&&existsSync(join(root,'reconstruction','models','14.whm')))assert.ok(meshes.reconstructed>=17,'Installed set must display both reconstructed pylons');
   if(studioInstalled){

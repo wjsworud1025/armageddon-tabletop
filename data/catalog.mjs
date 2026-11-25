@@ -61,9 +61,9 @@ const kinds = [
   ['terrain', 'largeRuin', '대형 제조공장 폐허', 5.2, 4.1],
   ['terrain', 'smallRuin', '소형 제조공장 폐허', 2.5, 1.4],
   ['terrain', 'shockArray', '충격기 배열', 4.1, 0.95],
-  ['terrain', 'capacitorStack', '축전기 다발', 4.2, 1.75],
+  ['terrain', 'capacitorStack', '축전기 다발', 4.2, 2.86],
   ['terrain', 'barricade', '락크리트 바리케이드', 3.8, 0.65],
-  ['terrain', 'generatorShrine', '발전기 성소', 3.5, 1.5],
+  ['terrain', 'generatorShrine', '발전기 성소', 3.5, 2.68],
   ['terrain', 'pylon', '송전 첨탑', 3.5, 1.4]
 ];
 

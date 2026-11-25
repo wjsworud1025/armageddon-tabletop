@@ -42,7 +42,7 @@ function reveal(map,defender=map==='B'?'orks':'marines'){
   game=step(game,'form-enhance',{team:'marines',enhancement:'veterans'});
   game=checkpoint(step(game,'form-lock',{team:'marines'}));
   assert.deepEqual(game.rules.attachments,{});
-  assert.equal(game.pieces.filter(p=>p.removed).length,0);
+  assert.deepEqual(game.pieces.filter(p=>p.removed).map(p=>p.id),['shockArray-1']);
   game=step(game,'form-open',{team:'orks'});
   game=step(game,'form-enhance',{team:'orks',enhancement:'armour'});
   game=checkpoint(step(game,'form-lock',{team:'orks'}));
@@ -50,7 +50,7 @@ function reveal(map,defender=map==='B'?'orks':'marines'){
   assert.equal(game.rules.deployment.next,defender);
   assert.equal(game.rules.reserves.intercessor.length,6);
   assert.ok(game.rules.reserves.intercessor.every(id=>piece(game,id).removed));
-  assert.deepEqual(game.pieces.filter(p=>visiblePatrolPiece(game.rules,p)).map(p=>p.faction),Array(15).fill('terrain'));
+  assert.deepEqual(game.pieces.filter(p=>visiblePatrolPiece(game.rules,p)).map(p=>p.faction),Array(14).fill('terrain'));
   deployments.set(key,game);
   return structuredClone(game);
 }
@@ -112,6 +112,40 @@ test('saved map, defender, turn, terrain and revealed reserve records agree with
   }
   assert.equal(stage(checkpoint(deployed)),'deployment');
   assert.deepEqual(original.rules.deployment.placed,[]);
+});
+
+test('the box shows all 15 terrain pieces before the draw; each saved map version restores its own structures and resumes through placement',()=>{
+  for(const version of [1,2])for(const [map,die] of [['A',1],['B',3],['C',5]]){
+    let game=fresh();game.rules.officialSetup.version=version;
+    assert.equal(fresh().rules.officialSetup.version,2);
+    assert.equal(game.pieces.filter(p=>visiblePatrolPiece(game.rules,p)).length,15);
+    const tooEarly=snapshot(game);piece(tooEarly,'shockArray-1').removed=true;
+    assert.throws(()=>restore(createTable(),tooEarly));
+    game=checkpoint(step(game,'official-roll-layout',{},[die]));
+    assert.equal(game.pieces.filter(p=>visiblePatrolPiece(game.rules,p)).length,version===1?15:14);
+    const switched=snapshot(game);
+    switched.rules.officialSetup.version=version===1?2:1;
+    assert.throws(()=>restore(createTable(),switched));
+    piece(switched,'shockArray-1').removed=version===1;
+    assert.throws(()=>restore(createTable(),switched),'other layout poses also differ');
+    const tampered=snapshot(game);piece(tampered,'shockArray-1').removed=version===1;
+    assert.throws(()=>restore(createTable(),tampered));
+    const unsupported=snapshot(game);unsupported.rules.officialSetup.version=3;
+    assert.throws(()=>restore(createTable(),unsupported));
+    game=step(step(game,'official-roll-role',{},[1,4]),'official-defend');
+    game=step(game,'form-enhance',{team:'marines',enhancement:'veterans'});
+    game=step(step(game,'form-lock',{team:'marines'}),'form-open',{team:'orks'});
+    game=step(game,'form-enhance',{team:'orks',enhancement:'warcry'});
+    game=checkpoint(step(game,'form-lock',{team:'orks'}));
+    game=checkpoint(step(step(game,'official-select',{unit:'warboss'}),'official-place'));
+    assert.deepEqual(game.rules.deployment.placed,['warboss']);
+    for(const at of layoutGeometry(map,version).terrain){
+      const model=piece(game,at.id);
+      assert.equal(model.removed,false);
+      assert.ok(Math.hypot(model.x-at.x,model.z-at.z)<1e-7);
+      assert.ok(Math.abs(Math.sin((model.yaw-at.yaw)/2))<1e-7);
+    }
+  }
 });
 
 test('official preparation cannot carry a forged battle round or phase into the first turn',()=>{
@@ -226,6 +260,9 @@ test('older manual and HP-only saves continue restoring without official formati
   const table={...createTable(),logs:['이전 전장'],rules:newBattle(),layout:{map:'B',blue:'orks'}};
   table.rules.deployment={defender:'orks',next:'marines',placed:['warboss']};
   Object.assign(piece(table,'warboss-1'),{x:0,z:0,elevation:2});
+  Object.assign(piece(table,'shockArray-1'),{x:3.25,z:1.6,yaw:.15,removed:false});
+  Object.assign(piece(table,'generatorShrine-1'),{x:7.5,z:9,removed:true});
+  assert.deepEqual(snapshot(checkpoint(table)).pieces,snapshot(table).pieces);
   assert.deepEqual(checkpoint(table).rules,table.rules);
   table.rules={hp:{'warboss-1':2}};
   assert.deepEqual(checkpoint(table).rules,table.rules);

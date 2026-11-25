@@ -33,15 +33,17 @@ export async function checkPatrolSetup({save,upload,click,state,js,reload,onDepl
     assert.deepEqual(board.visible.sort(),visible,'Visible terrain and miniatures in the 3D scene');
     assert.equal(board.count,visible.length,'Each visible piece is rendered once');
   }
-  const terrain=pieces.filter(p=>p.faction==='terrain');
+  const catalogTerrain=pieces.filter(p=>p.faction==='terrain');
+  const terrain=catalogTerrain.filter(p=>p.id!=='shockArray-1');
   const privateControls='[data-act^="form-"][data-team="marines"]';
   await upload(save);
   await click('[data-tab=battle]');
   await click(action('official-new'));
   assert.equal(await stage(),'layout');
-  await checkBoard(terrain);
+  await checkBoard(catalogTerrain);
   assert.equal(await available(action('start')),false);
   await roll('layout',[1]);
+  await checkBoard(terrain);
   await roll('role',[3,3]);
   assert.deepEqual((await current()).officialSetup.roleRolls,[[3,3]]);
   assert.equal(await stage(),'role-roll');

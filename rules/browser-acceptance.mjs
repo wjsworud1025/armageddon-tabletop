@@ -151,6 +151,15 @@ try {
   await choose('fighter',rifles[0].id);
   const otherGrot=template.pieces.find(p=>p.kind==='gretchin' && p.id!==victim.id);
   await choose('target',otherGrot.id);
+  const beforeSight=await state();
+  await click(button('inspect-sight'));
+  const visible=id=>js('tabletopView.pose('+JSON.stringify(id)+') !== null');
+  for(const id of [rifles[0].id,rifles[1].id,'gretchin-3'])assert.equal(await visible(id),false,id);
+  for(const id of [otherGrot.id,actor.id,'generatorShrine-1'])assert.equal(await visible(id),true,id);
+  assert.deepEqual(await state(),beforeSight,'Sight inspection cannot change the battle');
+  await choose('target','gretchin-3');
+  assert.equal(await visible(rifles[1].id),true,'Changing target restores the shared table');
+  await choose('target',otherGrot.id);
   await click(button('volley'));
   await choose('fighter',rifles[1].id);await choose('weapon','3');
   const secondUnit=template.pieces.find(p=>p.kind==='boy');

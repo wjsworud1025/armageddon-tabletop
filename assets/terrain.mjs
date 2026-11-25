@@ -1,6 +1,7 @@
 import {paint as p, seeded} from './sculpt.mjs';
 import {relief} from './wall-relief.mjs';
 import {shrineReturn} from './manufactorum-walls.mjs';
+import {generatorShrine} from './generator-shrine.mjs';
 
 const frame=0x464647, edge=0x69635b, panel=0x664332, inset=0x302e2c;
 
@@ -167,10 +168,10 @@ function capacitor(s) {
     s.cylinder(inset,[x,1.54,0],.315,.32,.023,18);
     for(const angle of [-1.1,1.10,3.1]) s.box(edge,[x+Math.sin(angle)*.44,.76,Math.cos(angle)*.44],[.094,1.48,.065],[0,angle,0]);
   }
-  const box=s.child([0,0,-.37]);
+  const box=s.child([0,0,.37]);
   box.box(frame,[0,.85,0],[.66,1.67,.45]);
-  for(let i=0;i<4;i++) box.box(p.rust,[0,.49+i*.24,-.23],[.53,.08,.07]);
-  const station=s.child([.64,0,-.49]);
+  for(let i=0;i<4;i++) box.box(p.rust,[0,.49+i*.24,.23],[.53,.08,.07]);
+  const station=s.child([.64,0,.49]);
   station.box(frame,[0,.92,0],[.57,1.83,.38]);
   station.box(0x465139,[0,.61,.205],[.46,.34,.056]);
   station.box(p.brass,[0,.374,.21],[.37,.075,.055]);
@@ -181,39 +182,7 @@ function capacitor(s) {
   lightning(station,[-.18,2.10,0],[.19,2.08,0],9);
 }
 
-function shrine(s) {
-  // Paired induction housings capped by bronze aquilas in the box photograph.
-  for(const side of [-1,1]) {
-    const tower=s.child([side*.91,0,0]);
-    tower.box(frame,[0,.085,0],[.70,.17,.87]);
-    for(const z of [-.25,.25]) {
-      tower.link(frame,[side*.178,.12,z],[0,2.29,z],.144,.141,6);
-      tower.link(edge,[-side*.192,.12,z],[0,1.10,z],.073,.059,6);
-    }
-    tower.box(frame,[0,2.28,0],[.42,.62,.65],[0,0,side*.09]);
-    tower.cylinder(p.iron,[0,2.21,0],.38,.36,.65,14,[0,0,Math.PI/2]);
-    for(const y of [1.97,2.37]) {
-      tower.cylinder(p.brass,[-side*.34,y,0],.16,.16,.10,14,[0,0,Math.PI/2]);
-      tower.oval(p.teal,[-side*.40,y,0],[.07,.1,.1]);
-    }
-    tower.link(p.rust,[side*.20,.13,.37],[side*.22,1.51,.30],.046,.046);
-    tower.cylinder(p.brass,[0,2.73,0],.047,.135,.27,8);
-    for(const wing of [-1,1]) {
-      for(let n=0;n<4;n++) {
-        tower.plate(n%2?p.brass:p.gold,[[0,0],[wing*(.39-n*.04),.21],[wing*(.34-n*.04),.10],[wing*.035,-.053]],.033,[0,2.82-n*.032,.013*n]);
-      }
-    }
-  }
-  for(const x of [-.39,.39]) {
-    s.cylinder(p.rust,[x,.49,0],.092,.11,.95,9);
-    s.cylinder(p.brass,[x,.18,0],.143,.143,.078,10);
-  }
-  s.box(frame,[0,1.52,0],[1.70,.22,.47]);
-  s.box(panel,[0,.47,0],[.78,.09,.26]);
-  for(let n=0;n<5;n++) lightning(s,[-.53,1.89+n*.132,-.11+n*.06],[.53,1.90+n*.137,-.08+n*.06],102+n*13);
-}
-
-const factories={largeRuin:(s,v)=>ruin(s,true,v),smallRuin:(s,v)=>ruin(s,false,v),shockArray:shock,capacitorStack:capacitor,barricade,generatorShrine:shrine,pylon};
+const factories={largeRuin:(s,v)=>ruin(s,true,v),smallRuin:(s,v)=>ruin(s,false,v),shockArray:shock,capacitorStack:capacitor,barricade,generatorShrine,pylon};
 
 export function scenery(s,item) {
   const model=s.child();

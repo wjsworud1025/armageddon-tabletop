@@ -57,13 +57,47 @@ function checkArmyDeployment(game){
 test('All six map and side combinations deploy each formation inside its zone with four objective areas',()=>{
   for(const map of ['A','B','C'])for(const blue of ['marines','orks']){
     const game={...createTable(),rules:null,logs:[]};applyLayout(game,map,blue);
-    assert.equal(layoutGeometry(map).terrain.length,15);
+    assert.equal(layoutGeometry(map).terrain.length,14);
+    assert.equal(game.pieces.filter(p=>p.faction==='terrain'&&!p.removed).length,14);
+    assert.equal(game.pieces.find(p=>p.kind==='shockArray').removed,true);
     checkArmyDeployment(game);
     const areas=objectiveAreas(game);assert.equal(areas.length,4);
     assert.equal(areas.filter(a=>a.home===blue).length,1);
     assert.equal(areas.filter(a=>a.home===null).length,2);
     assert.deepEqual(snapshot(restore(board,snapshot(game))),snapshot(game));
   }
+});
+test('on all three diagrams the shrine and capacitor each occupy their own printed area; the capacitor console faces the short edge shown',()=>{
+  const plants={A:[[850,861,0],[693.5,1099,0]],B:[[353,1090,90],[1187,871,90]],C:[[767,1319,90],[770,642,90]]};
+  for(const [map,expected] of Object.entries(plants)){
+    const {terrain}=layoutGeometry(map);
+    for(const [index,id] of ['generatorShrine-1','capacitorStack-1'].entries()){
+      const at=terrain.find(p=>p.id===id),[u,v,angle]=expected[index];
+      assert.ok(Math.abs(u-(203+(15-at.z)*1129/30))<1e-7);
+      assert.ok(Math.abs(v-(154+(22+at.x)*1654/44))<1e-7);
+      assert.equal(at.yaw,angle*Math.PI/180);
+    }
+    const capacitor=terrain.find(p=>p.id==='capacitorStack-1');
+    // Local +z transformed into world x/z by the sculpt's yaw.
+    const direction=[Math.sin(capacitor.yaw),Math.cos(capacitor.yaw)].map(n=>Math.round(n)||0);
+    assert.deepEqual(direction,map==='A'?[0,1]:[1,0]);
+    assert.equal(terrain.some(p=>p.id==='shockArray-1'),false);
+    const unchanged=poses=>poses.filter(p=>!['generatorShrine-1','capacitorStack-1','shockArray-1'].includes(p.id));
+    assert.deepEqual(unchanged(terrain),unchanged(layoutGeometry(map,1).terrain));
+  }
+});
+test('a saved custom table retains industrial terrain centres that touched the board edge with the former footprints',()=>{
+  const old={...createTable(),rules:newBattle(),logs:[]};
+  const saved=snapshot(old);
+  for(const [id,z] of [['generatorShrine-1',14.25],['capacitorStack-1',14.125]]){
+    Object.assign(saved.pieces.find(p=>p.id===id),{x:0,z,yaw:0,removed:false});
+  }
+  const loaded=restore(board,saved);
+  for(const id of ['generatorShrine-1','capacitorStack-1']){
+    assert.deepEqual(snapshot(loaded).pieces.find(p=>p.id===id),saved.pieces.find(p=>p.id===id));
+  }
+  saved.pieces.find(p=>p.id==='capacitorStack-1').z=100;
+  assert.ok(restore(board,saved).pieces.find(p=>p.id==='capacitorStack-1').z<=15);
 });
 test('attached leaders deploy with their specific bodyguard on all maps and both sides',()=>{
   const assignments=[{}, {'warboss-1':'boy-0'}, {'warboss-1':'boy-1'},

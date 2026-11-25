@@ -162,9 +162,10 @@ export function mountRules(container,api) {
     const availableAttacks=weapon.range?0:Math.max(1,weapon.attacks+Number(choices.extra)-allocated);
     return chunk('무기 공격',select('weapon','선택한 모델의 무기',options.map(({w,i})=>opt(String(i),w.name,choices.weapon)).join(''))+
       select('target','공격할 분대의 모델',candidates.map(p=>opt(p.id,pieceLabel(p),choices.target)).join(''))+
-      '<p class="br-sub">거리 '+dist.toFixed(1)+'″ · 사거리 '+range+' · A '+weapon.attacks+' · S '+weapon.strength+
+      '<p class="br-sub">분대까지 최단 거리 '+dist.toFixed(1)+'″ · 사거리 '+range+' · A '+weapon.attacks+' · S '+weapon.strength+
       ' · AP '+weapon.ap+' · D '+weapon.damage+'</p>'+
-      (weapon.range ? '<label><input data-field="cover" type="checkbox"'+(choices.cover?' checked':'')+'> 표적 분대에 엄폐 적용</label>' : '')+
+      (weapon.range&&api.inspectSight?btn('inspect-sight','사수 시점에서 선택한 모델 보기'):'')+
+      (weapon.range?'<label><input data-field="cover" type="checkbox"'+(choices.cover?' checked':'')+'> 표적 분대에 엄폐 적용</label>':'')+
       detail('mods','무기 및 분대 보정',row(number('hitMod','명중 보정',-1,1,choices.hitMod)+number('woundMod','상처 보정',-1,1,choices.woundMod)+number('extra','추가 공격',0,30,choices.extra))+
         '<label><input type="checkbox" data-field="lethal"'+(choices.lethal?' checked':'')+'>치명적 명중 (Lethal Hits)</label>')+
       (!weapon.range?number('allocation','이 표적에 배정할 근접 공격',1,availableAttacks,choices.allocation||availableAttacks):'')+
@@ -558,6 +559,11 @@ export function mountRules(container,api) {
       return;
     }
     const actor=getPiece(choices.fighter);
+    if(action==='inspect-sight'){
+      const target=getPiece(choices.target);
+      if(actor&&target&&!actor.removed&&!target.removed)api.inspectSight(actor.id,target.id);
+      return;
+    }
     if(state.declaration?.attackRoll&&!action.startsWith('packet-'))return;
     if(state.declaration?.precisionRoll&&action!=='resolve-'+state.declaration.precisionRoll.index)return;
     if(state.fightSequence?.counterAfter&&!(state.hazard?action.startsWith('hazard-'):action.startsWith('fight-counter-')))return;
@@ -906,6 +912,7 @@ export function mountRules(container,api) {
       choices.weapon='0'; choices.extra='0'; choices.hitMod='0'; choices.woundMod='0'; choices.lethal=false;
     }
     if(['fighter','weapon','target'].includes(key))choices.allocation='';
+    if (['fighter','target'].includes(key))api.exitSight?.();
     if (['fighter','weapon','target','objective'].includes(key)) refresh();
   }
   function toggle(event) {
