@@ -25,7 +25,7 @@ export function photoCamera(T,width,depth){
   const basis=new T.Matrix3().set(X.x,Y.x,Z.x,X.y,Y.y,Z.y,X.z,Y.z,Z.z);
   const camera=new T.PerspectiveCamera();
   camera.position.copy(O).applyMatrix3(basis.invert()).negate();camera.lookAt(0,0,0);camera.updateMatrixWorld();
-  return {camera,fit(w,h,zoom=1,offsetX=0,offsetY=0){
+  function fit(w,h,zoom=1,offsetX=0,offsetY=0){
     const base=photoFit(w,h),px=base.px*zoom,uMid=base.uMid-offsetX/px,vMid=base.vMid-offsetY/px;
     const row=(axis,mid,factor)=>[x,y,z,origin].map(v=>(v[axis]-mid*v.z)*factor);
     const rx=row('x',uMid,2*px/w),ry=row('y',vMid,-2*px/h);
@@ -33,5 +33,14 @@ export function photoCamera(T,width,depth){
     const worldToClip=new T.Matrix4().set(...rx,...ry,...rz,...rw);
     camera.projectionMatrix.multiplyMatrices(worldToClip,camera.matrixWorld);
     camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert();
-  }};
+  }
+  function frame(w,h,bounds){
+    fit(w,h);
+    const view=bounds.clone().applyMatrix4(new T.Matrix4().multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse));
+    // Keep the entire model between the stage header and the measurement tools.
+    const zoom=T.MathUtils.clamp(1.48/Math.max(view.max.x-view.min.x,view.max.y-view.min.y),.55,12);
+    const center=view.getCenter(new T.Vector3());
+    return {zoom,offsetX:-center.x*w*zoom/2,offsetY:center.y*h*zoom/2};
+  }
+  return {camera,fit,frame};
 }

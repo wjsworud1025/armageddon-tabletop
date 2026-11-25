@@ -282,9 +282,18 @@ export async function buildScene(canvas,api) {
       offsetX=ratio*offsetX+(1-ratio)*(e.clientX-r.left-r.width/2);offsetY=ratio*offsetY+(1-ratio)*(e.clientY-r.top-r.height/2)}
     else half=clamp(half*scale,1.2,55);projection()},{passive:false});
   function focus(id){const p=lookup(id);if(!p||p.removed)return;sightPair=null;
-    target.set(p.x,(p.elevation||0)+1,p.z);half=Math.max(2.1,p.baseWidth*1.2,p.baseDepth*1.2);
-    if(photo){photoZoom=Math.min(8,17/Math.max(p.baseWidth,2));offsetX=offsetY=0;projection();
-      const v=target.clone().project(camera);offsetX=-v.x*canvas.clientWidth/2;offsetY=v.y*canvas.clientHeight/2}
+    const bounds=new T.Box3().setFromObject(objects.get(id),true);
+    bounds.getCenter(target);
+    const w=canvas.clientWidth,h=canvas.clientHeight;
+    if(!w||!h)return;
+    if(photo){
+      const view=promo.frame(w,h,bounds);
+      photoZoom=view.zoom;offsetX=view.offsetX;offsetY=view.offsetY;
+    }else{
+      // A bounding sphere fits both axes at every orbit angle and aspect ratio.
+      const radius=bounds.getBoundingSphere(new T.Sphere()).radius;
+      half=Math.max(1.2,radius*Math.max(1,h/w)/.78);
+    }
     projection()}
   canvas.addEventListener('dblclick',e=>focus(pick(e)));
   function render(){if(invalid){invalid=false;paintMeasure();renderer.render(scene,camera)}requestAnimationFrame(render)}

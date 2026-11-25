@@ -4,6 +4,7 @@ import {createTable,photoFrame,photoToBoard} from '../data/catalog.mjs';
 import {baseDistance,place,restore,snapshot} from '../state.mjs';
 import * as T from '../vendor/three.module.min.js';
 import {photoCamera,photoFit} from '../photo-camera.mjs';
+import {createPiece} from '../assets/pieces.mjs';
 import {applyLayout,layoutGeometry,validDeployment,objectiveAreas,overlapsArea} from '../layouts.mjs';
 import {coherency} from '../movement.mjs';
 import {groupId,newBattle} from '../rules/battle.mjs';
@@ -21,6 +22,21 @@ test('Published roster counts, individual heights, unique ids and oriented photo
   });
   const foot=new T.Vector3().project(view.camera),head=new T.Vector3(0,2,0).project(view.camera);
   assert.ok(head.y>foot.y);
+});
+test('close-up frames the elevated shrine and both wing tips in wide and tall viewports',()=>{
+  const p=board.pieces.find(p=>p.kind==='generatorShrine'),obj=createPiece(T,p);
+  obj.position.set(p.x,2,p.z);obj.rotation.y=p.yaw;obj.updateMatrixWorld(true);
+  const bounds=new T.Box3().setFromObject(obj,true);
+  for(const [w,h] of [[1089,713],[480,860]]){
+    const cam=photoCamera(T,44,30),v=cam.frame(w,h,bounds);
+    cam.fit(w,h,v.zoom,v.offsetX,v.offsetY);
+    const frame=bounds.clone().applyMatrix4(new T.Matrix4().multiplyMatrices(cam.camera.projectionMatrix,cam.camera.matrixWorldInverse));
+    for(const axis of ['x','y']){
+      approx(frame.min[axis],-frame.max[axis]);
+      assert.ok(frame.max[axis]<=.74001);
+    }
+    approx(Math.max(frame.max.x,frame.max.y),.74);
+  }
 });
 test('Rotating elliptical vehicle and measuring round bases uses inches at the nearest edge',()=>{
   const a={faction:'orks',baseWidth:2,baseDepth:4,yaw:0,x:0,z:0},b={...a,baseWidth:2,baseDepth:2,x:10};
