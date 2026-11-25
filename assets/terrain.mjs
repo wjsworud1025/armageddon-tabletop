@@ -4,6 +4,10 @@ import {relief} from './wall-relief.mjs';
 const frame=0x464647, edge=0x69635b, panel=0x664332, inset=0x302e2c;
 
 function deck(s, width, depth, y) {
+  // The balcony is a torn sheet of metal with raised ribs and a hatch.
+  s.plate(panel,[[-.49,-.49],[.49,-.49],[.49,.04],[.42,.09],[.44,.18],
+    [.30,.21],[.34,.29],[.18,.33],[.21,.41],[.04,.40],[-.04,.48],[-.49,.48]]
+    .map(([x,z])=>[x*width,z*depth]),.074,[0,y,0],[Math.PI/2,0,0]);
   for(let i=0; i<=5; i++) {
     const z=-depth/2+i*depth/5;
     s.box(i%2===0?panel:p.rust,[0,y,z],[width,.094,.097]);
@@ -29,8 +33,9 @@ function ruin(s, large, variant) {
   const w=large?4.35:2.2, d=large?2.94:1.02;
   const corner=[-w/2,0,-d/2];
   if(large) {
-    relief(s,'door',w,3.95,'inside',undefined,corner);
-    relief(s,'pipe',d,3.95,undefined,[0,-Math.PI/2,0],corner);
+    const hasPipe=variant===0||variant===3;
+    relief(s,'door',w,3.95,'inside',undefined,corner,hasPipe?'chapel':'door');
+    relief(s,'pipe',d,3.95,undefined,[0,-Math.PI/2,0],corner,hasPipe?'pipe':'reliquary');
     const balcony=s.child([-w*.22,0,-d*.12]);
     deck(balcony,w*.56,d*.76,2.30);
     for(const z of [-d*.32,d*.30]) {
@@ -40,10 +45,12 @@ function ruin(s, large, variant) {
     const short=s.child(corner,[0,-Math.PI/2,0]);
     // A cast elbow, flanged collars and weathered cabling project from the
     // outer wall, leaving the rear passage and first-floor windows open.
-    const path=[[.31,2.00,-.13],[.32,3.21,-.13],[.43,3.38,-.13],[.71,3.40,-.13],[.86,3.45,-.13]];
+    const path=[[.31,1.78,.14],[.31,1.96,.23],[.32,3.21,.23],[.43,3.38,.23],[.71,3.40,.20],[.86,3.45,.15]];
     const oxides=[0x853c33,0x925242,0x6f3931,0xa15c47];
-    for(let i=1;i<path.length;i++) short.link(oxides[i-1],path[i-1],path[i],.058,.058,10);
-    for(let n=0;n<4;n++) short.cylinder(0x725844,[.316,2.13+n*.28,-.136],.071,.071,.047);
+    if(hasPipe){
+      for(let i=1;i<path.length;i++) short.link(oxides[(i-1)%oxides.length],path[i-1],path[i],.098,.098,10);
+      for(let n=0;n<4;n++) short.cylinder(0x725844,[.316,2.13+n*.28,.23],.12,.12,.055);
+    }
     for(let n=0;n<8;n++) {
       const z=-d/2+(n+.5)*d/8;
       s.box(0x53453b,[-w/2+.15,2.27,z],[.31,.075,.068]);

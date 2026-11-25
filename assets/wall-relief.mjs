@@ -1,3 +1,5 @@
+import {manufactorumWall} from './manufactorum-walls.mjs';
+
 let wallSurvey;
 export async function loadWallSurvey(){
   ({wallSurvey}=await import('./wall-survey.mjs'));
@@ -25,15 +27,9 @@ function pixel(sheet,x,y) {
 
 // Reconstruct a continuous double-sided wall with thickness, jagged boundary,
 // open windows and relief. The texture samples stay fixed when the player orbits.
-export function relief(s,name,width,height,innerName,rotation,origin) {
+export function relief(s,name,width,height,innerName,rotation,origin,publicSection=name) {
   if(!wallSurvey){
-    const wall=s.child(origin,rotation);
-    wall.box(0x62594b,[width*.5,height*.14,0],[width,height*.28,.15]);
-    for(const u of [.08,.5,.91]){
-      const h=height*(u>.9?.67:1);
-      wall.box(0x70665b,[width*u,h*.5,0],[width*.13,h,.17]);
-    }
-    wall.box(0x584e44,[width*.29,height*.85,0],[width*.54,height*.13,.2]);
+    manufactorumWall(s.child(origin,rotation),publicSection,width,height);
     return;
   }
   const T=s.T;
