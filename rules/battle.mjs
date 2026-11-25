@@ -15,8 +15,8 @@ export function startBattle(state,first,rounds) {
   return {...state,status:'playing',first,active:first,rounds,cp:{marines:1,orks:1}};
 }
 export function advance(state) {
-  if (state.status !== 'playing' || state.hazard || state.declaration || state.movePlan) return state;
-  if (state.step < steps.length - 1) return {...state,step:state.step+1};
+  if (state.status !== 'playing' || state.hazard || state.declaration || state.movePlan || state.chargePlan) return state;
+  if (state.step < steps.length - 1) return {...state,step:state.step+1,...(state.step===3?{chargeWindow:false}:{})};
   const next = opposite(state.active);
   const endRound = next === state.first;
   if (endRound && state.round === state.rounds) return {...state,status:'finished'};

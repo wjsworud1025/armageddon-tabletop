@@ -112,7 +112,9 @@ function boardContains(p,width,depth,delta=0) {
 // horizontally, then vertically, then pivots. Include intermediate waypoints for
 // another order. origins lets the UI replay a draft from its true starting pose.
 export function assessMove({game,pieces,origins={},paths={},type,advanceRoll=0,phase='finish',
-    takeToSkies=false,fallbackMode='ordered',desperateEscapeResolved=false,checkEligibility=true}) {
+    takeToSkies=false,fallbackMode='ordered',desperateEscapeResolved=false,checkEligibility=true,
+    chargeDistance,maxDistance}) {
+  const fightMove=type==='pile-in' || type==='consolidate';
   const errors=[],manual=[],models={};
   const seen=new Set();
   function add(list,code,ids,message) {
@@ -125,7 +127,9 @@ export function assessMove({game,pieces,origins={},paths={},type,advanceRoll=0,p
   if(!game || !Array.isArray(game.pieces) || !Array.isArray(pieces) || !pieces.length || !paths || typeof paths!=='object' || Array.isArray(paths) ||
     !origins || typeof origins!=='object' || Array.isArray(origins) ||
     !Number.isFinite(game.width) || !Number.isFinite(game.depth) || game.width<=0 || game.depth<=0 ||
-    !['normal','advance','fallback','remain'].includes(type) || !['path','finish'].includes(phase) ||
+    !['normal','advance','fallback','remain','charge','pile-in','consolidate'].includes(type) || !['path','finish'].includes(phase) ||
+    (type==='charge' && (!Number.isFinite(chargeDistance)||chargeDistance<0)) ||
+    (fightMove && (![3,6].includes(maxDistance)||takeToSkies)) ||
     !['ordered','desperate'].includes(fallbackMode) || (type==='advance' && (!Number.isInteger(advanceRoll) || advanceRoll<1 || advanceRoll>6))) {
     fail('invalid-move',[],'이동 종류·전장·분대·전력 이동 D6을 확인하세요.');
     return result(null);
@@ -160,7 +164,8 @@ export function assessMove({game,pieces,origins={},paths={},type,advanceRoll=0,p
   }
   const ends=[];
   for(const p of starts) {
-    const budget=moveLimit(p,type,advanceRoll,takeToSkies);
+    const budget=type==='charge'?Math.max(0,chargeDistance-(takeToSkies?2:0)):
+      fightMove?maxDistance:moveLimit(p,type,advanceRoll,takeToSkies);
     const flying=takeToSkies && isFly(p);
     let position=p, distance=0;
     const route=paths[p.id]??[];
@@ -220,7 +225,7 @@ export function assessMove({game,pieces,origins={},paths={},type,advanceRoll=0,p
         if(gapY(p,other)<=EPS) fail('base-overlap',pair,'이동 완료 시 두 베이스가 겹칩니다.');
         else check('model-clearance',pair,'다른 높이에서 두 모델이 겹칩니다. 실제 바닥 간격과 조형의 높이를 확인하세요.');
       }
-      if(other.faction!==p.faction && engaged(p,other)) fail('end-engaged',pair,'이동을 마친 분대는 적과 교전 거리 밖에 있어야 합니다.');
+      if(!fightMove && type!=='charge' && other.faction!==p.faction && engaged(p,other)) fail('end-engaged',pair,'이동을 마친 분대는 적과 교전 거리 밖에 있어야 합니다.');
     }
   }
   return result(coherence);

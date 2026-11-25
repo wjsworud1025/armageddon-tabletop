@@ -37,13 +37,17 @@ export function selectOrder(state,key) {
   return {...state,patrol:{...p,doctrine:key,usedDoctrines:[...p.usedDoctrines,key]}};
 }
 const phaseKey=state=>[state.round,state.active,state.step].join('-');
+// Core 15.01: a player can target each unit with only one stratagem per phase.
+export function unitTargetedByStratagem(state,unit) {
+  return Object.values(state.patrol?.tactics??{}).includes(phaseKey(state)+'/'+unit);
+}
 export function tacticActive(state,key,unit) {
   return state.patrol?.tactics?.[key]===phaseKey(state)+'/'+unit;
 }
 export function useTactic(state,key,unit,team,shocked) {
   const t=tactics[key],p=state.patrol;
   if (!t || state.status!=='playing' || t.team!==team || state.step!==t.step || shocked || state.cp[team]<1) return null;
-  if ((t.own && team!==state.active) || (t.opponent && team===state.active) || p.spent[key]===phaseKey(state)) return null;
+  if ((t.own && team!==state.active) || (t.opponent && team===state.active) || p.spent[key]===phaseKey(state) || unitTargetedByStratagem(state,unit)) return null;
   return {...state,cp:{...state.cp,[team]:state.cp[team]-1},patrol:{...p,
     spent:{...p.spent,[key]:phaseKey(state)},tactics:{...p.tactics,[key]:phaseKey(state)+'/'+unit}}};
 }

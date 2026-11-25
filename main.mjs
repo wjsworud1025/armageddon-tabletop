@@ -6,6 +6,7 @@ import {photoFit} from './photo-camera.mjs';
 import {getProfile} from './rules/profiles.mjs';
 import {newBattle,unitMembers,groupId,roll,shockTest,changeUnit} from './rules/battle.mjs';
 import {beginMove,proposeMove,finishMove,rewindMove,rerollMove,abandonInvalidMove} from './move-session.mjs';
+import {beginCharge,selectChargeTargets,proposeCharge,finishCharge,rewindCharge,cancelCharge} from './charge-session.mjs';
 import {applyLayout,objectiveAreas,validDeployment} from './layouts.mjs';
 import {studioGroupFor,openStudioViewer} from './assets/turntable.mjs';
 import {loadPortraitMap,portraitUrl} from './painted.mjs';
@@ -90,23 +91,29 @@ function setMode(value){mode=value;scene?.setMode(mode);
   $('hint').textContent=mode==='ruler'?'미니어처 두 개 또는 전장의 두 지점을 클릭하세요.':mode==='path'?'기물을 고른 뒤 경유할 지면을 차례로 클릭하세요.':'드래그 이동 · 우클릭 회전 · 휠 확대 · Shift 드래그 시점 이동'}
 function movingByRules(p){
   const r=game.rules;
-  if(r?.status!=='playing'||r.step!==1)return false;
+  if(r?.status!=='playing')return false;
   const unit=r.units?.[groupId(r,p)];
+  if(r.step===3)return !!r.chargePlan||!(unit?.charge&&!unit.chargeTracked&&!unit.charged);
+  if(r.step!==1)return false;
   // Older saves stored the order but no starting position or distance travelled.
   // Continue that open turn with its original table controls.
   if(!r.movePlan&&p.faction===r.active&&(unit?.reinforcing||unit?.movement&&!unit.movementTracked&&unit.movement!=='remain'))return false;
   return true;
 }
+function proposeTableMotion(p,paths){
+  return game.rules.step===3?proposeCharge(game,p,paths):proposeMove(game,p,paths);
+}
 function applyMovement(result){
+  const manual=[...new Set((result.manual||[]).map(m=>m.message))];
   mutate(()=>{
     game.rules=result.rules;
     for(const [id,pose] of Object.entries(result.poses||{}))Object.assign(piece(id),pose);
-  },result.message);
-  if(result.manual?.length)toast([...new Set(result.manual.map(m=>m.message))].join(' '));
+  },result.message+(manual.length?' · '+manual.join(' '):''));
+  if(manual.length)toast(manual.join(' '));
 }
 function editPose(p,delta,message){
   if(movingByRules(p)){
-    try{applyMovement(proposeMove(game,p,{[p.id]:[delta]}))}catch(e){toast(e.message);selection()}
+    try{applyMovement(proposeTableMotion(p,{[p.id]:[delta]}))}catch(e){toast(e.message);selection()}
   }else mutate(()=>{Object.assign(p,delta);place(p,p.x,p.z,game)},message);
 }
 function rotate(){const p=piece(active);if(p)editPose(p,{yaw:(p.yaw+Math.PI/12)%(2*Math.PI)},p.name+' 15° 회전')}
@@ -153,6 +160,30 @@ document.addEventListener('keydown',e=>{if(e.target.closest('input,select,textar
   else if(e.key==='Escape'){setMode('pick');select(null)}
   else if(e.key.toLowerCase()==='r')rotate()});
 const api={
+  getTable:()=>game,
+  chargeCommand(command,actor,targets,takeToSkies){
+    const r=game.rules;
+    try{
+      if(r?.status!=='playing'||r.step!==3)throw Error('돌격 페이즈에서 사용할 수 있습니다.');
+      let result;
+      if(command==='window'){
+        if(r.chargePlan||r.chargeWindow)throw Error('진행 중인 돌격부터 마치세요.');
+        result={rules:{...r,chargeWindow:true},message:'아군 돌격 선언 종료 · 상대 반응 기회'};
+      }else if(command==='targets')result=selectChargeTargets(game,targets,{takeToSkies});
+      else if(command==='rewind')result=rewindCharge(game);
+      else if(command==='cancel')result=cancelCharge(game);
+      else if(command==='finish')result=finishCharge(game);
+      else if(command==='legacy'){
+        const flags=actor&&r.units[groupId(r,actor)];
+        if(!flags?.charge||flags.charged||flags.chargeTracked||r.chargePlan)throw Error('이전 저장 파일의 진행 중인 돌격이 없습니다.');
+        result={rules:changeUnit(r,actor,{charged:true}),message:actor.name+' · 이전 저장의 돌격 이동 완료'};
+      }else{
+        if(r.chargeWindow&&command==='normal')throw Error('아군 돌격 선언이 끝났습니다.');
+        result=beginCharge(game,actor,{mode:command,endOfPhase:!!r.chargeWindow});
+      }
+      applyMovement(result);return '';
+    }catch(e){toast(e.message);return e.message}
+  },
   moveCommand(command,actor,options={}){
     try{
       let result;
@@ -206,7 +237,7 @@ async function start(){
         for(const m of group){m.x=m.piece.x;m.z=m.piece.z;paths[m.piece.id].push({x:m.x,z:m.z})}distance+=step;
       }
       if(movingByRules(p)){
-        try{applyMovement(proposeMove(game,p,paths))}catch(e){toast(e.message);return false}
+        try{applyMovement(proposeTableMotion(p,paths))}catch(e){toast(e.message);return false}
       }else mutate(()=>{for(const m of group)Object.assign(piece(m.piece.id),{x:m.x,z:m.z})},p.name+(drag?' 이동':' 경로 이동')+' · '+distance.toFixed(2)+'″ · '+(points.length-1)+'구간');
       return true;
     },

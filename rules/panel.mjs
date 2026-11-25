@@ -1,5 +1,6 @@
 import {getProfile} from './profiles.mjs';
 import {brokenFormations,removeForCoherency} from './end-turn.mjs';
+import {chargeActions,chargeControls} from './charge-controls.mjs';
 import {coherency,travelCost,moveLimit} from '../movement.mjs';
 import {newBattle,startBattle,advance,opposite,steps,teams,roll,currentHP,unitMembers,
   groupId,changeUnit,needsShock,shockTest,adjustHP,controlObjective,engaged,modelProfile,
@@ -209,12 +210,6 @@ export function mountRules(container,api) {
         if(actor.faction==='orks'&&state.movePlan?.unit===groupId(state,actor)&&unit.movement==='advance')
           action+=btn('reroll','전력 이동 재굴림',!!(unit.rerolled||state.movePlan.rerollClosed||Object.keys(state.movePlan.paths).length));
       }
-      if (state.step===3) {
-        const canCharge=unit.movement==='advance' ? inDoctrine(state,actor,'assault') || hasWaaagh(state,actor)
-          : unit.movement!=='fallback' || inDoctrine(state,actor,'tactical');
-        action=btn('charge','돌격 거리 2D6',Boolean(unit.charge || !canCharge || engagedEnemy || !enemyInTwelve));
-        if (unit.charge) action+=btn('charged',unit.charged?'돌격 이동 완료':'돌격 이동 완료 표시',!!unit.charged);
-      }
     }
     const flags=[unit.shocked?'전장 충격':'',unit.order||'',unit.charge?'돌격 굴림 '+unit.charge+'″':'',
       state.patrol.suppressed===groupId(state,actor)?'제압됨':''].filter(Boolean);
@@ -236,9 +231,7 @@ export function mountRules(container,api) {
     if (state.status==='playing' && state.step===4 && members.some(p=>p.kind==='warboss' && currentHP(state,p))) {
       action+=select('bossStyle','워보스 분대 근접 효과',opt('lethal','치명적 명중',choices.bossStyle||'lethal')+opt('sustained','추가 명중 1',choices.bossStyle));
     }
-    if (state.status==='playing' && !mine && state.step===3 && actor.kind==='captain' && !engagedEnemy &&
-      enemy.some(b=>api.getDistance(actor.id,b.id)<=6) && !unit.counterCharge)
-      action+=btn('countercharge','전쟁의 달인 · 반격 돌격 (최대 6″)');
+    if(state.step===3&&currentHP(state,actor)>0)action+=chargeActions(api.getTable(),actor);
     if (state.status==='playing' && !mine && state.step===2 && actor.kind==='vanguard' && unit.shotAt && !unit.reaction)
       action+=btn('react','신속 대응 · D6+1″ 이동');
     if (state.status==='playing' && mine && state.step===2 && actor.kind==='wartrakk' && unit.finishedAttack===2 && unit.hitTargets?.length && !unit.suppressedEnemy) {
@@ -301,8 +294,9 @@ export function mountRules(container,api) {
     } else {
       top=chunk(esc(state.mission || (state.rounds===5 ? patrolMissions[state.active] : '로컬 대전'))+' · '+state.round+'/'+state.rounds+' 라운드',
         '<b class="br-phase">'+teams[state.active]+' · '+steps[state.step]+'</b><p>'+prompts[state.step]+'</p>'+
-        btn('next',state.step<5?'다음 · '+steps[state.step+1]:(state.active!==state.first && state.round===state.rounds?'대전 마치기':'다음 플레이어'),!!(state.hazard||state.declaration||state.movePlan||dispersed.length)));
+        btn('next',state.step<5?'다음 · '+steps[state.step+1]:(state.active!==state.first && state.round===state.rounds?'대전 마치기':'다음 플레이어'),!!(state.hazard||state.declaration||state.movePlan||state.chargePlan||dispersed.length)));
     }
+    if(state.step===3)top+=chargeControls(api.getTable());
     for(const formation of dispersed){
       top+=chunk(esc(teams[formation[0].faction]+' · '+unitLabel(formation[0]))+' · 응집도 회복',
         '<p>이 분대의 플레이어가 제거할 모델을 하나 고르세요. 제거할 때마다 남은 모델의 간격을 다시 검사합니다.</p>'+
@@ -388,7 +382,7 @@ export function mountRules(container,api) {
       return commit({...state,deployment:{...d,placed,next}},unitLabel(actor)+' 배치 완료');
     }
     if (action==='next') {
-      if (state.hazard || state.declaration || state.movePlan || brokenFormations(state,contents()).length) return;
+      if (state.hazard || state.declaration || state.movePlan || state.chargePlan || brokenFormations(state,contents()).length) return;
       let resolved=recordLosses(state,contents());
       const areas=api.getObjectiveAreas?.()||[];
       if (areas.length) resolved.objectives=objectiveSnapshot(resolved,contents(),areas,api.getDistance);
@@ -401,6 +395,11 @@ export function mountRules(container,api) {
       const result=removeForCoherency(state,contents(),action.slice(10));
       if(result)return commit(result.rules,result.message,result.removed);
       return;
+    }
+    if(action.startsWith('charge-')){
+      const command=action.slice(7);
+      const targets=[...root.querySelectorAll('[data-charge-target]:checked')].map(el=>el.dataset.chargeTarget);
+      feedback=api.chargeCommand(command,actor,targets,!!root.querySelector('[data-charge-fly]:checked'));return refresh();
     }
     if (action==='cancel-plan' || action.startsWith('drop-') || action==='reopen') {
       const plan=state.declaration;
@@ -524,11 +523,9 @@ export function mountRules(container,api) {
       return commit(next,unitLabel(actor)+(action==='ingress'?' · 전장에 배치':' · 전략 예비대로 이동'),changes);
     }
     if (!currentHP(state,actor)) {feedback='제거된 모델입니다.';return refresh();}
-    if (action==='countercharge' || action==='react') {
-      const charge=action==='countercharge';
-      const distance=charge?Math.min(6,roll()+roll()):roll()+1;
-      const order=(charge?'반격 돌격 ':'신속 대응 이동 ')+distance+'″';
-      return commit(changeUnit(state,actor,charge?{order,counterCharge:true,charge:distance}:{order,reaction:true}),actor.name+' · '+order);
+    if (action==='react') {
+      const order='신속 대응 이동 '+(roll()+1)+'″';
+      return commit(changeUnit(state,actor,{order,reaction:true}),actor.name+' · '+order);
     }
     if (action==='suppress') {
       const target=val('suppressTarget');
@@ -559,11 +556,6 @@ export function mountRules(container,api) {
     if (['normal','advance','fallback','desperate','remain','reroll'].includes(action)) {
       feedback=api.moveCommand(action==='desperate'?'fallback':action,actor,{fallbackMode:action==='desperate'?'desperate':'ordered',takeToSkies:action!=='remain'&&!!field('takeToSkies')?.checked});return refresh();
     }
-    if (action==='charge') {
-      const dice=[roll(),roll()],distance=dice[0]+dice[1];
-      return commit(changeUnit(state,actor,{charge:distance}),unitLabel(actor)+' · 돌격 '+diceText(dice)+' = '+distance+'″');
-    }
-    if (action==='charged') return commit(changeUnit(state,actor,{charged:true}),unitLabel(actor)+' · 돌격 이동 완료');
     if (action==='attack' || action==='volley') {
       const {selected,target,members:targets,dist}=attackContext(state,actor);
       if (!selected||!target) return;

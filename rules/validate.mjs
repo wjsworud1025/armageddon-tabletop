@@ -39,25 +39,28 @@ const validRow=fields({...rowFields,vehiclePenalty:int(0,2)},Object.keys(rowFiel
 const declaration=fields({unit:group,locked:boolean,focus:nullable(group),rows:list(validRow,276)},['unit','locked','focus','rows']);
 const unit = fields({
   shocked:boolean,shockChecked:boolean,reinforcing:boolean,movementTracked:boolean,movement:oneOf(['normal','advance','fallback','remain']),
-  order:string,charge:int(0,12),charged:boolean,rerolled:boolean,attacks,finishedAttack:attackStep,
+  order:string,charge:int(0,12),chargeTracked:boolean,charged:boolean,rerolled:boolean,attacks,finishedAttack:attackStep,
   counterCharge:boolean,reaction:boolean,shotAt:boolean,suppressedEnemy:boolean,hitTargets:list(group,12)
 });
 const doctrine=oneOf(Object.keys(doctrines)),tactic=oneOf(Object.keys(tactics));
 const patrol=fields({
   doctrine:nullable(doctrine),usedDoctrines:list(doctrine,3),waaagh:int(0,2),waaaghUsed:boolean,
-  enhanced:map(oneOf(Object.keys(enhancements)),boolean),tactics:map(tactic,string),spent:map(tactic,string),
+  enhanced:map(oneOf(Object.keys(enhancements)),boolean),tactics:map(oneOf([...Object.keys(tactics),'heroicIntervention']),string),spent:map(oneOf([...Object.keys(tactics),'heroicIntervention']),string),
   suppressed:nullable(group),warcryUsed:boolean,grotReturned:boolean
 });
 const objective=fields({name:string,home:nullable(team),owner:nullable(team),secured:nullable(team),
   marineOC:int(0),orkOC:int(0)},['owner','marineOC','orkOC']);
 const pose=fields({x:Number.isFinite,z:Number.isFinite,elevation:n=>Number.isFinite(n)&&n>=0&&n<=20,yaw:Number.isFinite},['x','z','elevation','yaw']);
+const chargeFields={unit:group,actor:model,mode:oneOf(['normal','masterOfBattle','leapToDefend','intoTheFray']),
+  roll:int(2,12),dice:list(int(1,6),2),targets:list(group,12),origins:map(model,pose),paths:map(model,list(pose,512)),takeToSkies:boolean};
+const chargePlan=fields(chargeFields,Object.keys(chargeFields));
 const movePlan=fields({unit:group,type:oneOf(['advance','normal','fallback']),advanceRoll:int(0,6),
   origins:map(model,pose),paths:map(model,list(pose,512)),takeToSkies:boolean,fallbackMode:oneOf(['ordered','desperate']),
   desperateEscapeResolved:boolean,rerollClosed:boolean},['unit','type','advanceRoll','origins','paths','takeToSkies','fallbackMode','desperateEscapeResolved']);
 const battle=fields({
   version:oneOf([1]),status:oneOf(['setup','playing','finished']),first:team,active:team,
   round:int(1,20),rounds:int(1,20),step:int(0,5),cp:totals,vp:totals,hp,
-  units:map(group,unit),attachments:map(model,group),objectives:map(identifier,objective),hazard:nullable(hazard),declaration:nullable(declaration),movePlan:nullable(movePlan),
+  units:map(group,unit),attachments:map(model,group),objectives:map(identifier,objective),hazard:nullable(hazard),declaration:nullable(declaration),movePlan:nullable(movePlan),chargePlan:nullable(chargePlan),chargeWindow:boolean,
   reserves:map(group,list(model,46)),patrol,notes:string,mission:string,last:string,
   deployment:fields({defender:team,next:team,placed:list(group,12)},['defender','next','placed']),
   destroyedUnits:map(group,boolean),lossEvents:list(fields({id:group,faction:team,turn:int(1,40)},['id','faction','turn']),20000)
@@ -67,6 +70,14 @@ export function validateRulesState(value) {
   if (value==null) return true;
   if (fields({hp},['hp'])(value)) return true;
   if(!battle(value) || value.round>value.rounds)return false;
+  if(value.chargePlan){
+    const p=value.chargePlan,ids=Object.keys(p.origins),sum=p.dice.reduce((a,b)=>a+b,0);
+    const expected=['masterOfBattle','intoTheFray'].includes(p.mode)?Math.min(sum,6):sum;
+    return value.step===3&&value.status==='playing'&&!value.declaration&&!value.hazard&&!value.movePlan&&
+      ids.includes(p.actor)&&ids.every(id=>(value.attachments?.[id]||unitId(models.get(id)))===p.unit)&&
+      p.dice.length===2&&p.roll===expected&&value.units?.[p.unit]?.charge===p.roll&&
+      new Set(p.targets).size===p.targets.length&&!p.targets.includes(p.unit)&&Object.keys(p.paths).every(id=>ids.includes(id));
+  }
   if(value.movePlan){
     const m=value.movePlan,ids=Object.keys(m.origins);
     if(value.step!==1||value.status!=='playing'||value.declaration||!ids.length||value.units?.[m.unit]?.movement!==m.type||

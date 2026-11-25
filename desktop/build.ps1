@@ -9,7 +9,7 @@ $bundle = Join-Path $buildRoot 'table.zip'
 $stream = [IO.File]::Open($bundle, [IO.FileMode]::Create)
 $zip = [IO.Compression.ZipArchive]::new($stream,[IO.Compression.ZipArchiveMode]::Create)
 try {
-    $sources = @('index.html','table.css','main.mjs','media.mjs','state.mjs','scene.mjs','photo-camera.mjs','painted.mjs','studio-scene.mjs','layouts.mjs','move-session.mjs','movement.mjs','assets','data','rules','vendor','reconstruction')
+    $sources = @('index.html','table.css','main.mjs','media.mjs','state.mjs','scene.mjs','photo-camera.mjs','painted.mjs','studio-scene.mjs','layouts.mjs','move-session.mjs','movement.mjs','charge-session.mjs','charge.mjs','assets','data','rules','vendor','reconstruction')
     $localPhotos = Test-Path -LiteralPath (Join-Path $tableRoot 'reference/starter-set.jpg')
     if ($localPhotos) { $sources += 'reference' }
     foreach ($source in $sources) {

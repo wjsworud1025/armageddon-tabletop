@@ -74,9 +74,7 @@ export function beginMove(game,actor,type,options={}) {
   return {rules:{...next,movePlan:type==='remain'?null:plan},message:member.name+' · '+order,manual:assessment.manual,assessment};
 }
 
-export function proposeMove(game,actor,paths) {
-  const {rules,plan,survivors}=view(game,actor);
-  requireEscapeRolls(plan);
+export function appendUnitPaths(plan,survivors,paths) {
   if(!paths || typeof paths!=='object' || Array.isArray(paths)) throw new Error('모델별 경유점 목록이 필요합니다.');
   const nextPaths={...plan.paths};
   for(const [id,added] of Object.entries(paths)) {
@@ -95,6 +93,13 @@ export function proposeMove(game,actor,paths) {
     }
     if(route.length) nextPaths[id]=route;
   }
+  return nextPaths;
+}
+
+export function proposeMove(game,actor,paths) {
+  const {rules,plan,survivors}=view(game,actor);
+  requireEscapeRolls(plan);
+  const nextPaths=appendUnitPaths(plan,survivors,paths);
   const next={...plan,paths:nextPaths};
   if(plan.type==='advance' && Object.values(nextPaths).some(route=>route.length)) next.rerollClosed=true;
   const assessment=assessPlan(game,next,survivors,'path');

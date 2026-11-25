@@ -255,8 +255,63 @@ try {
   await js('Math.random=()=>.01');await click(button('move-finish'));await js('Math.random=window.acceptanceRandom');
   s=await state();assert.equal(s.rules.movePlan,null);assert.equal(s.rules.units.gretchin.shocked,true);
   assert.match(s.logs.at(-1),/전장 충격.*실패/);
+
+  const chargeFixture=(team,enemyCharged=false)=>{
+    const fixture=movementFixture({[actor.id]:[0,0],[victim.id]:[6,0],[near]:[1.5,0],[far]:[4.2,0]},
+      [actor.id,victim.id],team);
+    fixture.rules.step=3;fixture.rules.cp.marines=3;
+    if(enemyCharged) fixture.rules.units.gretchin={charge:7,charged:true,chargeTracked:true};
+    return fixture;
+  };
+  async function loadCharge(team,enemyCharged=false){
+    await upload(chargeFixture(team,enemyCharged));await click('[data-tab=battle]');
+    await click('#home');await click('#camera');await choose('fighter',actor.id);
+  }
+  async function declareCharge(mode,value){
+    await js('window.chargeRandom=Math.random;Math.random=()=>'+value);
+    try{await click(button('charge-'+mode));}finally{await js('Math.random=window.chargeRandom');}
+  }
+  async function selectGrots(){
+    await click('[data-charge-target="gretchin"]');await click(button('charge-targets'));
+  }
+  await loadCharge('marines');await declareCharge('normal',0);
+  s=await state();assert.deepEqual(s.rules.chargePlan.dice,[1,1]);assert.equal(await disabled('charge-targets'),true);
+  await click(button('charge-cancel'));s=await state();assert.equal(s.rules.chargePlan,null);
+  assert.equal(s.rules.units.captain.charge,2);assert.ok(!s.rules.units.captain.charged);
+  assert.equal(await disabled('charge-normal'),true);assert.equal(await js('!!document.querySelector("[data-act=charge-legacy]")'),false);
+  await loadCharge('marines');await declareCharge('normal',.5);await selectGrots();
+  assert.equal(await disabled('next'),true);
+  await drag(actor.id,near);s=await state();nearX(s,actor.id,1.5);
+  const shortCharge=structuredClone(s.rules.chargePlan);
+  await click(button('charge-finish'));s=await state();assert.deepEqual(s.rules.chargePlan,shortCharge);
+  assert.match(await js('document.getElementById("notice").textContent'),/교전/);
+  await click(button('charge-cancel'));s=await state();nearX(s,actor.id,0);assert.equal(s.rules.chargePlan,null);
+  assert.equal(await disabled('charge-normal'),true);
+  await click('#undo');s=await state();nearX(s,actor.id,1.5);assert.deepEqual(s.rules.chargePlan,shortCharge);
+  await click(button('charge-rewind'));s=await state();nearX(s,actor.id,0);assert.deepEqual(s.rules.chargePlan.paths,{});
+  await drag(actor.id,far);s=await state();nearX(s,actor.id,4.2);
+  const validCharge=structuredClone(s.rules.chargePlan);
+  assert.equal(validCharge.paths[actor.id].length,1);
+  await send('Page.reload');await until(()=>js('!!window.tabletopView'));await click('[data-tab=battle]');
+  assert.deepEqual((await state()).rules.chargePlan,validCharge);
+  await click(button('charge-finish'));s=await state();
+  assert.equal(s.rules.step,3);assert.equal(s.rules.chargePlan,null);assert.equal(s.rules.units.captain.charged,true);
+  assert.match(s.logs.at(-1),/선제 전투/);
+  await click('#undo');assert.deepEqual((await state()).rules.chargePlan,validCharge);
+  await click('#redo');assert.equal((await state()).rules.units.captain.charged,true);
+  for(const [mode,cost,limit] of [['masterOfBattle',0,6],['leapToDefend',1,12],['intoTheFray',2,6]]){
+    await loadCharge('orks',mode==='leapToDefend');
+    assert.equal(await js('!!document.querySelector('+JSON.stringify(button('charge-'+mode))+')'),false);
+    await click(button('charge-window'));await declareCharge(mode,.99);s=await state();
+    assert.equal(s.rules.chargePlan.mode,mode);assert.deepEqual(s.rules.chargePlan.dice,[6,6]);
+    assert.equal(s.rules.chargePlan.roll,limit);assert.equal(s.rules.cp.marines,3-cost);
+    await selectGrots();await drag(actor.id,far);s=await state();nearX(s,actor.id,4.2);
+    await click(button('charge-finish'));s=await state();assert.equal(s.rules.step,3);
+    assert.equal(s.rules.units.captain.charged,true);assert.equal(s.rules.cp.marines,3-cost);
+  }
   assert.deepEqual(errors,[]);
   console.log(JSON.stringify({passed:true,areas:4,rounds:5,winner:'marines',vp:finalVP,casualtyUndoRedo:true,
     corruptImportsRejected:2,volley:true,splitFire:true,lockedDeclarationReload:true,persisted:true,hazardousVolleyUndoRedo:true,
-    localArt,movementDrag:true,movementRange:true,movementUndoReload:true,desperateEscape:true,endTurnCoherency:true}));
+    localArt,movementDrag:true,movementRange:true,movementUndoReload:true,desperateEscape:true,endTurnCoherency:true,
+    chargeDrag:true,chargeFailure:true,chargeUndoReload:true,chargeReactions:3}));
 } finally {ws?.close();browser.kill();server.closeAllConnections();server.close();}
