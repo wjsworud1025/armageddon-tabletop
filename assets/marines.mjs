@@ -1,3 +1,4 @@
+import {landSpeeder} from './vehicles.mjs';
 import {paint as p} from './sculpt.mjs';
 import {sculptMarinePose} from './marine-poses-sculpt.mjs';
 
@@ -161,35 +162,5 @@ export function marine(s, kind, variant = 0) {
 }
 
 export function speeder(s) {
-  // Vehicle faces along the long axis of its oval plinth.
-  const g=s.child([0,.74,0]);
-  s.plate(p.stone,[[-.26,.07],[.32,.07],[.22,.23],[.11,.62],[-.01,.84],[-.09,.67],[-.16,.39]],.18,[-.03,0,-.59]);
-  const hull=g.child([0,0,0],[-.055,0,0]);
-  hull.box(p.blueShade,[0,.12,0],[1.23,.43,2.53]);
-  for (const sign of [-1,1]) {
-    const flank=hull.child([sign*.63,0,0],[0,sign*Math.PI/2,0]);
-    flank.plate(p.blue,[[-1.46,.20],[-1.24,-.10],[.95,-.17],[1.37,.03],[1.36,.41],[.92,.47],[.72,.18],[-.25,.20],[-.45,.39],[-1.21,.33]],.17);
-    hull.box(p.blue,[sign*.49,-.12,.52],[.30,.17,1.51]);
-    for(let n=0;n<7;n++) hull.box(p.steel,[sign*.56,-.206,.035+n*.166],[.19,.045,.075]);
-    hull.box(p.blue,[sign*.43,.44,-.90],[.36,.43,.67],[-.13,0,0]);
-    hull.box(p.iron,[sign*.43,.41,-1.269],[.24,.23,.063]);
-    hull.box(p.blue,[sign*.47,.135,1.04],[.36,.26,.67],[-.11,0,0]);
-    hull.box(p.iron,[sign*.47,.09,1.375],[.24,.14,.052]);
-    hull.oval(p.gold,[sign*.35,.33,1.00],[.055,.015,.07]);
-  }
-  hull.box(p.blue,[0,.18,.90],[.88,.29,.83],[-.12,0,0]);
-  hull.box(p.blue,[0,.30,-.90],[1.06,.24,.72]);
-  hull.box(p.black,[0,.305,-.021],[.92,.07,.79]);
-  for(const sign of [-1,1]) {
-    const crew=hull.child([sign*.265,.34,-.12]);
-    crew.box(p.blue,[0,.15,0],[.29,.29,.20]);
-    helmet(crew.child([0,.365,0]),p.blue,sign<0);
-    for(const arm of [-1,1]) {
-      crew.oval(p.blue,[arm*.164,.20,0],[.094,.10,.094]);
-      crew.link(p.blue,[arm*.16,.15,.03],[arm*.12,.10,.19],.056,.05);
-    }
-  }
-  const gun=hull.child([-.20,.40,.42]);
-  gun.box(p.iron,[0,.04,0],[.19,.16,.39]);
-  gun.cylinder(p.steel,[0,.047,.28],.054,.065,.31,10,[Math.PI/2,0,0]);
+  landSpeeder(s,helmet);
 }

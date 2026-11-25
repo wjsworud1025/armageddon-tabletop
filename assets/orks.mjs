@@ -1,3 +1,4 @@
+import {wartrakkVehicle} from './vehicles.mjs';
 import {paint as p} from './sculpt.mjs';
 import {sculptOrkPose} from './ork-poses-sculpt.mjs';
 
@@ -135,51 +136,5 @@ export function greenskin(s,kind,variant=0) {
 }
 
 export function wartrakk(s) {
-  const g=s.child();
-  const axle = [0,.41,.94];
-  g.cylinder(p.black,axle,.36,.36,.34,18,[0,0,Math.PI/2]);
-  for(const side of [-1,1]) {
-    g.cylinder(p.iron,[side*.181,.41,.94],.19,.19,.034,12,[0,0,Math.PI/2]);
-    g.link(p.steel,[side*.20,.41,.94],[side*.22,.89,.53],.044,.052);
-    const track=g.child([side*.464,.38,-.48]);
-    track.box(p.black,[0,0,0],[.293,.50,1.10]);
-    for(const end of [-1,1]) track.cylinder(p.black,[0,0,end*.52],.255,.255,.30,14,[0,0,Math.PI/2]);
-    for(let n=0;n<4;n++) track.cylinder(p.iron,[side*.155,-.01,-.46+.30*n],.183,.183,.041,12,[0,0,Math.PI/2]);
-    for(let n=0;n<8;n++) {
-      track.box(p.iron,[0,.267,-.52+n*.148],[.335,.056,.071]);
-      track.box(p.iron,[0,-.257,-.52+n*.148],[.335,.048,.074]);
-    }
-    g.link(p.iron,[side*.328,.64,-.33],[side*.45,1.20,-.96],.082,.071);
-    g.cylinder(p.iron,[side*.42,.67,-.97],.08,.092,.63,10,[-.21,0,0]);
-    g.plate(p.red,[[-.4,-.09],[.31,-.09],[.47,.07],[.22,.17],[-.38,.17]],.061,[side*.465,.738,-.42],[0,side*Math.PI/2,0]);
-  }
-  g.box(p.iron,[0,.51,-.10],[.73,.32,1.47]);
-  g.box(p.red,[0,.67,.26],[.53,.25,.66],[-.16,0,0]);
-  g.oval(p.leather,[0,.76,-.235],[.201,.085,.276]);
-  const rider=g.child([0,.27,-.19],[-.20,0,0],[.93,.91,.93]);
-  rider.oval(p.black,[0,.76,0],[.223,.223,.15]);
-  face(rider.child([0,1.038,.045]),false,1);
-  for(const side of [-1,1]) {
-    rider.oval(p.green,[side*.225,.865,0],[.103,.12,.09]);
-    rider.link(p.green,[side*.23,.82,.01],[side*.23,.74,.31],.085,.056);
-    g.link(p.iron,[side*.23,.933,.16],[side*.24,.932,.415],.021,.024);
-  }
-  const mount=g.child([0,.78,-.84]);
-  mount.box(p.iron,[0,.16,0],[.38,.33,.32]);
-  mount.box(p.black,[0,.45,.17],[.50,.31,.59]);
-  for(const [x,y] of [[-.13,.46],[.12,.46],[0,.62]]) {
-    mount.cylinder(p.iron,[x,y,.41],.076,.08,.34,10,[Math.PI/2,0,0]);
-    mount.cylinder(p.cream,[x,y,.61],.026,.080,.147,10,[Math.PI/2,0,0]);
-    mount.oval(p.orange,[x,y,.681],[.035,.033,.052]);
-  }
-  for(const side of [-1,1]) mount.box(p.red,[side*.20,.31,.11],[.075,.30,.45],[-.18,0,side*-.16]);
-  g.cylinder(p.iron,[.31,1.26,-.852],.018,.024,.95,8,[.10,0,.07]);
-  g.plate(p.red,[[0,0],[.25,-.06],[.12,-.11],[.16,-.17],[0,-.13]],.018,[.27,1.74,-.90]);
-  const gunner=g.child([.15,.91,-.99],[.05,-.08,.07],[.86,.86,.86]);
-  gunner.oval(p.leather,[0,.21,0],[.18,.24,.12]);
-  face(gunner.child([0,.50,.01]),false,1);
-  for(const side of [-1,1]) {
-    gunner.oval(p.green,[side*.174,.30,0],[.093,.102,.085]);
-    gunner.link(p.green,[side*.18,.28,0],[side*.24,.21,.15],.07,.062);
-  }
+  wartrakkVehicle(s,face);
 }
