@@ -150,6 +150,15 @@ try{
   await click('#training-three-start');
   await until(()=>js('tabletopView.stats().boardSurface==="reverse"&&tabletopView.stats().visiblePieces===26'));
   await click('#camera');await screenshot('04-handbook-shooting.png');
+  await click('#training-three-begin');assert.equal((await state()).training.active,'orks');
+  const shot='#training-three-options [data-action=';
+  await click(shot+'next]');
+  await click(shot+'shoot-unit][data-unit=warboss]');
+  await click(shot+'shoot-weapon][data-model=warboss-1][data-weapon="0"]');
+  await click(shot+'shoot-target][data-target=captain]');
+  await click('#training-three-options fieldset button');
+  await until(()=>js('document.querySelector("#hint").textContent.includes("시점 높이")'));
+  await screenshot('04-handbook-sight.png');
   await click('#training-three-exit');assert.deepEqual(await state(),beforeSecond);
   await js('document.querySelector("#deployment").open=true');
   const beforePreview=await state(),diagrams=new Set();

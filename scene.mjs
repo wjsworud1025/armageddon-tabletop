@@ -274,6 +274,7 @@ export async function buildScene(canvas,api) {
   function render(){if(invalid){invalid=false;paintMeasure();renderer.render(scene,camera)}requestAnimationFrame(render)}
   resize();home();sync();render();
   return {sync,loadReverse,select(id){if(selected!==id)waypoints=[];selected=id;sync()},home,focus,top(){home(pitch<1.55);return pitch>1.55},
+    lookFrom(from,to){if(from!==to&&lookup(from)&&lookup(to)){sightPair=[from,to];eyeOffset=0;projection()}},
     backPoint(){waypoints.pop();dirty()},walk(){const p=lookup(selected);if(p&&!p.removed&&waypoints.length&&api.route(p,[{x:p.x,z:p.z},...waypoints])){waypoints=[];dirty()}},
     togglePaint(){if(!photo&&pitch>=65*Math.PI/180){usePaint=true;home()}else{usePaint=!usePaint;projection()}},
     setMode(next){mode=next;if(sightPair){sightPair=null;projection()}ends=[];waypoints=[];dirty()},toggleGrid(){gridVisible=!gridVisible;grid.visible=gridVisible;dirty();return gridVisible},

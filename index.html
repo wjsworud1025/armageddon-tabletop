@@ -47,11 +47,14 @@
         </div>
       </section><section id="training-three" aria-labelledby="training-three-title">
         <h2 id="training-three-title">훈련 3 · 사격 전장</h2>
-        <div id="training-three-intro"><p>핸드북 67쪽의 폐허와 병력을 펼치고 세 구역에 미니어처를 배치합니다.</p>
+        <div id="training-three-intro"><p>세 구역에 병력을 배치하고 폐허 너머로 보이는 적을 겨눕니다. 상대를 전멸시키면 승리합니다.</p>
           <button id="training-three-start">사격 전장 배치 열기</button></div>
         <div id="training-three-play" hidden>
           <p id="training-three-status" role="status"></p>
-          <label><input id="training-three-zones" type="checkbox" checked> 배치 구역 표시</label>
+          <div id="training-three-setup"><label><input id="training-three-zones" type="checkbox" checked> 배치 구역 표시</label>
+            <button id="training-three-begin">배치 확정 · 오크 턴 시작</button></div>
+          <div id="training-three-battle" hidden><p id="training-three-forces"></p><p id="training-three-plan"></p>
+            <div id="training-three-options"></div><p id="training-three-last"></p></div>
           <div class="row"><button id="training-three-sight" disabled>선택한 모델의 시점</button><button id="training-three-exit">원래 전장으로</button></div>
         </div>
       </section><details id="deployment"><summary>컴뱃 패트롤 전장 배치</summary>

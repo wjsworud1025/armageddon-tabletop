@@ -88,6 +88,48 @@ export async function checkTrainingThree({save,upload,click,state,js,reload,send
   await reload();
   assert.deepEqual(await deployment(),moved);
   assert.deepEqual((await reverseScene()).poses,after.poses);
+  await click('#training-three-begin');
+  assert.equal((await deployment()).active,'orks');
+  assert.deepEqual((await scene()).poses,after.poses,'Preserve the adjusted deployment at the first turn');
+  const action=key=>'#training-three-options [data-action="'+key+'"]';
+  async function skip(){
+    const next=(await deployment()).phase==='shooting'?'shoot-next':'next';
+    await click(action(next));
+  }
+  for(let i=0;i<20;i++){
+    const s=await deployment();
+    if(s.active==='marines'&&s.phase==='shooting')break;
+    await skip();
+  }
+  await click(action('shoot-unit')+'[data-unit="captain"]');
+  await click(action('shoot-weapon')+'[data-model="captain-1"][data-weapon="0"]');
+  await click(action('shoot-target')+'[data-target="gretchin"]');
+  await click('#training-three-options fieldset button');
+  assert.match(await js('document.querySelector("#hint").textContent'),/시점 높이/);
+  await click('#home');
+  for(const id of sequence('gretchin',5)){
+    await click(action('shoot-sight')+'[data-id="'+id+'"][data-visibility="partial"]');
+  }
+  await click(action('shoot-confirm'));
+  const inCover=await deployment();
+  assert.equal(inCover.shooting.shot.cover,true);
+  await reload();assert.deepEqual(await deployment(),inCover);
+  // Each side uses the same controls as a real game. Force two successes and a
+  // failed save so a single casualty and its undo are observable on the table.
+  await js('window.savedRandom=Math.random;Math.random=()=>.99');
+  try{
+    await click(action('shoot-roll'));await click(action('shoot-roll'));
+    await js('Math.random=()=>0');
+    await click(action('shoot-roll'));
+    await click(action('shoot-allocate')+'[data-model="gretchin-1"]');
+  }finally{await js('Math.random=window.savedRandom;delete window.savedRandom')}
+  assert.equal((await scene()).poses['gretchin-1'],null);
+  await click('#undo');assert.ok((await scene()).poses['gretchin-1']);
+  await click('#redo');assert.equal((await scene()).poses['gretchin-1'],null);
+  await click(action('shoot-finish'));
+  for(let i=0;i<130&&!(await deployment()).winner;i++)await skip();
+  assert.equal((await deployment()).winner,'draw');
+  assert.match(await js('document.querySelector("#training-three-status").textContent'),/무승부/);
   await click('#training-three-exit');
   assert.ok(!(await deployment()));
   assert.deepEqual(await scene(),prior);
