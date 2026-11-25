@@ -267,7 +267,7 @@ def write_mesh(path,vs,faces,colors):
         out.write(bytes((-out.tell())%4));out.write(faces.astype('<u4' if wide else '<u2').tobytes())
 
 
-def registration(vertices,base,depth):
+def registration(vertices,base,depth,width=None):
     ground=float(np.percentile(vertices[:,1],.2))
     foot=vertices[vertices[:,1]<ground+.055][:,[0,2]]
     if len(foot)<20:
@@ -278,15 +278,26 @@ def registration(vertices,base,depth):
         projection=foot[:,0]*np.sin(a)+foot[:,1]*np.cos(a)
         spans.append(np.ptp(projection))
     angle=angles[np.argmax(spans)] if depth else 0
+    if width:
+        # Rectangular scatter terrain uses the longest edge of its minimum-area
+        # footprint rectangle, unlike oval vehicle bases which use a major axis.
+        foot=vertices[:,[0,2]]
+        boxes=[]
+        for a in angles:
+            major=np.array([np.sin(a),np.cos(a)]);minor=np.array([np.cos(a),-np.sin(a)])
+            spans=(np.ptp(foot@major),np.ptp(foot@minor))
+            if spans[0]>=spans[1]:
+                boxes.append((spans[0]*spans[1],a))
+        angle=min(boxes)[1]
     long=np.array([np.sin(angle),np.cos(angle)])
     across=np.array([np.cos(angle),-np.sin(angle)])
     projected=foot@np.array([long,across]).T
     low,high=projected.min(0),projected.max(0)
     pivot=((low+high)/2)@np.array([long,across])
     extent=(high-low).tolist()
-    inches=base if not depth else depth/extent[0]
+    inches=(depth or width)/extent[0] if (depth or width) else base
     return {'inches':inches,'center':[float(pivot[0]),ground,float(pivot[1])],
-            'yaw':float(-angle) if depth else None,'groundSpan':extent}
+            'yaw':float(-angle+np.pi/2) if width else float(-angle) if depth else None,'groundSpan':extent}
 
 
 def run(args):
@@ -294,6 +305,8 @@ def run(args):
     views=cameras(args.frames,args.image_size,args.distance,args.direction,args.calibration,args.footprint)
     if args.lens:
         fitted=json.loads(args.lens.read_text())
+        if 'cameras' in fitted:
+            fitted={c.tag:{**v,'center':[v['cx'],v['cy']]} for c,v in zip(views,fitted['cameras'])}
         for c in views:
             f=fitted[c.tag];w=c.rgb.shape[1]
             c.center=np.asarray(f['center'])*w;c.scale=f['scale']*w;c.distance=f['distance']
@@ -326,7 +339,7 @@ def run(args):
         lens=[{'eye':c.eye.round(6).tolist(),'right':c.right.round(6).tolist(),'down':c.down.round(6).tolist(),
                'cx':round(c.center[0]/c.rgb.shape[1],6),'cy':round(c.center[1]/c.rgb.shape[0],6),
                'scale':round(c.scale/c.rgb.shape[1],6),'distance':round(c.distance,5)} for c in views]
-        placement=registration(vertices,args.inches,args.depth)
+        placement=registration(vertices,args.inches,args.depth,args.width)
         metadata=args.output.with_suffix('.json')
         temporary=metadata.with_suffix('.json.part')
         temporary.write_text(json.dumps({'cameras':lens,'distance':args.distance,**placement,
@@ -343,6 +356,7 @@ if __name__=='__main__':
     parser.add_argument('--output',type=Path)
     parser.add_argument('--inches',type=float,required=True)
     parser.add_argument('--depth',type=float,help='Fit the measured longer diameter of a vehicle base, in inches')
+    parser.add_argument('--width',type=float,help='Fit terrain width along the board-local X axis, in inches')
     parser.add_argument('--density',type=float,default=64)
     parser.add_argument('--image-size',type=int,default=560)
     parser.add_argument('--allow',type=int,default=2)
