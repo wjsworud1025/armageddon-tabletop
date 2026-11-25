@@ -22,6 +22,7 @@ for (const kind of Object.keys(profiles)) for(let i=0;i<(count[kind]||1);i++) {
 }
 const model = value => models.has(value);
 const group = value => groups.has(value);
+const faction=id=>['captain','librarian','intercessor','vanguard','landSpeeder'].includes(models.get(id).kind)?'marines':'orks';
 const identifier = value => string(value) && /^[a-zA-Z][a-zA-Z0-9-]{0,59}$/.test(value) && !['constructor','prototype'].includes(value);
 const hp = map(model,(n,id)=>int(0,getProfile(models.get(id)).wounds)(n));
 const totals = fields({marines:int(0),orks:int(0)},['marines','orks']);
@@ -66,6 +67,7 @@ const battle=fields({
   round:int(1,20),rounds:int(1,20),step:int(0,5),cp:totals,vp:totals,hp,
   units:map(group,unit),attachments:map(model,group),objectives:map(identifier,objective),hazard:nullable(hazard),declaration:nullable(declaration),movePlan:nullable(movePlan),chargePlan:nullable(chargePlan),chargeWindow:boolean,
   fightSequence:validFightSequence,fightPlan:nullable(fightPlan),
+  reinforcePlan:nullable(fields({unit:group,mode:oneOf(['edge','deep-strike']),origins:map(model,pose)},['unit','mode','origins'])),
   reserves:map(group,list(model,46)),patrol,notes:string,mission:string,last:string,
   deployment:fields({defender:team,next:team,placed:list(group,12)},['defender','next','placed']),
   destroyedUnits:map(group,boolean),lossEvents:list(fields({id:group,faction:team,turn:int(1,40)},['id','faction','turn']),20000)
@@ -75,6 +77,13 @@ export function validateRulesState(value) {
   if (value==null) return true;
   if (fields({hp},['hp'])(value)) return true;
   if(!battle(value) || value.round>value.rounds)return false;
+  if(value.reinforcePlan){
+    const p=value.reinforcePlan,ids=Object.keys(p.origins),waiting=value.reserves?.[p.unit];
+    return value.status==='playing'&&value.step===1&&value.round>=2&&!value.movePlan&&!value.chargePlan&&!value.fightPlan&&!value.fightSequence&&!value.declaration&&!value.hazard&&
+      !!waiting?.length&&waiting.length===ids.length&&ids.every(id=>waiting.includes(id)&&faction(id)===value.active&&
+        (value.hp?.[id]??1)>0&&(value.attachments?.[id]||unitId(models.get(id)))===p.unit)&&
+      (p.mode==='edge'||p.unit==='gretchin'&&value.patrol?.grotReturned===true);
+  }
   if(value.fightSequence&&(value.status!=='playing'||value.step!==4))return false;
   if(value.fightPlan){
     const p=value.fightPlan,ids=Object.keys(p.origins),seq=value.fightSequence;
@@ -112,7 +121,6 @@ export function validateRulesState(value) {
   if(!plan)return true;
   if(value.hazard||!plan.rows.length||!plan.rows.some(r=>!r.done)||(!plan.locked&&plan.rows.some(r=>r.done)))return false;
   const modelGroup=id=>value.attachments?.[id]||unitId(models.get(id));
-  const faction=id=>['captain','librarian','intercessor','vanguard','landSpeeder'].includes(models.get(id).kind)?'marines':'orks';
   if(plan.focus && (!plan.locked||!plan.rows.some(r=>r.target===plan.focus&&!r.done)))return false;
   return plan.rows.every(r=>{
     const weapon=getProfile(models.get(r.actor)).weapons[r.weapon];

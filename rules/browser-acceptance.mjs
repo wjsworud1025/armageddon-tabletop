@@ -363,10 +363,69 @@ try {
   assert.equal(s.rules.fightSequence.stage,'done');assert.equal(await disabled('next'),false);
   await click(button('next'));s=await state();assert.equal(s.rules.step,5);assert.ok(!s.rules.fightSequence);
   await click(button('next'));s=await state();assert.equal(s.rules.step,0);assert.equal(s.rules.active,'orks');
+
+  // Round two, map A. Two surviving Intercessors and their attached Librarian
+  // enter at the left battlefield edge. Removed models mark pointer destinations.
+  const librarian=template.pieces.find(p=>p.kind==='librarian');
+  const arrivals=[rifles[0].id,rifles[1].id,librarian.id];
+  const legalMarkers=['vanguard-1','vanguard-2','vanguard-3'];
+  const blockedMarkers=['vanguard-4','vanguard-5','captain-1'];
+  const entryPositions=Object.fromEntries(arrivals.map((id,i)=>[id,[-13,-2+i*2]]));
+  legalMarkers.forEach((id,i)=>{entryPositions[id]=[-19,-10+i*2];});
+  blockedMarkers.forEach((id,i)=>{entryPositions[id]=[-19,2*i];});
+  entryPositions[victim.id]=[-14.5,5];
+  const entry=movementFixture(entryPositions,[victim.id],'marines');
+  entry.layout={map:'A',blue:'marines'};entry.rules.round=2;
+  entry.rules.attachments[librarian.id]='intercessor';entry.rules.reserves.intercessor=arrivals;
+  await upload(entry);await click('[data-tab=battle]');await click('#home');await click('#camera');
+  await choose('fighter',librarian.id);await click(button('ingress'));s=await state();
+  assert.equal(s.rules.reinforcePlan?.unit,'intercessor');assert.deepEqual(s.rules.reserves.intercessor,arrivals);
+  assert.deepEqual(Object.keys(s.rules.reinforcePlan.origins).sort(),[...arrivals].sort());
+  assert.equal(await disabled('next'),true);
+  for(const id of arrivals)assert.equal(s.pieces.find(p=>p.id===id).removed,false);
+  for(const [i,id] of arrivals.entries())await drag(id,blockedMarkers[i]);
+  s=await state();
+  const invalidEntry=structuredClone(s);
+  await click(button('reinforce-finish'));s=await state();
+  assert.deepEqual(s.rules.reinforcePlan,invalidEntry.rules.reinforcePlan);
+  assert.deepEqual(s.rules.reserves.intercessor,arrivals);assert.ok(!s.rules.units.intercessor?.reinforcing);
+  assert.match(await js('document.querySelector("#rules [aria-live=polite]")?.textContent||""'),/8″/);
+  await click(button('reinforce-cancel'));s=await state();
+  assert.equal(s.rules.reinforcePlan,null);assert.deepEqual(s.rules.reserves.intercessor,arrivals);
+  for(const id of arrivals){
+    assert.equal(s.pieces.find(p=>p.id===id).removed,true);
+    assert.deepEqual(coords(s,id),entryPositions[id]);
+  }
+  await click('#undo');s=await state();assert.deepEqual(s.rules.reinforcePlan,invalidEntry.rules.reinforcePlan);
+  await send('Page.reload');await until(()=>js('!!window.tabletopView'));await click('[data-tab=battle]');
+  s=await state();assert.deepEqual(s.rules.reinforcePlan,invalidEntry.rules.reinforcePlan);
+  assert.deepEqual(s.rules.reserves.intercessor,arrivals);assert.equal(await disabled('next'),true);
+  for(const id of arrivals)assert.deepEqual(coords(s,id),coords(invalidEntry,id));
+  await click('#home');await click('#camera');
+  for(const [i,id] of arrivals.entries())await drag(id,legalMarkers[i]);
+  s=await state();for(const [i,id] of arrivals.entries()){
+    assert.ok(Math.hypot(coords(s,id)[0]+19,coords(s,id)[1]-(-10+2*i))<.16,'Reserve placement missed '+id);
+  }
+  const legalEntry=structuredClone(s.rules.reinforcePlan);
+  await click(button('reinforce-finish'));s=await state();
+  assert.equal(s.rules.reinforcePlan,null);assert.equal(s.rules.reserves.intercessor,undefined);
+  assert.equal(s.rules.units.intercessor.reinforcing,true);assert.equal(s.rules.units.intercessor.movementTracked,true);
+  assert.equal(s.rules.attachments[librarian.id],'intercessor');
+  for(const id of arrivals)assert.equal(s.pieces.find(p=>p.id===id).removed,false);
+  await choose('fighter',librarian.id);assert.equal(await disabled('normal'),true);
+  await click('#undo');s=await state();assert.deepEqual(s.rules.reinforcePlan,legalEntry);assert.deepEqual(s.rules.reserves.intercessor,arrivals);
+  await click('#redo');s=await state();assert.equal(s.rules.reinforcePlan,null);assert.equal(s.rules.reserves.intercessor,undefined);
+  const arrived=arrivals.map(id=>coords(s,id));
+  await drag(librarian.id,blockedMarkers[2]);s=await state();
+  assert.deepEqual(arrivals.map(id=>coords(s,id)),arrived,'An arriving squad cannot move again in its Movement phase');
+  await click(button('next'));assert.equal((await state()).rules.step,2);
+  await drag(arrivals[0],blockedMarkers[0]);s=await state();
+  assert.deepEqual(arrivals.map(id=>coords(s,id)),arrived,'Ingress prevents another move until the next Charge phase');
   assert.deepEqual(errors,[]);
   console.log(JSON.stringify({passed:true,areas:4,rounds:5,winner:'marines',vp:finalVP,casualtyUndoRedo:true,
     corruptImportsRejected:2,volley:true,splitFire:true,lockedDeclarationReload:true,persisted:true,hazardousVolleyUndoRedo:true,
     localArt,movementDrag:true,movementRange:true,movementUndoReload:true,desperateEscape:true,endTurnCoherency:true,
     chargeDrag:true,chargeFailure:true,chargeUndoReload:true,chargeReactions:3,fightDrag:true,fightUndoReload:true,
-    fightTurns:2,fightLocked:true,fightConsolidation:true,fightEndTurn:true,corruptFightRejected:true}));
+    fightTurns:2,fightLocked:true,fightConsolidation:true,fightEndTurn:true,corruptFightRejected:true,
+    ingressAttached:true,ingressDistance:true,ingressCancelUndoReload:true,ingressCommitted:true,ingressMovementLocked:true}));
 } finally {ws?.close();browser.kill();server.closeAllConnections();server.close();}

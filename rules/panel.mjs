@@ -2,6 +2,8 @@ import {getProfile} from './profiles.mjs';
 import {brokenFormations,removeForCoherency} from './end-turn.mjs';
 import {chargeActions,chargeControls} from './charge-controls.mjs';
 import {createFightControls} from './fight-controls.mjs';
+import {reinforcementOptions,expiringReserves,reserveCapacity} from './reinforcements.mjs';
+import {attachForDeployment} from './reinforcement-session.mjs';
 import {coherency,travelCost,moveLimit} from '../movement.mjs';
 import {newBattle,startBattle,advance,opposite,steps,teams,roll,currentHP,unitMembers,
   groupId,changeUnit,needsShock,shockTest,adjustHP,controlObjective,engaged,modelProfile,
@@ -189,11 +191,18 @@ export function mountRules(container,api) {
       b.faction!==actor.faction && alive.some(a=>engaged(a,b,api.getDistance(a.id,b.id))));
     const stats='M '+p.move+'″ · T '+p.toughness+' · Sv '+p.save+'+ · W '+currentHP(state,actor)+'/'+p.wounds+' · Ld '+p.leadership+'+ · OC '+(unit.shocked?'–':p.oc);
     let action='';
+    let attachment='';
+    if (['librarian','warboss','weirdboy'].includes(actor.kind) && state.status==='setup') {
+      const eligible=actor.faction==='marines'?['intercessor']:['boy-0','boy-1'];
+      const current=state.attachments[actor.id]||'';
+      attachment=select('attach','합류할 분대',opt('','단독',current)+eligible.map(id=>opt(id,{intercessor:'인터세서 분대','boy-0':'보이즈 1분대','boy-1':'보이즈 2분대'}[id],current)).join(''));
+    }
     if (reserve) {
-      const eligible=state.status==='setup' || (state.status==='playing' && mine && state.round>=2 && state.step===1);
-      return chunk(esc(actor.name)+' · 전략 예비대','<p>예비대에 '+reserve.length+'명 대기 중</p>'+
-        btn('ingress',state.status==='setup'?'배치로 복귀':'전장에 증원 배치',!eligible)+
-        '<p class="br-sub">전장에 놓을 때 허용된 가장자리, 적과의 거리 및 편대를 확인하세요.</p>');
+      const setup=state.status==='setup', options=setup?null:reinforcementOptions(api.getTable(),groupId(state,actor));
+      return chunk(esc(actor.name)+' · 전략 예비대',attachment+'<p>예비대에 '+reserve.length+'명 대기 중</p>'+
+        btn('ingress',setup?'배치로 복귀':'가장자리에서 증원 배치',!setup&&!options.ok)+
+        (options?.modes.includes('deep-strike')?btn('ingress-deep','딥 스트라이크로 배치',!options.ok):'')+
+        (!setup&&!options.ok?'<p>'+esc(options.errors[0]?.message)+'</p>':''));
     }
     if (state.status==='setup') action=btn('reserve','분대를 전략 예비대로');
     if (state.status==='playing' && actor.kind==='gretchin' && !alive.length && !state.patrol.grotReturned)
@@ -214,13 +223,6 @@ export function mountRules(container,api) {
     }
     const flags=[unit.shocked?'전장 충격':'',unit.order||'',unit.charge?'돌격 굴림 '+unit.charge+'″':'',
       state.patrol.suppressed===groupId(state,actor)?'제압됨':''].filter(Boolean);
-    const leaders=['librarian','warboss','weirdboy'];
-    let attachment='';
-    if (leaders.includes(actor.kind) && state.status==='setup') {
-      const eligible=actor.faction==='marines'?['intercessor']:['boy-0','boy-1'];
-      const current=state.attachments[actor.id]||'';
-      attachment=select('attach','합류할 분대',opt('','단독',current)+eligible.map(id=>opt(id,{intercessor:'인터세서 분대','boy-0':'보이즈 1분대','boy-1':'보이즈 2분대'}[id],current)).join(''));
-    }
     let attack='';
     if (state.status==='playing' && ((state.step===2 && mine) || state.step===4)) attack=renderAttack(state,actor);
     const available=Object.entries(tactics).filter(([key,t])=>useTactic(state,key,groupId(state,actor),actor.faction,unit.shocked));
@@ -273,7 +275,8 @@ export function mountRules(container,api) {
     const all=contents();
     const dispersed=brokenFormations(state,all);
     fightView=state.step===4&&state.status==='playing'?fights.view():null;
-    const selector=select('fighter','현재 모델',opt('','미니어처 선택',actor?.id||'')+all.map(p=>opt(p.id,pieceLabel(p)+(p.removed?' (제거됨)':''),actor?.id||'')).join(''));
+    const reservedIds=new Set(Object.values(state.reserves).flat());
+    const selector=select('fighter','현재 모델',opt('','미니어처 선택',actor?.id||'')+all.map(p=>opt(p.id,pieceLabel(p)+(reservedIds.has(p.id)?' (예비대)':p.removed?' (제거됨)':''),actor?.id||'')).join(''));
     let top='';
     if (state.status==='setup') {
       top=chunk('로컬 2인 대전','<p>컴뱃 패트롤은 5라운드입니다. 전장 배치도를 고르고 수비 측부터 분대를 번갈아 배치하세요.</p>'+
@@ -296,7 +299,18 @@ export function mountRules(container,api) {
     } else {
       top=chunk(esc(state.mission || (state.rounds===5 ? patrolMissions[state.active] : '로컬 대전'))+' · '+state.round+'/'+state.rounds+' 라운드',
         '<b class="br-phase">'+teams[state.active]+' · '+steps[state.step]+'</b><p>'+prompts[state.step]+'</p>'+
-        btn('next',state.step<5?'다음 · '+steps[state.step+1]:(state.active!==state.first && state.round===state.rounds?'대전 마치기':'다음 플레이어'),!!(state.hazard||state.declaration||state.movePlan||state.chargePlan||dispersed.length||fightView&&!fightView.done)));
+        btn('next',state.step<5?'다음 · '+steps[state.step+1]:(state.active!==state.first && state.round===state.rounds?'대전 마치기':'다음 플레이어'),!!(state.hazard||state.declaration||state.movePlan||state.reinforcePlan||state.chargePlan||dispersed.length||fightView&&!fightView.done)));
+    }
+    if(state.reinforcePlan){
+      const deep=state.reinforcePlan.mode==='deep-strike';
+      const arriving=all.filter(p=>Object.hasOwn(state.reinforcePlan.origins,p.id));
+      const pickMember=select('fighter','배치할 모델',arriving.map(p=>opt(p.id,pieceLabel(p),actor?.id)).join(''));
+      root.innerHTML=top+chunk(deep?'딥 스트라이크 배치':'가장자리 증원 배치',
+        '<p>전장에서 분대원을 끌어 배치하세요. 모든 모델은 적 베이스와 수평으로 8″를 초과해 떨어져 있어야 합니다.</p>'+
+        (deep?'':'<p>각 베이스 전체를 전장 가장자리 6″ 안에 두세요.'+(state.round===2?' 적 배치 구역에 닿지 않게 하세요.':'')+'</p>')+
+        pickMember+row(btn('reinforce-finish','증원 배치 완료')+btn('reinforce-cancel','배치 취소 · 예비대 복귀')))+
+        (feedback?'<p aria-live="polite">'+esc(feedback)+'</p>':'');
+      return;
     }
     if(state.step===3)top+=chargeControls(api.getTable());
     if(fightView){
@@ -370,6 +384,15 @@ export function mountRules(container,api) {
     const actor=getPiece(choices.fighter);
     const val=id=>field(id)?.value??choices[id];
     const integer=(id,min,max)=>Math.max(min,Math.min(max,Math.trunc(Number(val(id)))||0));
+    if(state.reinforcePlan||((action==='ingress'||action==='ingress-deep')&&state.status==='playing')){
+      try{
+        feedback='';
+        if(state.reinforcePlan){
+          if(action==='reinforce-finish'||action==='reinforce-cancel')api.reinforceCommand(action.slice(10));
+        }else if(actor)api.reinforceCommand('begin',groupId(state,actor),action==='ingress-deep'?'deep-strike':'edge');
+      }catch(error){feedback=error.message;refresh()}
+      return;
+    }
     if (action==='start') {
       let first=choices.first,report='';
       if (first==='roll') { const result=rollOff();first=result.first;report=result.text; }
@@ -397,8 +420,16 @@ export function mountRules(container,api) {
       if (areas.length) resolved.objectives=objectiveSnapshot(resolved,contents(),areas,api.getDistance);
       const score=state.rounds===5 && areas.length && !state.mission ? missionAward(resolved,Object.values(resolved.objectives)) : 0;
       resolved.vp={...resolved.vp,[state.active]:resolved.vp[state.active]+score};
+      const expired=expiringReserves(api.getTable());
+      if(expired.ids.length){
+        const reserves={...resolved.reserves},hp={...resolved.hp};
+        for(const key of expired.units)delete reserves[key];
+        for(const id of expired.ids)hp[id]=0;
+        resolved={...resolved,reserves,hp};
+        if(!expired.final)resolved=recordLosses(resolved,contents());
+      }
       const next=advance(resolved);
-      return commit(next,(score?teams[state.active]+' 임무 +'+score+' VP · ':'')+(next.status==='finished'?'대전 종료':next.round+' 라운드 · '+teams[next.active]+' · '+steps[next.step]));
+      return commit(next,(expired.ids.length?'미도착 예비대 '+expired.ids.length+'명 제거 · ':'')+(score?teams[state.active]+' 임무 +'+score+' VP · ':'')+(next.status==='finished'?'대전 종료':next.round+' 라운드 · '+teams[next.active]+' · '+steps[next.step]));
     }
     if(action.startsWith('coherency-')){
       const result=removeForCoherency(state,contents(),action.slice(10));
@@ -525,17 +556,14 @@ export function mountRules(container,api) {
         const revive=action==='grot-reserve';
         if (!revive && state.status!=='setup') return;
         if (revive && (state.patrol.grotReturned || actor.kind!=='gretchin' || members.some(p=>currentHP(state,p)>0))) return;
-        const groups=new Set(contents().filter(p=>p.faction===actor.faction).map(p=>groupId(state,p)));
-        const already=[...groups].filter(g=>reserves[g]).length;
-        if (!revive && already>=Math.floor(groups.size/2)) {feedback='예비대는 해당 군대 분대 수의 절반까지입니다.';return refresh();}
+        if (!revive && !reserveCapacity({rules:state,pieces:contents()},actor.faction).remaining) {feedback='예비대는 해당 군대 분대 수의 절반까지입니다.';return refresh();}
         const reserveMembers=members.filter(p=>revive || currentHP(state,p)>0);
+        if(!reserveMembers.length)return;
         reserves[key]=reserveMembers.map(p=>p.id);
         for (const p of reserveMembers) {changes[p.id]=true;if(revive)hp[p.id]=getProfile(p).wounds;}
         if (revive) patrol={...patrol,grotReturned:true};
       }
-      if(action==='ingress'&&state.movePlan)return;
-      let next={...state,reserves,hp,patrol};
-      if(action==='ingress'&&state.status==='playing')next=changeUnit(next,actor,{reinforcing:true,movement:'normal',order:'증원 배치'});
+      const next={...state,reserves,hp,patrol};
       return commit(next,unitLabel(actor)+(action==='ingress'?' · 전장에 배치':' · 전략 예비대로 이동'),changes);
     }
     if (!currentHP(state,actor)) {feedback='제거된 모델입니다.';return refresh();}
@@ -613,12 +641,10 @@ export function mountRules(container,api) {
       if (state.status!=='setup') return;
       const actor=getPiece(choices.fighter);
       if (!actor) return;
-      if (el.value && Object.entries(state.attachments).some(([id,unit])=>id!==actor.id && unit===el.value)) {
-        feedback='그 분대에는 이미 지휘관이 합류했습니다.';return refresh();
-      }
-      if (el.value) state.attachments[actor.id]=el.value;
-      else delete state.attachments[actor.id];
-      return commit(state,actor.name+(el.value?' · 분대 합류':' · 단독 분대'));
+      try{
+        const result=attachForDeployment({rules:state,pieces:contents()},actor,el.value);
+        return commit(result.rules,actor.name+(el.value?' · 분대 합류':' · 단독 분대'),result.removed);
+      }catch(error){feedback=error.message;return refresh()}
     }
     choices[key]=el.type==='checkbox'?el.checked:el.value;
     if (key==='fighter') {

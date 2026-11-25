@@ -73,6 +73,8 @@ export function restore(template, save) {
       throw new Error('미니어처 배치 데이터가 손상되었습니다.');
     piece.yaw = record.yaw % (Math.PI*2);
     piece.removed = !!record.removed;
+    if(piece.removed&&Object.hasOwn(save.rules?.reinforcePlan?.origins??{},piece.id))
+      throw new Error('배치 중인 예비대 모델이 저장된 전장에 없습니다.');
     piece.elevation = clamp(record.elevation??0,0,20);
     place(piece,record.x,record.z,game);
   }

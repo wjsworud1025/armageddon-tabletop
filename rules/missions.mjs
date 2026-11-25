@@ -24,7 +24,7 @@ export function recordLosses(state,pieces) {
 }
 
 export function objectiveSnapshot(state,pieces,areas,distance) {
-  const live=pieces.filter(p=>p.faction!=='terrain' && currentHP(state,p)>0 && !state.reserves?.[unitId(p)]);
+  const live=pieces.filter(p=>p.faction!=='terrain' && currentHP(state,p)>0 && !state.reserves?.[groupId(state,p)]?.includes(p.id));
   const byId=new Map(live.map(p=>[p.id,p]));
   const engagedGroups=new Set();
   if (distance) {

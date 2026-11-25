@@ -8,6 +8,7 @@ import {newBattle,unitMembers,groupId,roll,shockTest,changeUnit} from './rules/b
 import {beginMove,proposeMove,finishMove,rewindMove,rerollMove,abandonInvalidMove} from './move-session.mjs';
 import {beginCharge,selectChargeTargets,proposeCharge,finishCharge,rewindCharge,cancelCharge} from './charge-session.mjs';
 import {beginFightMove,proposeFightMove,finishFightMove,cancelFightMove} from './fight-session.mjs';
+import {beginReinforcement,placeReinforcement,finishReinforcement} from './rules/reinforcement-session.mjs';
 import {applyLayout,objectiveAreas,validDeployment,objectiveFootprints} from './layouts.mjs';
 import {studioGroupFor,openStudioViewer} from './assets/turntable.mjs';
 import {loadPortraitMap,portraitUrl} from './painted.mjs';
@@ -54,7 +55,10 @@ function selection(){
   $('studio-tools').hidden=!original||!p||!studioGroupFor(p);if(!p)return;
   $('piece-name').textContent=p.name;
   $('piece-spec').textContent=factionNames[p.faction]+' · '+(p.faction==='terrain'?'지면 점유 폭':'베이스')+' '+Math.round(p.baseWidth*25.4)+' × '+Math.round(p.baseDepth*25.4)+' mm';
-  $('elevation').value=p.elevation||0;$('remove').textContent=p.removed?'전장 복귀':'전장에서 제거';
+  const inReserve=Object.values(game.rules?.reserves??{}).some(ids=>ids.includes(p.id));
+  $('elevation').value=p.elevation||0;
+  $('remove').disabled=inReserve||!!game.rules?.reinforcePlan;
+  $('remove').textContent=inReserve?(p.removed?'예비대 대기 중':'예비대 배치 중'):p.removed?'전장 복귀':'전장에서 제거';
   $('focus').disabled=!!p.removed;
 }
 function roster(){
@@ -95,14 +99,18 @@ function movingByRules(p){
   if(r?.status!=='playing')return false;
   if(r.step===4)return true;
   const unit=r.units?.[groupId(r,p)];
+  if(r.step===2&&unit?.reinforcing&&unit.movementTracked)return true;
   if(r.step===3)return !!r.chargePlan||!(unit?.charge&&!unit.chargeTracked&&!unit.charged);
   if(r.step!==1)return false;
+  if(r.reinforcePlan)return true;
   // Older saves stored the order but no starting position or distance travelled.
   // Continue that open turn with its original table controls.
-  if(!r.movePlan&&p.faction===r.active&&(unit?.reinforcing||unit?.movement&&!unit.movementTracked&&unit.movement!=='remain'))return false;
+  if(!r.movePlan&&p.faction===r.active&&!unit?.movementTracked&&(unit?.reinforcing||unit?.movement&&unit.movement!=='remain'))return false;
   return true;
 }
 function proposeTableMotion(p,paths){
+  if(game.rules.step===2)throw Error('이번 턴에 증원한 분대는 돌격 페이즈 전까지 다시 이동할 수 없습니다.');
+  if(game.rules.reinforcePlan)return placeReinforcement(game,p,paths);
   if(game.rules.step===4)return proposeFightMove(game,p,paths,fightObjectives());
   return game.rules.step===3?proposeCharge(game,p,paths):proposeMove(game,p,paths);
 }
@@ -123,7 +131,11 @@ function editPose(p,delta,message){
   }else mutate(()=>{Object.assign(p,delta);place(p,p.x,p.z,game)},message);
 }
 function rotate(){const p=piece(active);if(p)editPose(p,{yaw:(p.yaw+Math.PI/12)%(2*Math.PI)},p.name+' 15° 회전')}
-function remove(id,removed){const p=piece(id);if(p&&!!p.removed!==!!removed)mutate(()=>{
+function remove(id,removed){const p=piece(id);
+  if(game.rules?.reinforcePlan || p&&game.rules?.reserves?.[groupId(game.rules,p)]?.includes(id)){
+    toast('예비대는 대전 탭에서 배치하거나 복귀시키세요.');return;
+  }
+  if(p&&!!p.removed!==!!removed)mutate(()=>{
   p.removed=!!removed;
   if(!removed && game.rules?.hp?.[id]===0)game.rules.hp[id]=getProfile(p)?.wounds??1;
 },p.name+(removed?' 제거':' 복귀'))}
@@ -167,6 +179,10 @@ document.addEventListener('keydown',e=>{if(e.target.closest('input,select,textar
   else if(e.key.toLowerCase()==='r')rotate()});
 const api={
   getTable:()=>game,
+  reinforceCommand(command,unit,mode){
+    const result=command==='begin'?beginReinforcement(game,unit,mode):finishReinforcement(game,command==='cancel');
+    applyMovement(result);
+  },
   fightObjectives,
   beginFightPath(choice){applyMovement(beginFightMove(game,choice,fightObjectives()))},
   finishFightPath(cancel){applyMovement(cancel?cancelFightMove(game):finishFightMove(game,fightObjectives()))},

@@ -42,3 +42,12 @@
 교전 유지·교전 진입 재정비가 끝나면 아직 싸우지 않은 교전 상대가 즉시 한 분대씩 싸운다. 6월 기본 규칙 PDF는 교전 진입 반격을 명시한다. 교전 유지 반격은 앱 공개 전사본의 12.08 정오표 문구를 따랐다. 이 수정의 공식 앱 화면은 직접 대조하지 못했다. [앱의 근접전 FAQ·정오표 전사본](https://wahapedia.ru/wh40k11ed/the-rules/core-rules/#Fight-Phase)
 
 경로 편집기는 받침대 접촉, 이동 한도, 교전 유지, 대상 접근 및 최종 편대를 검사한다. 다른 직선 경로로 교전이나 거점 진입이 가능하다고 확인되면 그 조건을 적용한다. 지형 또는 분대원들의 연계 이동으로 다른 경로가 가능한지는 화면에 표시된 모델을 보고 양측이 판정한다.
+
+### 전략 예비대와 증원
+
+1. **전투 전 편성.** 컴뱃 패트롤 임무 5단계에서 지휘관 합류와 예비대를 함께 결정한다. 예비대로 시작할 수 있는 분대 수는 최종 편성 분대 수의 절반까지이며, 홀수면 내림한다. 합류 분대는 기본 규칙 19.01에 따라 분자와 분모에서 모두 한 분대로 센다. 이 패트롤 임무는 **급속 증원(Rapid Ingress)** 전술을 금지한다. [컴뱃 패트롤 임무 5·9단계 앱 전사본](https://wahapedia.ru/wh40k11ed_cp/the-rules/combat-patrol-mission/) · [공식 코어 규칙 19.01, 20.01](https://assets.warhammer-community.com/eng_01-06_warhammer40k_new40k_core_rules-was6fbu1ix-hfewhmxyiy.pdf)
+2. **일반 증원.** 2라운드부터 자기 이동 페이즈에 예비 분대의 모든 모델을 배치한다. 받침대 전체가 전장 안에 있고 한 곳 이상 가장자리에서 6″ 이내여야 한다. 모든 적 모델과의 수평 받침대 간격은 **8″ 초과**여야 한다. 2라운드에는 상대 배치 구역에 걸칠 수 없다. 3라운드부터 이 구역 제한이 풀린다. 전원이 합법적으로 놓이지 않으면 예비대에 남는다. 배치 후 다음 돌격 페이즈 시작까지 다른 종류의 이동을 할 수 없다. [공식 코어 규칙 03.02, 09.04, 20.03–20.04](https://assets.warhammer-community.com/eng_01-06_warhammer40k_new40k_core_rules-was6fbu1ix-hfewhmxyiy.pdf)
+3. **그레친의 딥 스트라이크.** **그레친 증식(Grot Infestation)**으로 복귀한 그레친 분대는 8″ 초과 간격을 지키면 전장 중앙 또는 상대 배치 구역에도 증원할 수 있다. 전투 전부터 예비대였다는 사실만으로는 이 능력을 얻지 않는다. 이 스타터 패트롤의 뱅가드 베테랑 전용 카드에도 딥 스트라이크가 기재되어 있지 않다. [공식 코어 규칙 24.09](https://assets.warhammer-community.com/eng_01-06_warhammer40k_new40k_core_rules-was6fbu1ix-hfewhmxyiy.pdf) · [’Ardmob 패트롤 카드 전사본](https://wahapedia.ru/wh40k11ed_cp/factions/ardmob/) · [Assault Force 패트롤 카드 전사본](https://wahapedia.ru/wh40k11ed_cp/factions/assault-force/)
+4. **예비대 기한.** 3라운드의 두 번째 턴이 끝날 때 아직 증원하지 않은 최초 예비대는 파괴된다. 20.02–20.03은 전투 중 전장에서 예비대로 다시 들어간 분대에 예외를 둔다. 이 구현은 전장에 있던 그레친이 증식해 같은 분대로 돌아간 경우 이 재배치 예외를 적용한다. 다만 마지막 턴 종료에는 남은 예비대를 모두 파괴하며, 이때 모델 파괴를 조건으로 하는 효과는 발동하지 않는다. [공식 코어 규칙 20.02–20.04](https://assets.warhammer-community.com/eng_01-06_warhammer40k_new40k_core_rules-was6fbu1ix-hfewhmxyiy.pdf) · [최종 턴 처리에 관한 앱 부록 전사본](https://wahapedia.ru/wh40k11ed_cp/the-rules/rules-appendix/)
+
+A/B/C 맵에서는 게임이 상대 배치 구역을 검사한다. 제품 전장이나 자유 배치에서 배치 구역 경계를 지정하지 않았으면 두 플레이어가 합의한 경계를 확인한다. 편대, 모델 받침대의 겹침, 적과의 수평 간격은 자동으로 검사한다. 지형과 받침대가 겹치는 곳에서는 벽·천장을 관통하는지, 상층에서는 모델이 안정적으로 서는지 확인한다. 상층의 높이가 가장자리 거리 판정을 바꿀 때도 화면에 확인 요청을 표시한다. [공식 코어 규칙 01.04, 03.01–03.03, 13.06](https://assets.warhammer-community.com/eng_01-06_warhammer40k_new40k_core_rules-was6fbu1ix-hfewhmxyiy.pdf)

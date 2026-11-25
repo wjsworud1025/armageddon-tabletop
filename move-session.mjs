@@ -56,7 +56,7 @@ function requireEscapeRolls(plan) {
 // No view coordinates or state are changed here, including when validation fails.
 export function beginMove(game,actor,type,options={}) {
   const rules=movementPhase(game), member=actingModel(game,actor);
-  if(rules.movePlan) throw new Error('진행 중인 분대 이동을 먼저 마치세요.');
+  if(rules.movePlan||rules.reinforcePlan) throw new Error('진행 중인 분대 이동이나 예비대 배치를 먼저 마치세요.');
   if(!Object.hasOwn(moveNames,type)) throw new Error('알 수 없는 이동 종류입니다.');
   const unit=groupId(rules,member), existing=rules.units[unit]||{};
   if(existing.movement) throw new Error('이 분대는 이번 턴에 이동을 이미 선언했습니다.');
