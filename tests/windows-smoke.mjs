@@ -67,6 +67,22 @@ try{
   assert.match(await js('document.querySelector("#piece-name").textContent'),/발전기 성소/);
   await screenshot('01c-generator-shrine.png');
   await click('#home');await js('document.querySelector("#search").value="";document.querySelector("#search").dispatchEvent(new Event("input"))');
+  const preBoy=await state(),boyStudy=structuredClone(preBoy);
+  for(const p of boyStudy.pieces){
+    p.removed=p.id!=='boy-20';
+    if(!p.removed)Object.assign(p,{x:0,z:0,yaw:-Math.PI/8,elevation:0});
+  }
+  await upload(boyStudy);
+  await js('document.querySelector("#search").value="보이 20";document.querySelector("#search").dispatchEvent(new Event("input"))');
+  await click('[aria-label$="boy-20"]');await click('#focus');
+  assert.match(await js('document.querySelector("#piece-name").textContent'),/보이 20/);
+  await until(()=>js('document.querySelector("#notice").hidden&&tabletopView.stats().visiblePieces===1'));
+  const visibleBoy=await js('tabletopView.pose("boy-20")');
+  assert.equal(visibleBoy.x,0);assert.equal(visibleBoy.yaw,-Math.PI/8);
+  await screenshot('03-boy-20.png');
+  await upload(preBoy);await click('#home');
+  await js('document.querySelector("#search").value="";document.querySelector("#search").dispatchEvent(new Event("input"))');
+  assert.deepEqual((await state()).pieces,preBoy.pieces);
   if(publicFlag!==-1)assert.equal(meshes.reconstructed,0);
   else if(studioInstalled&&existsSync(join(root,'reconstruction','models','14.whm')))assert.ok(meshes.reconstructed>=17,'Installed set must display both reconstructed pylons');
   if(studioInstalled){

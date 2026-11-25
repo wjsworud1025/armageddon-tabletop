@@ -1,5 +1,6 @@
 import {paint as p,Sculpt} from './sculpt.mjs';
 import {orkPose} from './ork-poses.mjs';
+import {shoulderShootaBoy} from './ork-shoulder-shoota.mjs';
 
 const mix=(a,b,t)=>a.map((v,i)=>v+(b[i]-v)*t);
 const offset=(a,x,y,z)=>[a[0]+x,a[1]+y,a[2]+z];
@@ -210,6 +211,7 @@ function groundSkull(s,foot,side,u){
 
 export function sculptOrkPose(parent,kind,variant,face){
   const s=new Sculpt(parent.T,parent.group,true);
+  if(kind==='boy'&&variant===19)return shoulderShootaBoy(s);
   const pose=orkPose(kind,variant);
   if(!pose) throw new RangeError('Missing '+kind+' pose '+variant);
   const grot=kind==='gretchin',nob=!grot&&variant%10===0;
