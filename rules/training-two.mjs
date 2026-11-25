@@ -48,7 +48,8 @@ function buildBattle({scenario,field,names,validateLayout,wallSegments,shooting=
     for(const original of field.pieces.filter(p=>p.faction==='terrain')) {
       const wall=table.pieces.find(p=>p.id===original.id);
       req(same(pose(wall),pose(original)) && same(wall.displayScale,original.displayScale) &&
-        !!wall.previousSecondRuin===!!original.previousSecondRuin,'훈련 지형은 배치도의 벽 위치에 놓으세요.');
+        !!wall.previousSecondRuin===!!original.previousSecondRuin&&!!wall.previousSmallRuin===!!original.previousSmallRuin,
+        '훈련 지형은 배치도의 벽 위치에 놓으세요.');
     }
     const poses=Object.fromEntries(table.pieces.filter(p=>p.faction!=='terrain').map(p=>[p.id,pose(p)]));
     if(!shooting)req(keys.every(u=>coherent(members(table.pieces,u))),'배치한 분대는 2″ 간격으로 이어져야 합니다.');

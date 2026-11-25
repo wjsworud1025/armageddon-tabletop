@@ -32,7 +32,7 @@ export const trainingThreePlan={
     {id:'largeRuin-2',zone:'orks',points:[[22.10,9.55],[16.40,9.55],[16.40,6.80]],center:[18.670,7.785],yaw:0},
     {id:'smallRuin-2',zone:'orks',points:[[23.20,3.20],[27.15,3.20],[27.15,4.50]],center:[26.10,4.29],yaw:-Math.PI/2},
     {id:'smallRuin-3',zone:'marines',points:[[2.50,13.15],[6.70,13.15],[6.70,14.40]],center:[5.85,14.29],yaw:-Math.PI/2},
-    {id:'smallRuin-1',zone:'gretchin',points:[[15.35,20.25],[15.35,16.25],[16.50,16.25]],center:[16.05,18.25],yaw:Math.PI/2},
+    {id:'smallRuin-1',zone:'gretchin',points:[[15.35,20.25],[15.35,16.25],[16.50,16.25]],center:[15.3633,16.8762],yaw:58.34*Math.PI/180},
   ],
 };
 
@@ -47,14 +47,14 @@ export function createTrainingThreeTable(){
   const pieces=poses.map(([id,x,z,yaw])=>({
     ...catalog.get(id),...toWorld({x,z}),yaw,elevation:0,removed:false,
   }));
-  return {width,depth,surface:'reverse',pieces};
+  return {width,depth,surface:'reverse',handbookRevision:3,pieces};
 }
 
 // Consecutive vertices form the occupied wall segments in game coordinates.
-// The third small fragment is straight with small feet in the public sculpt.
+// Earlier saves used the straight casting for the Gretchin's shrine.
 export function trainingThreeWallSegments(wall){
   const vertices=cornerVertices(wall);
-  return wall.id==='smallRuin-1'?vertices.slice(0,2):vertices;
+  return wall.id==='smallRuin-1'&&wall.previousSmallRuin?vertices.slice(0,2):vertices;
 }
 
 function distanceToSegment(p,a,b){

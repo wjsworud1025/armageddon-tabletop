@@ -15,6 +15,7 @@ import {checkShooterSight} from './browser-shooter-sight.mjs';
 import {checkPlungingFire} from './browser-plunging-fire.mjs';
 import {checkTerrainAreas} from './browser-terrain-areas.mjs';
 import {checkAreaCover} from './browser-area-cover.mjs';
+import {checkSmallRuin} from './browser-small-ruin.mjs';
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 // --public-exe <file> exercises a clean distribution using the same native host.
 const publicFlag=process.argv.indexOf('--public-exe');
@@ -56,6 +57,7 @@ try{
   await until(async()=>{if(errors.length)throw Error(errors.join('; '));return js('!!window.tabletopView')});
   const stats=await js('tabletopView.stats()');assert.equal(stats.pieces,61);
   async function screenshot(name){await delay(500);const img=await send('Page.captureScreenshot',{format:'png'});writeFileSync(join(evidence,name),Buffer.from(img.data,'base64'))}
+  await checkSmallRuin({save:await state(),upload,state,js,click,send,screenshot});
   await checkRuinSight({save:await state(),upload,state,js,click,send,screenshot});
   const shootingTools={save:await state(),upload,state,js,click,screenshot,reload:async()=>{
     await send('Page.reload');await until(()=>js('!!window.tabletopView'));await click('[data-tab=battle]');

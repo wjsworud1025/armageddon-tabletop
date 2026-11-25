@@ -95,10 +95,13 @@ for(const map of ['A','B','C']){
     const activeSave=snapshot(game);
     Object.assign(piece(activeSave,'captain-1'),{x:1.7,z:1.9,yaw:.27});
     Object.assign(piece(activeSave,'largeRuin-1'),{x:1.7,z:1.9,yaw:-.76});
-    for(const version of [1,2,3]){
+    for(const version of [1,2,3,4]){
       activeSave.rules.officialSetup.version=version;
       piece(activeSave,'shockArray-1').removed=version!==1;
-      assert.deepEqual(snapshot(restore(createTable(),activeSave)),activeSave,'Restore the ongoing battle in place, including overlapping pieces');
+      const loaded=restore(createTable(),activeSave),small=piece(loaded,'smallRuin-1');
+      assert.equal(!!small.previousSmallRuin,version<4);
+      assert.equal(small.baseDepth,version<4?1.4:1.25);
+      assert.deepEqual(snapshot(loaded),activeSave,'Restore the ongoing battle in place, including overlapping pieces');
       const handbook={...activeSave,training:createTrainingOne()};
       assert.deepEqual(snapshot(restore(createTable(),handbook)),handbook,'Preserve the underlying patrol poses while a handbook mission is open');
     }
@@ -126,13 +129,14 @@ test('saved map, defender, turn, terrain and revealed reserve records agree with
 });
 
 test('the box shows all 15 terrain pieces before the draw; each saved map version restores its own structures and resumes through placement',()=>{
-  assert.equal(fresh().rules.officialSetup.version,3);
-  for(const version of [1,2,3])for(const [map,die] of [['A',1],['B',3],['C',5]]){
+  assert.equal(fresh().rules.officialSetup.version,4);
+  for(const version of [1,2,3,4])for(const [map,die] of [['A',1],['B',3],['C',5]]){
     let game=fresh();game.rules.officialSetup.version=version;
     assert.equal(game.pieces.filter(p=>visiblePatrolPiece(game.rules,p)).length,15);
     const tooEarly=snapshot(game);piece(tooEarly,'shockArray-1').removed=true;
     assert.throws(()=>restore(createTable(),tooEarly));
     game=checkpoint(step(game,'official-roll-layout',{},[die]));
+    assert.equal(!!piece(game,'smallRuin-1').previousSmallRuin,version<4);
     assert.equal(game.pieces.filter(p=>visiblePatrolPiece(game.rules,p)).length,version===1?15:14);
     const switched=snapshot(game);
     switched.rules.officialSetup.version=version===1?2:1;
@@ -146,7 +150,11 @@ test('the box shows all 15 terrain pieces before the draw; each saved map versio
     }
     const tampered=snapshot(game);piece(tampered,'shockArray-1').removed=version===1;
     assert.throws(()=>restore(createTable(),tampered));
-    const unsupported=snapshot(game);unsupported.rules.officialSetup.version=4;
+    if(version>=3){
+      const wrongSmall=snapshot(game);wrongSmall.rules.officialSetup.version=version===3?4:3;
+      assert.throws(()=>restore(createTable(),wrongSmall),'the two editions register a different small ruin');
+    }
+    const unsupported=snapshot(game);unsupported.rules.officialSetup.version=5;
     assert.throws(()=>restore(createTable(),unsupported));
     game=step(step(game,'official-roll-role',{},[1,4]),'official-defend');
     game=step(game,'form-enhance',{team:'marines',enhancement:'veterans'});

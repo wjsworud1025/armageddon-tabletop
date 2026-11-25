@@ -6,7 +6,7 @@ import {validateTrainingTwo} from './rules/training-two.mjs';
 import {validateTrainingThreeDeployment} from './rules/training-three-deployment.mjs';
 import {validateTrainingThreeBattle} from './rules/training-three-battle.mjs';
 import {trainingFourBattle,trainingFourDeployment} from './rules/training-four-battle.mjs';
-import {patrolSetupView} from './rules/patrol-setup.mjs';
+import {patrolSetupView,patrolTerrainPiece} from './rules/patrol-setup.mjs';
 import {layoutGeometry} from './layouts.mjs';
 import {validPlacedPatrolUnits,recoverPreviousRuinDeployment} from './rules/official-deployment.mjs';
 
@@ -70,6 +70,7 @@ export function restore(template, save) {
   }
   const records = new Map(save.pieces.map(p => [p.id,p]));
   const game = structuredClone(template);
+  game.pieces=game.pieces.map(p=>patrolTerrainPiece(p,save.rules?.officialSetup?.version));
   for (const piece of game.pieces) {
     const record = records.get(piece.id);
     if (!record || ![record.x,record.z,record.yaw,record.elevation??0].every(finite))

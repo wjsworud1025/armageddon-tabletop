@@ -3,7 +3,7 @@ import {profiles,getProfile,unitId} from './profiles.mjs';
 import {validFightSequence} from '../fight-sequence.mjs';
 import {doctrines,enhancements,tactics,effectWeapon} from './patrol.mjs';
 import {canCommandReroll} from './command-reroll.mjs';
-import {validatePatrolSetup,patrolSetupView} from './patrol-setup.mjs';
+import {validatePatrolSetup,patrolSetupView,patrolTerrainPiece} from './patrol-setup.mjs';
 import {validPatrolFormations} from './patrol-formations.mjs';
 import {createTable} from '../data/catalog.mjs';
 import {sightBoardMatches,sightHP} from './patrol-sight.mjs';
@@ -290,7 +290,8 @@ export function validateRulesState(value,pieceRecords=null,layout=undefined) {
       faction(r.actor)!==faction(r.preferred) && (value.step!==2 || faction(r.actor)===value.active) &&
       (weapon.range?r.assigned===0:r.assigned>=1&&r.assigned<=weapon.attacks+r.extra);
   }))return false;
-  const savedPieces=()=>pieceRecords.map(({id,x,z,elevation,yaw,removed})=>({...catalog.get(id),x,z,elevation,yaw,removed:!!removed}));
+  const savedPieces=()=>pieceRecords.map(({id,x,z,elevation,yaw,removed})=>patrolTerrainPiece(
+    {...catalog.get(id),x,z,elevation,yaw,removed:!!removed},value.officialSetup?.version));
   // An intact sight record refers to this exact board. Once casualties or
   // movement invalidate it, original row qualifiers remain historical.
   if(pieceRecords&&plan.locked&&value.shootingSight&&plan.rows.some(r=>r.manualCover)&&

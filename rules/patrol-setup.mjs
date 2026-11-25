@@ -1,4 +1,5 @@
 import {opposite,roll} from './battle.mjs';
+import {createTable} from '../data/catalog.mjs';
 
 // Combat Patrol Mission Sequence 2–8, Warhammer 40,000 app 2.7.1:
 // https://wahapedia.ru/wh40k11ed_cp/the-rules/combat-patrol-mission/
@@ -13,8 +14,18 @@ const fields=(value,keys)=>value!==null&&typeof value==='object'&&
   Object.keys(value).length===keys.length&&keys.every(k=>Object.hasOwn(value,k));
 
 export function newPatrolSetup(){
-  return {version:3,layoutDie:null,roleRolls:[],roleChoice:null,
+  return {version:4,layoutDie:null,roleRolls:[],roleChoice:null,
     formationsRevealed:false,deploymentComplete:false,firstRolls:[]};
+}
+
+// A saved official game keeps the same terrain for deployment, movement,
+// sight, and replay. Custom tables use the current cast at their saved pose.
+export function patrolTerrainPiece(piece,version){
+  if(piece.id!=='smallRuin-1')return piece;
+  if([1,2,3].includes(version))return {...piece,previousSmallRuin:true,baseWidth:2.5,baseDepth:1.4};
+  if(!piece.previousSmallRuin)return piece;
+  const current=createTable().pieces.find(p=>p.id===piece.id);
+  return {...piece,previousSmallRuin:false,baseWidth:current.baseWidth,baseDepth:current.baseDepth};
 }
 
 // Each pair preserves both players' rolls, always [Marines, Orks]. A tie
@@ -36,7 +47,7 @@ function validRolls(rolls){
 
 export function validatePatrolSetup(s){
   if(!fields(s,['version','layoutDie','roleRolls','roleChoice','formationsRevealed','deploymentComplete','firstRolls'])||
-    ![1,2,3].includes(s.version)||s.layoutDie!==null&&!die(s.layoutDie)||
+    ![1,2,3,4].includes(s.version)||s.layoutDie!==null&&!die(s.layoutDie)||
     !validRolls(s.roleRolls)||!validRolls(s.firstRolls)||
     typeof s.formationsRevealed!=='boolean'||typeof s.deploymentComplete!=='boolean')return false;
   if(s.roleRolls.length&&s.layoutDie===null)return false;

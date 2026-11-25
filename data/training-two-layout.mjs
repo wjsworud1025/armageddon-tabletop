@@ -63,21 +63,30 @@ export function createTrainingTwoTable(){
 export function trainingTwoWallSegments(wall){
   const hw=wall.baseWidth/2,hd=wall.baseDepth/2;
   const co=Math.cos(wall.yaw),si=Math.sin(wall.yaw);
-  const line=wall.id==='largeRuin-2'&&!wall.previousSecondRuin?
-    [[2.59,1.765],[-2.27,1.765],[-2.27,-2.11]]:[[hw,-hd],[-hw,-hd],[-hw,hd]];
+  let line=[[hw,-hd],[-hw,-hd],[-hw,hd]];
+  if(wall.id==='largeRuin-2'&&!wall.previousSecondRuin)
+    line=[[2.59,1.765],[-2.27,1.765],[-2.27,-2.11]];
+  if(wall.id==='smallRuin-1'&&!wall.previousSmallRuin)
+    line=[[-1.045,.599],[.526,-.340],[1.079,.529]];
   return line.map(([x,z])=>({
     x:wall.x+co*x+si*z,z:wall.z-si*x+co*z,
   }));
 }
 
-export function previousHandbookField(scenario,field){
+export function previousHandbookField(scenario,field,revision=1){
   const second=scenario===2;
   const center=second?{x:25.05,z:5.64}:{x:18.55,z:7.19};
-  return {...field,handbookRevision:1,pieces:field.pieces.map(p=>p.id!=='largeRuin-2'?p:
-    {...p,...trainingTwoWorldPoint(center),yaw:second?-Math.PI/2:Math.PI/2,baseDepth:4.1,previousSecondRuin:true})};
+  return {...field,handbookRevision:revision,pieces:field.pieces.map(p=>{
+    if(p.id==='largeRuin-2'&&revision===1)
+      return {...p,...trainingTwoWorldPoint(center),yaw:second?-Math.PI/2:Math.PI/2,baseDepth:4.1,previousSecondRuin:true};
+    if(p.id==='smallRuin-1'&&revision<=2)
+      return {...p,...trainingTwoWorldPoint({x:16.05,z:18.25}),yaw:Math.PI/2,baseDepth:1.4,previousSmallRuin:true};
+    return p;
+  })};
 }
 
 export function handbookBaseDepth(table,piece){
+  if(table.handbookRevision<=2&&piece.id==='smallRuin-1')return 1.4;
   return table.handbookRevision===1&&piece.id==='largeRuin-2'?4.1:piece.baseDepth;
 }
 

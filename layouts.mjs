@@ -43,6 +43,9 @@ const registeredRuins={
   B:[[495,455,180],[1020,1481,270],[456,1465,0],[1078,500,180],[806,364,0],[781,531,270],[757,1428,90],[747,1630,270]],
   C:[[1147,582,270],[381,1413,0],[1172,1273,0],[366,692,180],[1032,286,180],[1221,289,0],[314,1665,180],[475,1701,270]]
 };
+// Group 18's centre lines meet inside the casting, at (+0.526, -0.340).
+// These centres place that elbow on the printed inside corner of each map.
+const smallShrinePoses={A:[1192.43,285.50,58.34],B:[796.43,326.50,58.34],C:[1021.50,275.54,148.34]};
 // Earlier official-setup saves recorded all three industrial pieces. Keep
 // their original positions and headings when resuming those tables.
 const originalPlants={
@@ -51,14 +54,18 @@ const originalPlants={
   C:{'shockArray-1':[766,1323,90],'capacitorStack-1':[768,622,90],'generatorShrine-1':[769,679,90]}
 };
 const terrainAreas=Object.fromEntries(Object.entries(layouts).map(([code,data])=>[code,patrolTerrainAreas(code,data.areas,world)]));
-export function layoutGeometry(code,version=3){
+export function layoutGeometry(code,version=4){
   const data=layouts[code];if(!data)return null;
   const blue=points(data.zone),red=blue.map(([x,z])=>[-x,-z]);
-  const ruins=version===3?registeredRuins[code]:[];
+  const ruins=version>=3?registeredRuins[code]:[];
   const positions=Object.fromEntries(ids.map((id,i)=>[id,ruins[i]??data.positions[i]]));
+  if(version>=4)positions['smallRuin-1']=smallShrinePoses[code];
   if(version===1)Object.assign(positions,originalPlants[code]);
   return {blue,red,areas:data.areas,terrainAreas:terrainAreas[code],terrain:Object.entries(positions).map(([id,[u,v,deg]])=>{
-    const [x,z]=world([u,v]);return {id,x,z,yaw:deg*Math.PI/180}
+    const [x,z]=world([u,v]);
+    const pose={id,x,z,yaw:deg*Math.PI/180};
+    if(id==='smallRuin-1')Object.assign(pose,{baseDepth:version>=4?1.25:1.4,previousSmallRuin:version<4});
+    return pose;
   })};
 }
 export function layoutScenery(game,geo){
@@ -110,13 +117,14 @@ function fitsZone(p,zone,margin=0){
 export function validDeployment(game,p){
   const geo=layoutGeometry(game.layout?.map);return !!geo&&fitsZone(p,p.faction===game.layout.blue?geo.blue:geo.red);
 }
-// The preset rotates troops and terrain in quarter turns. Circular infantry
-// use exact gaps, while vehicles keep a conservative rectangular clearance.
+// Circular infantry use exact gaps. Vehicles and angled terrain keep
+// enough clearance for the full rotated bounding rectangle.
 const separation=.075;
 function footprint(p){
-  const sideways=Math.abs(Math.sin(p.yaw))>.5;
-  return {x:p.x,z:p.z,rx:(sideways?p.baseDepth:p.baseWidth)/2,rz:(sideways?p.baseWidth:p.baseDepth)/2,
-    circle:p.faction!=='terrain'&&p.baseWidth===p.baseDepth};
+  const c=Math.abs(Math.cos(p.yaw)),s=Math.abs(Math.sin(p.yaw));
+  const circle=p.faction!=='terrain'&&p.baseWidth===p.baseDepth;
+  return {x:p.x,z:p.z,circle,rx:(circle?p.baseWidth:c*p.baseWidth+s*p.baseDepth)/2,
+    rz:(circle?p.baseDepth:s*p.baseWidth+c*p.baseDepth)/2};
 }
 function clear(a,b){
   const dx=Math.abs(a.x-b.x),dz=Math.abs(a.z-b.z);

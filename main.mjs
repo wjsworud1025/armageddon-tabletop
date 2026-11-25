@@ -59,7 +59,11 @@ function shownTable(){
       const poses=new Map(project(game.training).map(p=>[p.id,p]));
       for(const p of trainingField.pieces){
         const pose=poses.get(p.id);
-        if(pose){delete p.previousSecondRuin;Object.assign(p,pose)}else p.removed=true;
+        if(pose){
+          delete p.previousSecondRuin;
+          delete p.previousSmallRuin;
+          Object.assign(p,pose);
+        }else p.removed=true;
       }
       trainingField.training=game.training;
     }

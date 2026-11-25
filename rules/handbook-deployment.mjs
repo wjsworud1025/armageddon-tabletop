@@ -11,13 +11,20 @@ export function handbookFacing(origin,yaw){
   return origin+(((n%24+36)%24)-12)*handbookTurn;
 }
 
-// Histories replay against their original board, including wall collision
-// tests. Only the second ruin changed between the two printed-layout fits.
+// Histories replay against the exact obstacles for their printed-layout fit.
+// Revision 2 replaced the second large ruin, revision 3 the first small ruin.
 export function handbookEditions(scenario,field,build){
-  const current=build(field),previous=build(previousHandbookField(scenario,field));
-  const methods={create:table=>(table?.handbookRevision===1?previous:current).create(table)};
+  const latest=field.handbookRevision??2;
+  const editions=new Map([[latest,build(field)]]);
+  for(let revision=1;revision<latest;revision++)editions.set(revision,build(previousHandbookField(scenario,field,revision)));
+  const current=editions.get(latest);
+  const methods={create:table=>{
+    const edition=editions.get(table?.handbookRevision??latest);
+    if(!edition)throw Error('알 수 없는 훈련 전장 판본입니다.');
+    return edition.create(table);
+  }};
   for(const method of Object.keys(current)){
-    if(method!=='create')methods[method]=(state,...args)=>(state?.version===1?previous:current)[method](state,...args);
+    if(method!=='create')methods[method]=(state,...args)=>(editions.get(state?.version)??current)[method](state,...args);
   }
   return methods;
 }

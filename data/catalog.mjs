@@ -72,12 +72,14 @@ export function createTable() {
     layouts[kind].map(([u,v,angle], variant) => {
       const nob = kind === 'boy' && (variant === 0 || variant === 10);
       const baseWidth = nob ? mm(40) : width;
+      const baseDepth = kind==='largeRuin'&&variant===1 ? 4.22
+        : kind==='smallRuin'&&variant===0 ? 1.25 : (depth??baseWidth);
       const ordinal = variant + 1;
       const name = nob ? '보스 놉 ' + (variant === 0 ? '1' : '2')
         : (layouts[kind].length === 1 ? label : label + ' ' + ordinal);
       return {
         id: kind + '-' + ordinal, kind, name, faction, variant,
-        baseWidth, baseDepth: kind==='largeRuin'&&variant===1?4.22:(depth??baseWidth), ...photoToBoard(u,v), yaw: angle * Math.PI / 180
+        baseWidth, baseDepth, ...photoToBoard(u,v), yaw: angle * Math.PI / 180
       };
     })
   );

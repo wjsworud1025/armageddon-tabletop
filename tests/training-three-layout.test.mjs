@@ -41,7 +41,7 @@ test('all 22 decoded base centres are legal simultaneously and the four terrain 
   assert.equal(people.filter(p=>p.kind==='boy'&&Math.abs(p.baseWidth*25.4-40)<1e-8).length,1);
   for(const p of t.pieces.filter(p=>p.faction==='terrain')){
     assert.deepEqual([p.baseWidth,p.baseDepth],[stock.get(p.id).baseWidth,stock.get(p.id).baseDepth]);
-    assert.equal(trainingThreeWallSegments(p).length,p.id==='smallRuin-1'?2:3);
+    assert.equal(trainingThreeWallSegments(p).length,3);
     assert.ok(!Object.hasOwn(p,'scale')&&!Object.hasOwn(p,'displayScale'));
   }
   t.pieces[0].removed=true;

@@ -24,6 +24,7 @@ import {checkRuinSight} from '../tests/browser-ruin-sight.mjs';
 import {checkShooterSight,sightButton,inspectButton} from '../tests/browser-shooter-sight.mjs';
 import {checkPlungingFire} from '../tests/browser-plunging-fire.mjs';
 import {checkAreaCover} from '../tests/browser-area-cover.mjs';
+import {checkSmallRuin} from '../tests/browser-small-ruin.mjs';
 
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const server=createServer(async(req,res)=>{
@@ -88,8 +89,10 @@ try {
   const trainingTools={save,upload,click,state,js,send,reload:async()=>{
     await send('Page.reload');await until(()=>js('!!window.tabletopView'));await click('[data-tab=battle]');
   }};
+  await checkSmallRuin(trainingTools);
+  console.log('Passed small ruin return, courtyard and legacy table picking');
   await checkRuinSight(trainingTools);
-  console.log('Passed both surface picks through the ruin window and into its crossbar');
+  console.log('Passed shooter-view checks through the large ruin window, into its crossbar, into the short return, and above it');
   await checkShooterSight(trainingTools);
   console.log('Passed individual sight records, unit range, declaration locks and persistence');
   const shootingTools={...trainingTools,screenshot:async name=>{

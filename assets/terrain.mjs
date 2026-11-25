@@ -3,6 +3,7 @@ import {relief} from './wall-relief.mjs';
 import {shrineReturn} from './manufactorum-walls.mjs';
 import {generatorShrine} from './generator-shrine.mjs';
 import {reliquaryRuin} from './reliquary-ruin.mjs';
+import {votiveWall} from './votive-wall.mjs';
 
 const frame=0x464647, edge=0x69635b, panel=0x664332, inset=0x302e2c;
 
@@ -68,8 +69,9 @@ function ruin(s, large, variant) {
       shell.box(0x53453b,[-w/2+.15,2.27+landingOffset,z],[.31,.075,.068]);
     }
   } else {
-    // The four kit fragments include two flat ends and two masonry corners;
-    // they expose very different silhouettes at the same camera angle.
+    // The assembly leaflet shows two joined walls on all four fragments.
+    // The one-wall stand-ins below survive for historical #1 and the
+    // as-yet unmeasured #4. Fragments #2 and #3 use their original returns.
     const front=['back','shrine','shrine','shortPipe'][variant%4];
     const h=[1.50,1.15,1.45,1.68][variant%4];
     relief(s,front,w,h,undefined,undefined,corner);
@@ -183,7 +185,7 @@ function capacitor(s) {
   lightning(station,[-.18,2.10,0],[.19,2.08,0],9);
 }
 
-const factories={largeRuin:(s,v)=>v===1?reliquaryRuin(s):ruin(s,true,v),smallRuin:(s,v)=>ruin(s,false,v),shockArray:shock,capacitorStack:capacitor,barricade,generatorShrine,pylon};
+const factories={largeRuin:(s,v)=>v===1?reliquaryRuin(s):ruin(s,true,v),smallRuin:(s,v)=>v===0?votiveWall(s):ruin(s,false,v),shockArray:shock,capacitorStack:capacitor,barricade,generatorShrine,pylon};
 
 function registeredScenery(s,item,draw) {
   const model=s.child();
@@ -213,5 +215,9 @@ export function scenery(s,item) {
 // moving a model on its landing. Both archived art modes use their original shell.
 export function legacySecondRuin(s,item) {
   registeredScenery(s,{...item,baseWidth:5.2,baseDepth:4.1},model=>ruin(model,true,1));
+}
+
+export function legacySmallRuin(s,item) {
+  registeredScenery(s,item,model=>ruin(model,false,0));
 }
 

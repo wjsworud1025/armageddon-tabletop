@@ -63,7 +63,7 @@ export function createTrainingFourTable(){
   const pieces=poses.map(([id,x,z,yaw])=>({
     ...catalog.get(id),...toWorld({x,z}),yaw,elevation:0,removed:false,
   }));
-  return {width,depth,surface:'reverse',pieces};
+  return {width,depth,surface:'reverse',handbookRevision:3,pieces};
 }
 
 const areaByKind={
