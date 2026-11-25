@@ -18,7 +18,7 @@
 
 1. **대전 → 컴뱃 패트롤 전장 배치**에서 A, B, C 가운데 하나와 진영을 고른 뒤 **전장에 배치**를 누른다. 15개 지형은 배치도에 따라 옮겨지고, 두 군대는 각각의 배치 구역 안에 임시로 정렬된다. 배치도를 열어 치수를 확인하고 원하는 분대 위치를 조정한다.
 2. 선공을 결정하고 **대전 시작**을 누른다. 기본 5라운드에서 스페이스 마린과 오크는 각자의 패트롤 임무에 따라 점수를 얻는다.
-3. 전장에서 모델을 선택해 해당 단계에 가능한 행동과 무기를 확인한다. 자동 판정 내역, 수동으로 확인해야 할 조건과 승점은 **대전**과 **기록**에서 확인한다.
+3. 이동 페이즈에는 **대전**에서 이동 종류를 선언하고, 기물을 끌거나 경유점을 지정한 뒤 **분대 이동 완료**를 누른다. 사격·근접전은 각 무기와 표적을 지정해 **분대 전체 선언 확정**을 누른 뒤 굴린다. 피해·승점 판정은 **대전**과 **기록**에서 확인한다.
 4. 매 변경 사항은 이 PC에 자동 저장된다. 다른 PC에서 이어 하려면 **저장 파일 ↓**로 JSON을 받아 새 전장의 **불러오기**에서 연다.
 5. **대전 → 팩션 룰북과 스타터 규칙**에서 [스페이스 마린 코덱스](https://www.warhammer.com/shop/codex-space-marines-2026-eng), [오크 코덱스](https://www.warhammer.com/shop/codex-orks-2026-eng)와 [공식 무료 컴뱃 패트롤 규칙 안내](https://www.warhammer-community.com/en-gb/articles/2akzkx92/combat-patrol-is-now-live-in-your-app/)를 열 수 있다. 이 세트로 대전할 때 사용할 편성 이름은 **Assault Force**와 **’Ardmob**다.
 
@@ -28,7 +28,7 @@ Windows PowerShell에서 저장소 루트를 기준으로 실행한다.
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File desktop/build.ps1
-node --test tests/table.test.mjs rules/*.test.mjs
+node --test tests/*.test.mjs rules/*.test.mjs
 node tests/windows-smoke.mjs
 node rules/browser-acceptance.mjs
 ```

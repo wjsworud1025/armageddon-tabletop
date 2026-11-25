@@ -181,7 +181,6 @@ export async function buildScene(canvas,api) {
     const d=gesture;if(!d||d.pointer!==e.pointerId)return;
     const dx=e.clientX-d.sx,dy=e.clientY-d.sy;
     if(!d.drag&&Math.hypot(dx,dy)<3)return;
-    if(!d.drag&&d.type==='move')api.checkpoint();
     d.drag=true;
     if(d.type==='orbit'){if(photo){const r=canvas.getBoundingClientRect();const centre=ground({clientX:r.left+r.width/2,clientY:r.top+r.height/2});if(centre)target.copy(centre);half/=photoZoom}photo=false;yaw=d.angle-dx*.007;pitch=clamp(d.pitch+dy*.007,.14,Math.PI/2-.0001);projection()}
     if(d.type==='pan'){
@@ -196,9 +195,10 @@ export async function buildScene(canvas,api) {
   function finish(e,cancel=false){
     const d=gesture;if(!d||d.pointer!==e.pointerId)return;
     gesture=null;if(canvas.hasPointerCapture(e.pointerId))canvas.releasePointerCapture(e.pointerId);
-    if(d.type==='move'&&d.drag){const p=lookup(d.id);
-      if(cancel){for(const i of d.records){i.piece.x=i.x;i.piece.z=i.z}sync()}
-      else api.moved(p,Math.hypot(p.x-d.start.x,p.z-d.start.z),d.records.length);}
+    if(d.type==='move'&&d.drag){const p=lookup(d.id),end={x:p.x,z:p.z};
+      for(const i of d.records){i.piece.x=i.x;i.piece.z=i.z}
+      if(!cancel)api.route(p,[d.start,end],true);
+      sync();}
     if(!cancel&&d.type==='measure'&&!d.drag&&d.g){if(ends.length>=2)ends=[];ends.push(d.id?{id:d.id}:{x:d.g.x,z:d.g.z});dirty();api.measure(ends.length)}
     if(!cancel&&d.type==='path'&&!d.drag&&d.g){
       if(d.id&&!waypoints.length&&d.id!==selected){api.select(d.id)}

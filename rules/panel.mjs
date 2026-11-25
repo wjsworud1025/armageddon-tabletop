@@ -1,8 +1,10 @@
 import {getProfile} from './profiles.mjs';
+import {coherency,travelCost,moveLimit} from '../movement.mjs';
 import {newBattle,startBattle,advance,opposite,steps,teams,roll,currentHP,unitMembers,
-  groupId,changeUnit,needsShock,shockTest,adjustHP,resolveAttack,controlObjective,engaged,weaponSlot,modelProfile,
-  queueHazard,hazardCandidates,resolveHazard} from './battle.mjs';
-import {doctrines,enhancements,tactics,selectOrder,useTactic,inDoctrine,hasWaaagh,effectWeapon,tacticActive} from './patrol.mjs';
+  groupId,changeUnit,needsShock,shockTest,adjustHP,controlObjective,engaged,modelProfile,
+  hazardCandidates,resolveHazard} from './battle.mjs';
+import {draftRestriction,appendDeclaration,lockDeclaration,attackPackets,resolvePacket} from './declarations.mjs';
+import {doctrines,enhancements,tactics,selectOrder,useTactic,inDoctrine,hasWaaagh,effectWeapon} from './patrol.mjs';
 import {patrolMissions,recordLosses,objectiveSnapshot,missionAward} from './missions.mjs';
 
 const sourcePatrol='https://www.warhammer-community.com/en-gb/articles/2akzkx92/combat-patrol-is-now-live-in-your-app/';
@@ -10,7 +12,7 @@ const sourceCore='https://assets.warhammer-community.com/eng_01-06_warhammer40k_
 const prompts=[
   '반절 이하인 분대와 전장 충격 상태인 분대를 검사하세요. 양쪽에 지휘 포인트가 1씩 지급됐습니다.',
   '분대를 선택해 이동 방식을 선언하고 모델을 옮기세요. 이동할 때 편대와 교전 거리를 확인하세요.',
-  '공격할 모델과 무기를 선택하세요. 상대 분대가 보이는지 확인한 뒤 공격을 굴리세요.',
+  '한 분대의 사격 무기와 표적을 모두 지정하세요. 사선을 확인하고 선언을 확정한 뒤 공격을 판정하세요.',
   '돌격을 선언하고 2D6을 굴리세요. 굴림 거리 안의 적을 정하고 돌격 경로를 확인하세요.',
   '양쪽의 밀착 이동을 마친 뒤 선제 공격 분대부터 교대로 싸우세요. 마지막에 재정비하세요.',
   '임무의 턴 종료 조건을 확인하고 승점을 기록한 뒤 턴을 넘기세요.'
@@ -92,24 +94,23 @@ export function mountRules(container,api) {
   function attackRestriction(state,actor,weapon,targets,dist) {
     if (!currentHP(state,actor)) return '제거된 모델';
     const order=findKey(state,actor);
-    if (state.hazard && (state.hazard.dice || state.hazard.unit!==groupId(state,actor))) return '대기 중인 위험 판정을 먼저 마치세요';
+    if(!targets.length)return '선택할 표적이 없습니다';
+    const idx=getProfile(actor).weapons.findIndex(w=>w.name===weapon.name);
+    const draft=draftRestriction(state,contents(),actor,idx,groupId(state,targets[0]));
+    if(draft)return draft;
     if (order.finishedAttack===state.step) return '이번 페이즈의 분대 공격을 마쳤습니다';
-    const past=order.attacks?.[actor.id] || [];
-    const slot=weaponSlot(weapon);
-    if (past.some(a=>a.slot===slot)) return '이미 사용한 무기';
     const inContact=(a,b)=>engaged(a,b,api.getDistance(a.id,b.id));
     if (!weapon.range) return targets.some(t=>inContact(actor,t))?'':'교전 거리 밖';
     if (dist>weapon.range) return '사거리 밖';
     if (order.movement==='fallback' && !inDoctrine(state,actor,'tactical')) return '후퇴한 분대';
     if (order.movement==='advance' && !weapon.assault && !inDoctrine(state,actor,'devastator') && !hasWaaagh(state,actor)) return '전력 이동 후 사용 불가';
-    if (actor.kind!=='landSpeeder' && past.some(a=>a.ranged && a.pistol!==weapon.pistol)) return '권총과 일반 무기는 함께 사용 불가';
     const current=living(state),own=unitMembers(state,current,actor);
     const contact=own.some(a=>targets.some(b=>inContact(a,b)));
     const tied=contact || own.some(a=>current.some(b=>b.faction!==actor.faction && inContact(a,b)));
     if (tied && order.movement==='advance') return '교전 중 전력 이동 사격 불가';
     if (tied && actor.kind!=='landSpeeder' && (!weapon.pistol || !contact)) return '교전 중에는 해당 적에게 근접 사격만 가능';
-    if (contact && weapon.blast) return '교전 중인 표적에 폭발 무기 사용 불가';
     const targetTied=contact || targets.some(b=>current.some(a=>a.faction===actor.faction && inContact(a,b)));
+    if (targetTied && weapon.blast) return '교전 중인 표적에 폭발 무기 사용 불가';
     if (targetTied && !contact && !targets.some(t=>t.kind==='landSpeeder')) return '다른 분대와 교전 중인 표적';
     return '';
   }
@@ -124,12 +125,15 @@ export function mountRules(container,api) {
     });
   }
   function renderAttack(state,actor) {
+    if(state.declaration?.locked)return '';
     const {options,selected,candidates,target,members,dist}=attackContext(state,actor);
     if (!target || !selected) return '<p>전장에 공격할 적이 없습니다.</p>';
     const weapon=selected.w;
     const range=weapon.range ? weapon.range+'″' : '근접';
     const blocked=attackRestriction(state,actor,weapon,members,dist);
     const matching=blocked?[]:matchingShooters(state,actor,weapon,members,dist);
+    const allocated=(state.declaration?.rows||[]).filter(r=>r.actor===actor.id).reduce((n,r)=>n+r.assigned,0);
+    const availableAttacks=weapon.range?0:Math.max(1,weapon.attacks+Number(choices.extra)-allocated);
     return chunk('무기 공격',select('weapon','선택한 모델의 무기',options.map(({w,i})=>opt(String(i),w.name,choices.weapon)).join(''))+
       select('target','표적 분대 · 우선 피해 배정 모델',candidates.map(p=>opt(p.id,pieceLabel(p),choices.target)).join(''))+
       '<p class="br-sub">거리 '+dist.toFixed(1)+'″ · 사거리 '+range+' · A '+weapon.attacks+' · S '+weapon.strength+
@@ -137,9 +141,33 @@ export function mountRules(container,api) {
       (weapon.range ? '<label><input data-field="cover" type="checkbox"'+(choices.cover?' checked':'')+'> 표적 분대에 엄폐 적용</label>' : '')+
       detail('mods','무기 및 분대 보정',row(number('hitMod','명중 보정',-1,1,choices.hitMod)+number('woundMod','상처 보정',-1,1,choices.woundMod)+number('extra','추가 공격',0,30,choices.extra))+
         '<label><input type="checkbox" data-field="lethal"'+(choices.lethal?' checked':'')+'>치명적 명중 (Lethal Hits)</label>')+
-      row(btn('attack',blocked || '이 무기 공격 굴리기',Boolean(blocked))+
-        (matching.length>1?btn('volley','동일 무기 '+matching.length+'개 함께 굴리기'):''))+
-      '<p class="br-sub">가시선과 특수 능력을 확인하세요. 일괄 공격은 선택 분대에서 같은 무기·사거리 효과를 가진 모델 전체에 적용합니다.</p>');
+      (!weapon.range?number('allocation','이 표적에 배정할 근접 공격',1,availableAttacks,choices.allocation||availableAttacks):'')+
+      row(btn('attack',blocked || (weapon.range?'사선 확인 · 이 무기 선언':'이 근접 무기 선언'),Boolean(blocked))+
+        (matching.length>1?btn('volley',(weapon.range?'사선 확인 · ':'')+'동일 무기 '+matching.length+'개 선언'):''))+
+      '<p class="br-sub">각 사수에서 적 분대가 보이는지 확인하세요. 일부 모델만 보이면 해당 모델의 무기를 개별 지정하세요.</p>');
+  }
+  function renderDeclaration(state,all) {
+    const plan=state.declaration;
+    if(!plan)return '';
+    const actor=all.find(p=>groupId(state,p)===plan.unit);
+    if(!actor)return '';
+    const header=esc(unitLabel(actor))+' · '+(plan.locked?'공격 판정':'분대 공격 선언');
+    if(!plan.locked){
+      const list=plan.rows.map((r,i)=>'<div>'+esc(pieceLabel(getPiece(r.actor)))+' · '+esc(getProfile(getPiece(r.actor)).weapons[r.weapon].name)+
+        ' → '+esc(unitLabel(getPiece(r.preferred)))+(r.assigned?' × '+r.assigned:'')+' '+btn('drop-'+i,'삭제')+'</div>').join('');
+      return chunk(header,list+'<p>같은 분대에서 다른 모델·무기를 더 지정할 수 있습니다. 확정하면 미지정 사격 무기는 이번에 발사하지 않습니다.</p>'+
+        row(btn('lock','분대 전체 선언 확정')+btn('cancel-plan','선언 취소')));
+    }
+    const groups=attackPackets(state,all);
+    return chunk(header,'<p>동일 판정은 함께 굴립니다. 한 표적을 골랐다면 그 표적의 남은 공격부터 해결하세요.</p>'+
+      groups.map(p=>{
+        const r=plan.rows[p.index],defenders=living(state).filter(t=>groupId(state,t)===p.target);
+        const label=unitLabel(getPiece(r.preferred))+' · '+[...p.names].join(' / ')+' × '+p.indices.length;
+        const pref=defenders.some(t=>t.id===choices['allocate-'+p.index])?choices['allocate-'+p.index]:r.preferred;
+        return (defenders.length?select('allocate-'+p.index,'방어 측 우선 배정',defenders.map(t=>opt(t.id,pieceLabel(t),pref)).join('')):'')+
+          btn('resolve-'+p.index,label+(defenders.length?' 판정':' · 전멸한 표적 공격 종료'));
+      }).join('')+(!plan.rows.some(r=>r.done)?detail('target-exception','표적 적격성 변경',
+        '<p>상대 반응 이동 등으로 기존 표적을 선택할 수 없게 되면 양측 확인 후 선언을 수정하세요.</p>'+btn('reopen','적격성 변경 · 선언 다시 열기')):''));
   }
   function renderActor(state,actor) {
     const p=modelProfile(state,actor),members=unitMembers(state,contents(),actor);
@@ -169,8 +197,17 @@ export function mountRules(container,api) {
       action+=btn('grot-reserve','그레친 증식 · 전원을 예비대로 복귀');
     if (state.status==='playing' && currentHP(state,actor)>0 && (mine || state.step===4)) {
       if (state.step===0) action=btn('shock',unit.shockChecked?'검사 완료':'전장 충격 2D6',unit.shockChecked || !needsShock(state,members));
-      if (state.step===1) action=row(btn('normal','일반 이동',!!unit.movement || engagedEnemy)+btn('advance','전력 이동 D6',!!unit.movement || engagedEnemy)+btn('fallback','후퇴',!!unit.movement || !engagedEnemy)+btn('remain','정지',!!unit.movement)+
-        (actor.faction==='orks' && unit.movement==='advance'?btn('reroll','전력 이동 재굴림',!!unit.rerolled):''));
+      if (state.step===1){
+        const busy=!!(state.movePlan||unit.movement||unit.reinforcing);
+        action=row(btn('normal','일반 이동',busy||engagedEnemy)+btn('advance','전력 이동 D6',busy||engagedEnemy)+
+          btn('fallback','질서 있는 후퇴',busy||!engagedEnemy||unit.shocked)+btn('desperate','필사적 탈출',busy||!engagedEnemy)+btn('remain','정지',busy));
+        if(!unit.reinforcing&&unit.movement&&unit.movement!=='remain'&&!unit.movementTracked&&!state.movePlan)
+          action+='<p>이전 저장 파일의 이동입니다. 이번 분대의 남은 거리를 직접 재고 기물을 배치하세요.</p>';
+        if(!busy&&members.some(m=>!m.removed&&['vanguard','landSpeeder'].includes(m.kind)))
+          action+='<label><input data-field="takeToSkies" type="checkbox"> 비행 이동 (최대 거리 −2″)</label>';
+        if(actor.faction==='orks'&&state.movePlan?.unit===groupId(state,actor)&&unit.movement==='advance')
+          action+=btn('reroll','전력 이동 재굴림',!!(unit.rerolled||state.movePlan.rerollClosed||Object.keys(state.movePlan.paths).length));
+      }
       if (state.step===3) {
         const canCharge=unit.movement==='advance' ? inDoctrine(state,actor,'assault') || hasWaaagh(state,actor)
           : unit.movement!=='fallback' || inDoctrine(state,actor,'tactical');
@@ -203,7 +240,7 @@ export function mountRules(container,api) {
       action+=btn('countercharge','전쟁의 달인 · 반격 돌격 (최대 6″)');
     if (state.status==='playing' && !mine && state.step===2 && actor.kind==='vanguard' && unit.shotAt && !unit.reaction)
       action+=btn('react','신속 대응 · D6+1″ 이동');
-    if (state.status==='playing' && mine && state.step===2 && actor.kind==='wartrakk' && unit.hitTargets?.length && !unit.suppressedEnemy) {
+    if (state.status==='playing' && mine && state.step===2 && actor.kind==='wartrakk' && unit.finishedAttack===2 && unit.hitTargets?.length && !unit.suppressedEnemy) {
       const hit=unit.hitTargets.map(id=>living(state).find(p=>groupId(state,p)===id)).filter(Boolean);
       if (hit.length) action+=select('suppressTarget','명중한 적 분대',hit.map(p=>opt(groupId(state,p),unitLabel(p),choices.suppressTarget)).join(''))+btn('suppress','사격 완료 · 적 분대 제압');
     }
@@ -252,7 +289,8 @@ export function mountRules(container,api) {
       if (!d) setup+=row(btn('defender-marines','마린 수비')+btn('defender-orks','오크 수비'));
       if (d && remaining.length) {
         const outside=actor && api.getLayout?.() && api.isInDeploymentZone && unitMembers(state,all,actor).some(p=>!p.removed && !api.isInDeploymentZone(p.id));
-        setup+=btn('deploy',outside?'분대를 배치 구역 안에 놓으세요':'선택 분대 배치 완료',!actor || actor.faction!==deployTeam || d.placed.includes(groupId(state,actor)) || outside);
+        const coherent=!actor||coherency(unitMembers(state,all,actor)).ok;
+        setup+=btn('deploy',outside?'분대를 배치 구역 안에 놓으세요':!coherent?'분대 간격을 조정하세요':'선택 분대 배치 완료',!actor || actor.faction!==deployTeam || d.placed.includes(groupId(state,actor)) || outside || !coherent);
       }
       top+=detail('deployment','교대 배치',setup);
     } else if (state.status==='finished') {
@@ -261,15 +299,29 @@ export function mountRules(container,api) {
     } else {
       top=chunk(esc(state.mission || (state.rounds===5 ? patrolMissions[state.active] : '로컬 대전'))+' · '+state.round+'/'+state.rounds+' 라운드',
         '<b class="br-phase">'+teams[state.active]+' · '+steps[state.step]+'</b><p>'+prompts[state.step]+'</p>'+
-        btn('next',state.step<5?'다음 · '+steps[state.step+1]:(state.active!==state.first && state.round===state.rounds?'대전 마치기':'다음 플레이어'),!!state.hazard));
+        btn('next',state.step<5?'다음 · '+steps[state.step+1]:(state.active!==state.first && state.round===state.rounds?'대전 마치기':'다음 플레이어'),!!(state.hazard||state.declaration||state.movePlan)));
+    }
+    if(state.movePlan){
+      const plan=state.movePlan;
+      const mover=all.find(p=>groupId(state,p)===plan.unit);
+      let budget='';
+      if(actor&&plan.origins[actor.id]&&!actor.removed){
+        const path=[plan.origins[actor.id],...(plan.paths[actor.id]||[])];
+        const spent=path.slice(1).reduce((sum,end,i)=>sum+travelCost(actor,path[i],end,plan.takeToSkies),0);
+        const limit=moveLimit(actor,plan.type,plan.advanceRoll,plan.takeToSkies);
+        budget='<p>'+esc(actor.name)+' · 이동 '+spent.toFixed(2)+'″ / '+limit+'″ · 남은 거리 '+Math.max(0,limit-spent).toFixed(2)+'″</p>';
+      }
+      top+=chunk(esc(mover?unitLabel(mover):state.movePlan.unit)+' · 이동 중',
+        budget+'<p>분대원을 드래그하거나 경로를 지정하세요. 이동 완료 시 전체 분대의 응집도와 최종 위치를 검사합니다.</p>'+
+        row(btn('move-finish','분대 이동 완료',!!state.hazard)+btn('move-rewind','경로 다시 그리기',!!state.hazard)+btn('move-abandon','불가능한 이동 취소',!!state.hazard)));
     }
     if (state.hazard) {
       const hazard=state.hazard;
       const unit=all.find(p=>groupId(state,p)===hazard.unit);
-      const title=(unit?unitLabel(unit):hazard.unit)+' · 위험 무기 '+hazard.count+'개';
+      const title=(unit?unitLabel(unit):hazard.unit)+(hazard.reason==='escape'?' · 필사적 탈출 모델 ':' · 위험 무기 ')+hazard.count+'개';
       if (!hazard.dice) {
-        top+=chunk(esc(title),'<p>이 분대의 다른 무기 공격을 모두 마친 뒤 굴리세요.</p>'+
-          btn('hazard-roll','분대 공격 종료 · 위험 판정'));
+        top+=chunk(esc(title),(hazard.reason==='escape'?'<p>모델을 옮기기 전에 분대 전원의 위험 주사위를 굴리세요.</p>':'<p>이 분대의 다른 무기 공격을 모두 마친 뒤 굴리세요.</p>')+
+          btn('hazard-roll',hazard.reason==='escape'?'이동 전 위험 판정':'분대 공격 종료 · 위험 판정'));
       } else {
         const eligible=hazardCandidates(state,all);
         top+=chunk(esc(title),'<p>D6 ['+diceText(hazard.dice)+'] · 배정할 모탈 운드 '+hazard.remaining+'점</p>'+
@@ -289,7 +341,7 @@ export function mountRules(container,api) {
       if (state.step===0 && state.active==='orks') orders=btn('order-waaagh','와아! 선포',p.waaaghUsed);
       if (flags || orders) army=chunk('패트롤 명령',orders+(flags?'<p>'+esc(flags)+'</p>':''));
     }
-    root.innerHTML=top+army+selector+(actor?renderActor(state,actor):'')+
+    root.innerHTML=top+army+renderDeclaration(state,all)+selector+(actor?renderActor(state,actor):'')+
       (state.status!=='setup'?renderObjectives(state):'')+
       chunk('주사위',row(number('rollCount','D6 개수',1,60,choices.rollCount)+btn('dice','굴리기')))+
       ((feedback||state.last)?'<p aria-live="polite" class="br-latest">'+esc(feedback||state.last)+'</p>':'')+
@@ -329,7 +381,7 @@ export function mountRules(container,api) {
       return commit({...state,deployment:{...d,placed,next}},unitLabel(actor)+' 배치 완료');
     }
     if (action==='next') {
-      if (state.hazard) return;
+      if (state.hazard || state.declaration || state.movePlan) return;
       let resolved=recordLosses(state,contents());
       const areas=api.getObjectiveAreas?.()||[];
       if (areas.length) resolved.objectives=objectiveSnapshot(resolved,contents(),areas,api.getDistance);
@@ -337,6 +389,57 @@ export function mountRules(container,api) {
       resolved.vp={...resolved.vp,[state.active]:resolved.vp[state.active]+score};
       const next=advance(resolved);
       return commit(next,(score?teams[state.active]+' 임무 +'+score+' VP · ':'')+(next.status==='finished'?'대전 종료':next.round+' 라운드 · '+teams[next.active]+' · '+steps[next.step]));
+    }
+    if (action==='cancel-plan' || action.startsWith('drop-') || action==='reopen') {
+      const plan=state.declaration;
+      if(!plan)return;
+      if(action==='reopen'){
+        if(!plan.locked||plan.rows.some(r=>r.done))return;
+        return commit({...state,declaration:{...plan,locked:false}},'표적 적격성 변경 · 공격 선언 수정');
+      }
+      if(plan.locked)return;
+      const rows=action==='cancel-plan'?[]:plan.rows.filter((_,i)=>String(i)!==action.slice(5));
+      return commit({...state,declaration:rows.length?{...plan,rows}:null},'공격 선언 수정');
+    }
+    if(action==='lock'){
+      const plan=state.declaration;
+      if(!plan || plan.locked)return;
+      const all=contents(),live=living(state);
+      const eligible=state.step===4?live.filter(p=>groupId(state,p)===plan.unit &&
+        live.some(t=>t.faction!==p.faction&&engaged(p,t,api.getDistance(p.id,t.id)))):[];
+      const clear={...state,declaration:null};
+      const rows=[];
+      for(const r of plan.rows){
+        const p=getPiece(r.actor),weapon=getProfile(p).weapons[r.weapon];
+        const targets=live.filter(t=>groupId(state,t)===r.target);
+        const distance=Math.min(...targets.map(t=>api.getDistance(p.id,t.id)));
+        const problem=attackRestriction(clear,p,weapon,targets,distance);
+        if(problem){feedback=p.name+' · '+problem;return refresh();}
+        const areas=api.getObjectiveAreas?.()||[];
+        const guard=targets.some(t=>t.kind==='intercessor')&&targets.every(t=>areas.some(a=>a.members.includes(t.id)));
+        const friends=live.filter(t=>groupId(state,t)===plan.unit),opponents=live.filter(t=>t.faction!==p.faction);
+        const touches=(friendly,hostile)=>friendly.some(a=>hostile.some(b=>engaged(a,b,api.getDistance(a.id,b.id))));
+        let vehiclePenalty=0;
+        if(weapon.range && !(weapon.pistol&&touches(friends,targets))){
+          if(p.kind==='landSpeeder'&&touches(friends,opponents))vehiclePenalty++;
+          if(targets.some(t=>t.kind==='landSpeeder')&&touches(live.filter(f=>f.faction===p.faction),targets))vehiclePenalty++;
+        }
+        rows.push({...r,distance,size:targets.length,guard,vehiclePenalty});
+      }
+      const next=lockDeclaration({...state,declaration:{...plan,rows}},all,eligible);
+      if(!next){feedback='교전 중인 각 모델의 근접 공격을 모두 배정하세요.';return refresh();}
+      return commit(next,'분대 공격 선언 확정 · 무기·표적 배정 '+rows.length+'건');
+    }
+    if(action.startsWith('resolve-')){
+      const index=Number(action.slice(8));
+      const resolved=resolvePacket(state,contents(),index,val('allocate-'+index)||null);
+      if(!resolved)return;
+      const {result,packet,actor,target}=resolved;
+      const trace=result?' · '+result.hits+'/'+result.count+' 명중 · 상처 '+result.wounds+' · 피해 '+
+        result.damage.reduce((sum,h)=>sum+h.lost,0)+' · 명중 ['+diceText(result.hitDice)+'] · 상처 ['+diceText(result.woundDice)+
+        '] · 방어 ['+diceText(result.saves)+']':' · 해결할 공격 없음';
+      return commit(resolved.state,unitLabel(actor)+' → '+unitLabel(target)+' · '+[...packet.names].join(' / ')+trace+
+        (resolved.finished?' · 분대 공격 완료':'')+(resolved.state.hazard?' · 위험 D6 × '+resolved.state.hazard.count:''),resolved.removed);
     }
     if (action==='hazard-roll' || action==='hazard-end' || action.startsWith('hazard-wound-')) {
       if (!state.hazard || (action==='hazard-roll')===!!state.hazard.dice) return;
@@ -371,6 +474,10 @@ export function mountRules(container,api) {
       state.objectives[choices.objective]={owner,marineOC:a,orkOC:b};
       return commit(state,(getPiece(choices.objective)?.name||'목표')+' · '+(teams[owner]||'중립')+' ('+a+' / '+b+')');
     }
+    if (['move-finish','move-rewind','move-abandon'].includes(action)){
+      if(!state.movePlan||state.hazard)return;
+      feedback=api.moveCommand(action.slice(5));return refresh();
+    }
     if (!actor || !getProfile(actor)) return;
     const unit=findKey(state,actor);
     const profile=getProfile(actor);
@@ -399,7 +506,10 @@ export function mountRules(container,api) {
         for (const p of reserveMembers) {changes[p.id]=true;if(revive)hp[p.id]=getProfile(p).wounds;}
         if (revive) patrol={...patrol,grotReturned:true};
       }
-      return commit({...state,reserves,hp,patrol},unitLabel(actor)+(action==='ingress'?' · 전장에 배치':' · 전략 예비대로 이동'),changes);
+      if(action==='ingress'&&state.movePlan)return;
+      let next={...state,reserves,hp,patrol};
+      if(action==='ingress'&&state.status==='playing')next=changeUnit(next,actor,{reinforcing:true,movement:'normal',order:'증원 배치'});
+      return commit(next,unitLabel(actor)+(action==='ingress'?' · 전장에 배치':' · 전략 예비대로 이동'),changes);
     }
     if (!currentHP(state,actor)) {feedback='제거된 모델입니다.';return refresh();}
     if (action==='countercharge' || action==='react') {
@@ -434,16 +544,8 @@ export function mountRules(container,api) {
       return commit(changeUnit(state,actor,{shocked:!test.passed,shockChecked:true}),
         unitLabel(actor)+' · '+diceText(test.dice)+' / Ld '+test.target+'+ · '+(test.passed?'통과':'전장 충격'));
     }
-    if (action==='reroll') {
-      if (unit.rerolled || unit.movement!=='advance' || actor.faction!=='orks') return;
-      const order='전력 이동 '+(profile.move+roll())+'″';
-      return commit(changeUnit(state,actor,{order,rerolled:true}),unitLabel(actor)+' · 재굴림 · '+order);
-    }
-    if (['normal','advance','fallback','remain'].includes(action)) {
-      const distance=action==='advance'?profile.move+roll():action==='remain'?0:profile.move;
-      const order={normal:'일반 이동',advance:'전력 이동',fallback:'후퇴',remain:'정지'}[action]+' '+distance+'″';
-      if (unit.movement) {feedback='이 분대는 이미 이동을 선언했습니다. 변경하려면 되돌리기를 사용하세요.';return refresh();}
-      return commit(changeUnit(state,actor,{movement:action,order}),unitLabel(actor)+' · '+order);
+    if (['normal','advance','fallback','desperate','remain','reroll'].includes(action)) {
+      feedback=api.moveCommand(action==='desperate'?'fallback':action,actor,{fallbackMode:action==='desperate'?'desperate':'ordered',takeToSkies:action!=='remain'&&!!field('takeToSkies')?.checked});return refresh();
     }
     if (action==='charge') {
       const dice=[roll(),roll()],distance=dice[0]+dice[1];
@@ -459,29 +561,15 @@ export function mountRules(container,api) {
       const blades=state.patrol.enhanced.blades && targets.some(t=>t.kind==='vanguard') && unit.charged && !selected.w.range;
       const withWarboss=!selected.w.range && members.some(p=>p.kind==='warboss' && currentHP(state,p)>0);
       const withLibrarian=!!selected.w.range && members.some(p=>p.kind==='librarian' && currentHP(state,p)>0);
-      const areas=api.getObjectiveAreas?.()||[];
-      const onObjective=areas.length && targets.some(t=>t.kind==='intercessor') && targets.every(t=>areas.some(a=>a.members.includes(t.id)));
-      const usedWeapon=onObjective?{...selected.w,ap:Math.min(0,selected.w.ap+1)}:selected.w;
-      const result=resolveAttack({weapon:usedWeapon,targets,state,preferred:target.id,distance:dist,copies:shooters.length,
-        cover:choices.cover,lethal:choices.lethal || (withWarboss && choices.bossStyle!=='sustained'),
-        sustained:withWarboss && choices.bossStyle==='sustained',ignorePenalties:withLibrarian,
-        hitMod:integer('hitMod',-1,1)-Number(state.patrol.suppressed===groupId(state,actor)),woundMod:integer('woundMod',-1,1)-Number(Boolean(blades)),
-        extraAttacks:integer('extra',0,30)});
-      const removed={};
-      for (const [id,hp] of Object.entries(result.hp)) {
-        if (!hp) removed[id]=true;
-      }
-      const lost=result.damage.reduce((sum,h)=>sum+h.lost,0);
-      const trace=' · 명중 ['+diceText(result.hitDice)+'] · 상처 ['+diceText(result.woundDice)+'] · 방어 ['+diceText(result.saves)+']';
-      const attacks={...unit.attacks};
-      for(const p of shooters) attacks[p.id]=[...(attacks[p.id]||[]),{slot:weaponSlot(selected.w),ranged:!!selected.w.range,pistol:selected.w.pistol}];
-      const hitTargets=[...new Set([...(unit.hitTargets||[]),...(result.hits?[groupId(state,target)]:[])])];
-      let next=changeUnit({...state,hp:{...state.hp,...result.hp}},actor,{attacks,hitTargets});
-      if (selected.w.hazardous) next=queueHazard(next,actor,shooters.length);
-      if (selected.w.range) next=changeUnit(next,target,{shotAt:true});
-      return commit(next,actor.name+' → '+target.name+' · '+selected.w.name+(shooters.length>1?' × '+shooters.length:'')+' · '+result.hits+'/'+result.count+
-        ' 명중 · 상처 '+result.wounds+' · 피해 '+lost+' · 제거 '+Object.keys(removed).length+trace+
-        (next.hazard?' · 분대 공격 종료 후 위험 D6 × '+next.hazard.count:''),removed);
+      const rows=shooters.map(p=>({actor:p.id,weapon:getProfile(p).weapons.findIndex(w=>w.name===selected.w.name),
+        target:groupId(state,target),preferred:target.id,distance:Math.min(...targets.map(t=>api.getDistance(p.id,t.id))),size:targets.length,
+        assigned:selected.w.range?0:integer('allocation',1,selected.w.attacks+integer('extra',0,30)),
+        hit:integer('hitMod',-1,1)-Number(state.patrol.suppressed===groupId(state,actor)),wound:integer('woundMod',-1,1)-Number(Boolean(blades)),
+        extra:integer('extra',0,30),cover:!!(selected.w.range&&choices.cover),lethal:!!(choices.lethal || (withWarboss&&choices.bossStyle!=='sustained')),
+        sustained:!!(withWarboss&&choices.bossStyle==='sustained'),ignore:withLibrarian,guard:false}));
+      const next=appendDeclaration(state,contents(),rows);
+      if(!next){feedback='선언할 수 없는 배정입니다. 모델별 근접 공격 수와 이미 선택한 무기를 확인하세요.';return refresh();}
+      return commit(next,unitLabel(actor)+' · '+selected.w.name+' × '+rows.length+' → '+unitLabel(target)+' 선언');
     }
   }
   function change(event) {
@@ -516,6 +604,7 @@ export function mountRules(container,api) {
       if (choices.fighter) api.selectPiece(choices.fighter);
       choices.weapon='0'; choices.extra='0'; choices.hitMod='0'; choices.woundMod='0'; choices.lethal=false;
     }
+    if(['fighter','weapon','target'].includes(key))choices.allocation='';
     if (['fighter','weapon','target','objective'].includes(key)) refresh();
   }
   function toggle(event) {

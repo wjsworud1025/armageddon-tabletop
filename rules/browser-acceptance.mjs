@@ -27,7 +27,8 @@ const server=createServer(async(req,res)=>{
   } catch (error) {console.error('Static file',req.url,error.message);res.writeHead(404);res.end();}
 });
 server.listen(0,'127.0.0.1');await once(server,'listening');
-const url='http://127.0.0.1:'+server.address().port+(existsSync(join(root,'reference','starter-set.jpg'))?'/?studio=1':'');
+const localArt=!process.argv.includes('--public') && existsSync(join(root,'reference','starter-set.jpg'));
+const url='http://127.0.0.1:'+server.address().port+(localArt?'/?studio=1':'');
 const profile=mkdtempSync(join(tmpdir(),'patrol-acceptance-'));
 const chrome=['C:/Program Files/Google/Chrome/Application/chrome.exe','C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe'].find(existsSync);
 assert.ok(chrome);
@@ -103,7 +104,10 @@ try {
   assert.equal(await disabled('attack'),false);
   // Real attack pipeline with 6 to hit, 6 to wound, natural 1 to save.
   await js('window.acceptanceRandom=Math.random;{const samples=[.95,.95,.01];Math.random=()=>samples.shift()??.5;}');
-  await click(button('attack'));await js('Math.random=window.acceptanceRandom');
+  await click(button('attack'));
+  assert.equal(await disabled('next'),true);
+  assert.equal((await state()).rules.hp[victim.id],undefined);
+  await click(button('lock'));await click(button('resolve-0'));await js('Math.random=window.acceptanceRandom');
   s=await state();assert.equal(s.rules.hp[victim.id],0);
   assert.ok(s.pieces.find(p=>p.id===victim.id).removed);
   assert.equal(await disabled('attack'),true);
@@ -122,10 +126,23 @@ try {
   await choose('fighter',rifles[0].id);
   const otherGrot=template.pieces.find(p=>p.kind==='gretchin' && p.id!==victim.id);
   await choose('target',otherGrot.id);
-  await js('Math.random=()=>.01');
-  await click(button('volley'));await js('Math.random=window.acceptanceRandom');
+  await click(button('volley'));
+  await choose('fighter',rifles[1].id);await choose('weapon','3');
+  const secondUnit=template.pieces.find(p=>p.kind==='boy');
+  await choose('target',secondUnit.id);await click(button('attack'));
+  await click(button('lock'));
+  const declared=(await state()).rules.declaration;
+  assert.equal(declared.locked,true);assert.ok(declared.rows.some(r=>r.target==='boy-0'));
+  await send('Page.reload');await until(()=>js('!!window.tabletopView'));await click('[data-tab=battle]');
+  assert.deepEqual((await state()).rules.declaration,declared);
+  await js('window.acceptanceRandom=Math.random; Math.random=()=>.01');
+  await click(button('resolve-0'));
+  const nextRow=(await state()).rules.declaration.rows.findIndex(r=>!r.done);
+  await click(button('resolve-'+nextRow));await js('Math.random=window.acceptanceRandom');
   s=await state();
-  for(const rifle of rifles) assert.equal(s.rules.units.intercessor.attacks[rifle.id].length,1);
+  assert.equal(s.rules.units.intercessor.attacks[rifles[0].id].length,1);
+  assert.equal(s.rules.units.intercessor.attacks[rifles[1].id].length,2);
+  await choose('fighter',rifles[1].id);
   assert.equal(await disabled('attack'),true);
   await js('(()=>{for(let i=0;i<58;i++){const b=document.querySelector("[data-act=next]"); if(!b || b.disabled)throw Error("Missing phase "+i);b.click();}})()');
   s=await state();
@@ -157,6 +174,8 @@ try {
   await choose('target',actor.id);
   await js('window.acceptanceRandom=Math.random;Math.random=()=>.01');
   await click(button('volley'));
+  assert.ok(!(await state()).rules.hazard);
+  await click(button('lock'));await click(button('resolve-0'));
   assert.equal((await state()).rules.hazard.count,2);
   assert.equal(await disabled('next'),true);
   await js('let hazardDice=[.01,.4];Math.random=()=>hazardDice.shift()??.9');
@@ -173,6 +192,65 @@ try {
   assert.equal(s.pieces.find(p=>p.id===bombers[1].id).removed,false);
   assert.deepEqual(s.rules.hazard.dice,[1,3]);
   await click('#redo');assert.equal((await state()).rules.hp[bombers[1].id],0);
+
+  // These removed pieces supply read-only screen projections for exact board
+  // positions. Use genuine pointer events for selection and every drag.
+  const near='librarian-1',far='landSpeeder-1';
+  const movementFixture=(locations,units,team)=>{
+    const fixture=structuredClone(save);
+    for(const rec of fixture.pieces) {
+      rec.removed=!units.includes(rec.id);
+      if(locations[rec.id]) [rec.x,rec.z]=locations[rec.id];
+    }
+    fixture.layout=null;
+    fixture.rules={...startBattle(newBattle(),team,5),step:1};
+    return fixture;
+  };
+  const at=(id)=>js('(()=>{const p=tabletopView.screen('+JSON.stringify(id)+'), r=document.querySelector("#view").getBoundingClientRect();return {x:p.x+r.x,y:p.y+r.y};})()');
+  const mouse=(type,p,buttons)=>send('Input.dispatchMouseEvent',{type,x:p.x,y:p.y,button:'left',buttons,clickCount:1});
+  async function drag(id,anchor) {
+    const from=await at(id),to=await at(anchor);
+    await mouse('mousePressed',from,1);await mouse('mouseMoved',to,1);await mouse('mouseReleased',to,0);
+  }
+  const coords=(snap,id)=>{const p=snap.pieces.find(rec=>rec.id===id);return [p.x,p.z];};
+  const nearX=(snap,id,x)=>assert.ok(Math.abs(coords(snap,id)[0]-x)<.15,'Expected '+id+' at x='+x+', observed '+coords(snap,id));
+  const drillMove=movementFixture({[actor.id]:[0,0],[near]:[3,0],[far]:[10,0]},[actor.id],'marines');
+  await upload(drillMove);await click('[data-tab=battle]');await click('#camera');
+  await choose('fighter',actor.id);await click(button('normal'));
+  assert.equal((await state()).rules.movePlan.unit,'captain');
+  assert.equal(await disabled('next'),true);
+  await drag(actor.id,near);
+  s=await state();nearX(s,actor.id,3);assert.equal(s.rules.movePlan.paths[actor.id].length,1);
+  const draft=structuredClone(s.rules.movePlan);
+  await drag(actor.id,far);
+  s=await state();nearX(s,actor.id,3);assert.deepEqual(s.rules.movePlan,draft);
+  assert.match(await js('document.getElementById("notice").textContent'),/누적 이동 거리/);
+  await click(button('move-rewind'));s=await state();nearX(s,actor.id,0);assert.deepEqual(s.rules.movePlan.paths,{});
+  await click('#undo');s=await state();nearX(s,actor.id,3);assert.deepEqual(s.rules.movePlan,draft);
+  await send('Page.reload');await until(()=>js('!!window.tabletopView'));await click('[data-tab=battle]');
+  assert.deepEqual((await state()).rules.movePlan,draft);assert.equal(await disabled('next'),true);
+  await click(button('move-finish'));s=await state();assert.equal(s.rules.movePlan,null);nearX(s,actor.id,3);
+  await click('#undo');assert.deepEqual((await state()).rules.movePlan,draft);
+  await click('#redo');assert.equal((await state()).rules.movePlan,null);
+  await click(button('next'));assert.equal((await state()).rules.step,2);
+
+  const escapes=movementFixture({[actor.id]:[0,0],[bombers[0].id]:[-2.1,0],[bombers[1].id]:[-2.1,1.25],[near]:[-6,1.25]},
+    [actor.id,bombers[0].id,bombers[1].id],'orks');
+  await upload(escapes);await click('[data-tab=battle]');await click('#camera');
+  await choose('fighter',bombers[0].id);await click(button('desperate'));
+  s=await state();assert.equal(s.rules.hazard.reason,'escape');assert.equal(s.rules.hazard.count,2);
+  assert.equal(await disabled('move-finish'),true);
+  await js('window.acceptanceRandom=Math.random;{const dice=[.01,.8];Math.random=()=>dice.shift()??.8}');
+  await click(button('hazard-roll'));await js('Math.random=window.acceptanceRandom');
+  await click(button('hazard-wound-'+bombers[0].id));
+  s=await state();assert.equal(s.rules.movePlan.desperateEscapeResolved,true);
+  assert.equal(s.pieces.find(p=>p.id===bombers[0].id).removed,true);
+  await drag(bombers[1].id,near);s=await state();nearX(s,bombers[1].id,-6);
+  await js('Math.random=()=>.01');await click(button('move-finish'));await js('Math.random=window.acceptanceRandom');
+  s=await state();assert.equal(s.rules.movePlan,null);assert.equal(s.rules.units.gretchin.shocked,true);
+  assert.match(s.logs.at(-1),/전장 충격.*실패/);
   assert.deepEqual(errors,[]);
-  console.log(JSON.stringify({passed:true,areas:4,rounds:5,winner:'marines',vp:finalVP,casualtyUndoRedo:true,corruptImportsRejected:2,volley:true,persisted:true,hazardousVolleyUndoRedo:true}));
+  console.log(JSON.stringify({passed:true,areas:4,rounds:5,winner:'marines',vp:finalVP,casualtyUndoRedo:true,
+    corruptImportsRejected:2,volley:true,splitFire:true,lockedDeclarationReload:true,persisted:true,hazardousVolleyUndoRedo:true,
+    localArt,movementDrag:true,movementRange:true,movementUndoReload:true,desperateEscape:true}));
 } finally {ws?.close();browser.kill();server.closeAllConnections();server.close();}

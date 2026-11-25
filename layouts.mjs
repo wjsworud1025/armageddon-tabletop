@@ -1,4 +1,4 @@
-import {baseDistance} from './state.mjs';
+import {groupId} from './rules/battle.mjs';
 
 // Board edges in the 1535 x 1961 reference diagrams. Rotate the portrait sheet
 // onto the long horizontal axis of the digital table.
@@ -81,27 +81,100 @@ function fitsZone(p,zone){
 export function validDeployment(game,p){
   const geo=layoutGeometry(game.layout?.map);return !!geo&&fitsZone(p,p.faction===game.layout.blue?geo.blue:geo.red);
 }
-export function applyLayout(game,map,blue){
-  const geo=layoutGeometry(map);if(!geo||!['orks','marines'].includes(blue))throw Error('지원하지 않는 배치입니다.');
-  game.layout={map,blue};const terrain=game.pieces.filter(p=>p.faction==='terrain');
-  for(const pose of geo.terrain){const p=terrain.find(p=>p.id===pose.id);Object.assign(p,pose,{removed:false,elevation:0})}
-  const parked=[...terrain],positions=[];
-  for(let x=-21.5;x<22;x+=.6)for(let z=-14.5;z<15;z+=.6)positions.push({x,z});
-  const radius=p=>Math.hypot(p.baseWidth,p.baseDepth)/2;
-  for(const team of [blue,blue==='marines'?'orks':'marines']){
-    const zone=team===blue?geo.blue:geo.red,sign=team===blue?1:-1;
-    const army=game.pieces.filter(p=>p.faction===team&&!p.removed).sort((a,b)=>b.baseWidth*b.baseDepth-a.baseWidth*a.baseDepth||a.kind.localeCompare(b.kind));
-    let prev=null;
-    for(const p of army){
-      p.yaw=sign*Math.PI/2;p.elevation=0;
-      const same=prev?.kind===p.kind,anchor=same?prev:{x:-sign*18,z:0};
-      const sorted=[...positions].sort((a,b)=>Math.hypot(a.x-anchor.x,a.z-anchor.z)-Math.hypot(b.x-anchor.x,b.z-anchor.z));
-      const chosen=sorted.find(q=>{
-        const test={...p,...q};if(!fitsZone(test,zone))return false;
-        return !parked.some(f=>Math.hypot(f.x-q.x,f.z-q.z)<radius(f)+radius(test)+.08&&baseDistance(f,test)<.07);
-      });
-      if(!chosen)throw Error('배치 구역에 남은 공간이 없습니다.');
-      Object.assign(p,chosen);parked.push(p);prev=p;
-    }
+// The preset rotates troops and terrain in quarter turns. Circular infantry
+// use exact gaps, while vehicles keep a conservative rectangular clearance.
+const separation=.075;
+function footprint(p){
+  const sideways=Math.abs(Math.sin(p.yaw))>.5;
+  return {x:p.x,z:p.z,rx:(sideways?p.baseDepth:p.baseWidth)/2,rz:(sideways?p.baseWidth:p.baseDepth)/2,
+    circle:p.faction!=='terrain'&&p.baseWidth===p.baseDepth};
+}
+function clear(a,b){
+  const dx=Math.abs(a.x-b.x),dz=Math.abs(a.z-b.z);
+  if(dx>=a.rx+b.rx+separation||dz>=a.rz+b.rz+separation)return true;
+  if(a.circle&&b.circle)return dx*dx+dz*dz>=(a.rx+b.rx+separation)**2;
+  if(!a.circle&&!b.circle)return false;
+  const rect=a.circle?b:a,r=a.circle?a.rx:b.rx;
+  return Math.max(0,dx-rect.rx)**2+Math.max(0,dz-rect.rz)**2>=(r+separation)**2;
+}
+function formationFits(candidate,placed){
+  if(!placed.length)return true;
+  let neighbour=false;
+  // Every multi-model starter unit has circular bases, including its leader.
+  for(const other of placed){
+    const d=(candidate.x-other.x)**2+(candidate.z-other.z)**2;
+    const radii=candidate.rx+other.rx;
+    if(d>(radii+9)**2)return false;
+    if(d<=(radii+2)**2)neighbour=true;
   }
+  return neighbour;
+}
+function arrange(team,zone,yaw,terrain,rules){
+  const groups=new Map(),spots=new Map();
+  const xs=zone.map(v=>v[0]),zs=zone.map(v=>v[1]);
+  const left=Math.min(...xs),right=Math.max(...xs),bottom=Math.min(...zs),top=Math.max(...zs);
+  for(const p of team){
+    const key=groupId(rules,p);
+    if(!groups.has(key))groups.set(key,[]);
+    groups.get(key).push(p);
+    const size=p.baseWidth+'/'+p.baseDepth;
+    if(spots.has(size))continue;
+    const choices=[];
+    for(let row=0,z=bottom+.2;z<top;row++,z+=.34){
+      for(let x=left+.2+(row%2)*.17;x<right;x+=.34){
+        const pose={...p,x,z,yaw},q=footprint(pose);
+        if(fitsZone(pose,zone)&&terrain.every(o=>clear(q,o)))choices.push(q);
+      }
+    }
+    spots.set(size,choices);
+  }
+  const area=p=>p.baseWidth*p.baseDepth;
+  const units=[...groups.values()].map(g=>g.sort((a,b)=>area(b)-area(a)||a.id.localeCompare(b.id)));
+  units.sort((a,b)=>Number(b[0].baseDepth!==b[0].baseWidth)-Number(a[0].baseDepth!==a[0].baseWidth)||
+    b.reduce((n,p)=>n+area(p),0)-a.reduce((n,p)=>n+area(p),0)||a[0].id.localeCompare(b[0].id));
+  for(const [sx,sz] of [[1,1],[-1,-1],[1,-1],[-1,1],[.25,1],[-.25,-1],[.25,-1],[-.25,1]]){
+    const parked=[],result=[];
+    for(const unit of units){
+      const available=unit.map(p=>spots.get(p.baseWidth+'/'+p.baseDepth).filter(q=>parked.every(o=>clear(q,o))));
+      const starts=available[0].sort((a,b)=>sx*(a.x-b.x)+sz*(a.z-b.z));
+      const tried=[];
+      let bestFormation=null;
+      for(const start of starts){
+        if(tried.some(q=>(q.x-start.x)**2+(q.z-start.z)**2<.75**2))continue;
+        tried.push(start);
+        const grouped=[start];
+        for(let i=1;i<unit.length;i++){
+          let best=null,score=Infinity;
+          for(const q of available[i]){
+            const rank=(q.x-start.x)**2+(q.z-start.z)**2;
+            if(rank>=score||!grouped.every(o=>clear(q,o))||!formationFits(q,grouped))continue;
+            score=rank;best=q;
+          }
+          if(!best)break;
+          grouped.push(best);
+        }
+        if(grouped.length===unit.length){bestFormation=grouped;break;}
+      }
+      if(!bestFormation)break;
+      parked.push(...bestFormation);
+      unit.forEach((p,i)=>result.push([p,{x:bestFormation[i].x,z:bestFormation[i].z,yaw,elevation:0}]));
+    }
+    if(result.length===team.length)return result;
+  }
+  throw Error('배치 구역에 분대 전체를 놓을 수 없습니다.');
+}
+export function applyLayout(game,map,blue){
+  const geo=layoutGeometry(map);
+  if(!geo||!['orks','marines'].includes(blue))throw Error('지원하지 않는 배치입니다.');
+  const scenery=geo.terrain.map(pose=>[game.pieces.find(p=>p.id===pose.id),{...pose,elevation:0,removed:false}]);
+  const obstacles=scenery.map(([p,pose])=>footprint({...p,...pose}));
+  const placements=[...scenery];
+  for(const faction of ['marines','orks']){
+    const army=game.pieces.filter(p=>p.faction===faction&&!p.removed);
+    const isBlue=faction===blue;
+    const planned=arrange(army,isBlue?geo.blue:geo.red,(isBlue?1:-1)*Math.PI/2,obstacles,{attachments:game.rules?.attachments||{}});
+    placements.push(...planned);
+  }
+  for(const [p,pose] of placements)Object.assign(p,pose);
+  game.layout={map,blue};
 }

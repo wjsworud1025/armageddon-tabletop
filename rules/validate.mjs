@@ -26,12 +26,19 @@ const hp = map(model,(n,id)=>int(0,getProfile(models.get(id)).wounds)(n));
 const totals = fields({marines:int(0),orks:int(0)},['marines','orks']);
 const attacks = map(model,list(fields({slot:string,ranged:boolean,pistol:boolean},['slot','ranged']),6));
 const attackStep=oneOf([2,4]);
-const hazardFields=fields({unit:group,count:int(1,276),dice:list(int(1,6),276),remaining:int(1,828)},['unit','count']);
+const hazardFields=fields({unit:group,reason:oneOf(['escape']),count:int(1,276),dice:list(int(1,6),276),remaining:int(1,828)},['unit','count']);
 const hazard=value=>hazardFields(value) && (value.dice===undefined
   ? value.remaining===undefined
   : value.dice.length===value.count && int(1,value.dice.filter(d=>d<=2).length*3)(value.remaining));
+const rowFields={
+  actor:model,weapon:int(0,8),target:group,preferred:model,distance:n=>Number.isFinite(n)&&n>=0&&n<=200,
+  size:int(1,46),assigned:int(0,45),hit:int(-2,1),wound:int(-2,1),extra:int(0,30),
+  cover:boolean,lethal:boolean,sustained:boolean,ignore:boolean,guard:boolean,done:boolean
+};
+const validRow=fields({...rowFields,vehiclePenalty:int(0,2)},Object.keys(rowFields));
+const declaration=fields({unit:group,locked:boolean,focus:nullable(group),rows:list(validRow,276)},['unit','locked','focus','rows']);
 const unit = fields({
-  shocked:boolean,shockChecked:boolean,movement:oneOf(['normal','advance','fallback','remain']),
+  shocked:boolean,shockChecked:boolean,reinforcing:boolean,movementTracked:boolean,movement:oneOf(['normal','advance','fallback','remain']),
   order:string,charge:int(0,12),charged:boolean,rerolled:boolean,attacks,finishedAttack:attackStep,
   counterCharge:boolean,reaction:boolean,shotAt:boolean,suppressedEnemy:boolean,hitTargets:list(group,12)
 });
@@ -43,10 +50,14 @@ const patrol=fields({
 });
 const objective=fields({name:string,home:nullable(team),owner:nullable(team),secured:nullable(team),
   marineOC:int(0),orkOC:int(0)},['owner','marineOC','orkOC']);
+const pose=fields({x:Number.isFinite,z:Number.isFinite,elevation:n=>Number.isFinite(n)&&n>=0&&n<=20,yaw:Number.isFinite},['x','z','elevation','yaw']);
+const movePlan=fields({unit:group,type:oneOf(['advance','normal','fallback']),advanceRoll:int(0,6),
+  origins:map(model,pose),paths:map(model,list(pose,512)),takeToSkies:boolean,fallbackMode:oneOf(['ordered','desperate']),
+  desperateEscapeResolved:boolean,rerollClosed:boolean},['unit','type','advanceRoll','origins','paths','takeToSkies','fallbackMode','desperateEscapeResolved']);
 const battle=fields({
   version:oneOf([1]),status:oneOf(['setup','playing','finished']),first:team,active:team,
   round:int(1,20),rounds:int(1,20),step:int(0,5),cp:totals,vp:totals,hp,
-  units:map(group,unit),attachments:map(model,group),objectives:map(identifier,objective),hazard:nullable(hazard),
+  units:map(group,unit),attachments:map(model,group),objectives:map(identifier,objective),hazard:nullable(hazard),declaration:nullable(declaration),movePlan:nullable(movePlan),
   reserves:map(group,list(model,46)),patrol,notes:string,mission:string,last:string,
   deployment:fields({defender:team,next:team,placed:list(group,12)},['defender','next','placed']),
   destroyedUnits:map(group,boolean),lossEvents:list(fields({id:group,faction:team,turn:int(1,40)},['id','faction','turn']),20000)
@@ -55,6 +66,29 @@ const battle=fields({
 export function validateRulesState(value) {
   if (value==null) return true;
   if (fields({hp},['hp'])(value)) return true;
-  return battle(value) && value.round<=value.rounds && (!value.hazard ||
-    (value.status==='playing' && attackStep(value.step)));
+  if(!battle(value) || value.round>value.rounds)return false;
+  if(value.movePlan){
+    const m=value.movePlan,ids=Object.keys(m.origins);
+    if(value.step!==1||value.status!=='playing'||value.declaration||!ids.length||value.units?.[m.unit]?.movement!==m.type||
+      !ids.every(id=>(value.attachments?.[id]||unitId(models.get(id)))===m.unit)||
+      !Object.keys(m.paths).every(id=>ids.includes(id))||(m.type==='advance'?m.advanceRoll<1:m.advanceRoll!==0))return false;
+    const escaping=m.type==='fallback'&&m.fallbackMode==='desperate'&&!m.desperateEscapeResolved;
+    if(escaping)return value.hazard?.reason==='escape'&&value.hazard.unit===m.unit&&value.hazard.count===ids.length;
+    return !value.hazard;
+  }
+  if(value.hazard?.reason==='escape')return false;
+  if(!value.hazard && !value.declaration)return true;
+  if(value.status!=='playing'||!attackStep(value.step))return false;
+  const plan=value.declaration;
+  if(!plan)return true;
+  if(value.hazard||!plan.rows.length||!plan.rows.some(r=>!r.done)||(!plan.locked&&plan.rows.some(r=>r.done)))return false;
+  const modelGroup=id=>value.attachments?.[id]||unitId(models.get(id));
+  const faction=id=>['captain','librarian','intercessor','vanguard','landSpeeder'].includes(models.get(id).kind)?'marines':'orks';
+  if(plan.focus && (!plan.locked||!plan.rows.some(r=>r.target===plan.focus&&!r.done)))return false;
+  return plan.rows.every(r=>{
+    const weapon=getProfile(models.get(r.actor)).weapons[r.weapon];
+    return weapon && !!weapon.range===(value.step===2) && modelGroup(r.actor)===plan.unit && modelGroup(r.preferred)===r.target &&
+      faction(r.actor)!==faction(r.preferred) && (value.step!==2 || faction(r.actor)===value.active) &&
+      (weapon.range?r.assigned===0:r.assigned>=1&&r.assigned<=weapon.attacks+r.extra);
+  });
 }

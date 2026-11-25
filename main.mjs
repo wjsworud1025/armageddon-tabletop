@@ -4,7 +4,8 @@ import {baseDistance,place,restore,snapshot,translateFormation} from './state.mj
 import {buildScene} from './scene.mjs';
 import {photoFit} from './photo-camera.mjs';
 import {getProfile} from './rules/profiles.mjs';
-import {newBattle,unitMembers} from './rules/battle.mjs';
+import {newBattle,unitMembers,groupId,roll,shockTest,changeUnit} from './rules/battle.mjs';
+import {beginMove,proposeMove,finishMove,rewindMove,rerollMove,abandonInvalidMove} from './move-session.mjs';
 import {applyLayout,objectiveAreas,validDeployment} from './layouts.mjs';
 import {studioGroupFor,openStudioViewer} from './assets/turntable.mjs';
 import {loadPortraitMap,portraitUrl} from './painted.mjs';
@@ -87,7 +88,28 @@ function setMode(value){mode=value;scene?.setMode(mode);
   for(const id of ['pick','ruler','path'])$(id).setAttribute('aria-pressed',String(id===mode));
   $('route-bar').hidden=mode!=='path';
   $('hint').textContent=mode==='ruler'?'미니어처 두 개 또는 전장의 두 지점을 클릭하세요.':mode==='path'?'기물을 고른 뒤 경유할 지면을 차례로 클릭하세요.':'드래그 이동 · 우클릭 회전 · 휠 확대 · Shift 드래그 시점 이동'}
-function rotate(){const p=piece(active);if(p)mutate(()=>{p.yaw=(p.yaw+Math.PI/12)%(2*Math.PI);place(p,p.x,p.z,game)},p.name+' 15° 회전')}
+function movingByRules(p){
+  const r=game.rules;
+  if(r?.status!=='playing'||r.step!==1)return false;
+  const unit=r.units?.[groupId(r,p)];
+  // Older saves stored the order but no starting position or distance travelled.
+  // Continue that open turn with its original table controls.
+  if(!r.movePlan&&p.faction===r.active&&(unit?.reinforcing||unit?.movement&&!unit.movementTracked&&unit.movement!=='remain'))return false;
+  return true;
+}
+function applyMovement(result){
+  mutate(()=>{
+    game.rules=result.rules;
+    for(const [id,pose] of Object.entries(result.poses||{}))Object.assign(piece(id),pose);
+  },result.message);
+  if(result.manual?.length)toast([...new Set(result.manual.map(m=>m.message))].join(' '));
+}
+function editPose(p,delta,message){
+  if(movingByRules(p)){
+    try{applyMovement(proposeMove(game,p,{[p.id]:[delta]}))}catch(e){toast(e.message);selection()}
+  }else mutate(()=>{Object.assign(p,delta);place(p,p.x,p.z,game)},message);
+}
+function rotate(){const p=piece(active);if(p)editPose(p,{yaw:(p.yaw+Math.PI/12)%(2*Math.PI)},p.name+' 15° 회전')}
 function remove(id,removed){const p=piece(id);if(p&&!!p.removed!==!!removed)mutate(()=>{
   p.removed=!!removed;
   if(!removed && game.rules?.hp?.[id]===0)game.rules.hp[id]=getProfile(p)?.wounds??1;
@@ -120,7 +142,7 @@ $('rotate').onclick=rotate;$('remove').onclick=()=>{const p=piece(active);if(p)r
 $('sight').onclick=()=>{reference(false);setMode('sight');$('hint').textContent='시선을 확인할 상대 기물을 클릭하세요.'};
 $('studio-view').onclick=()=>{const p=piece(active);if(p)openStudioViewer(p)};
 $('elevation').onchange=()=>{const p=piece(active),n=$('elevation').valueAsNumber;if(!p||!Number.isFinite(n))return selection();
-  mutate(()=>p.elevation=Math.min(20,Math.max(0,n)),p.name+' 높이 조정')};
+  editPose(p,{elevation:Math.min(20,Math.max(0,n))},p.name+' 높이 조정')};
 $('save').onclick=()=>{const data=new Blob([JSON.stringify(snapshot(game),null,2)],{type:'application/json'});
   const url=URL.createObjectURL(data),a=document.createElement('a');a.href=url;a.download='armageddon-table.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)};
 $('load').onclick=()=>$('file').click();
@@ -131,6 +153,30 @@ document.addEventListener('keydown',e=>{if(e.target.closest('input,select,textar
   else if(e.key==='Escape'){setMode('pick');select(null)}
   else if(e.key.toLowerCase()==='r')rotate()});
 const api={
+  moveCommand(command,actor,options={}){
+    try{
+      let result;
+      if(command==='finish'){
+        const plan=game.rules.movePlan;
+        result=finishMove(game);
+        if(plan?.fallbackMode==='desperate'){
+          const members=game.pieces.filter(p=>p.faction!=='terrain'&&groupId(game.rules,p)===plan.unit);
+          const test=members.length&&!game.rules.units[plan.unit]?.shocked&&shockTest(game.rules,members);
+          if(test){result.rules=changeUnit(result.rules,members[0],{shocked:!test.passed});result.message+=' · 전장 충격 ['+test.dice.join(', ')+'] '+(test.passed?'통과':'실패')}
+        }
+      }else if(command==='rewind')result=rewindMove(game);
+      else if(command==='abandon')result=abandonInvalidMove(game);
+      else if(command==='reroll')result=rerollMove(game,actor,roll());
+      else{
+        result=beginMove(game,actor,command,{...options,advanceRoll:command==='advance'?roll():0});
+        if(command==='fallback'&&options.fallbackMode==='desperate'){
+          const members=unitMembers(game.rules,game.pieces,actor).filter(p=>!p.removed);
+          result.rules={...result.rules,hazard:{reason:'escape',unit:groupId(result.rules,actor),count:members.length}};
+        }
+      }
+      applyMovement(result);return '';
+    }catch(error){toast(error.message);return error.message}
+  },
   getPieces:()=>game.pieces,getSelection:()=>piece(active)??null,selectPiece:select,
   getObjectiveAreas:()=>objectiveAreas(game),getLayout:()=>game.layout??null,configureLayout,
   isInDeploymentZone:id=>piece(id)&&validDeployment(game,piece(id)),
@@ -150,18 +196,20 @@ async function start(){
     appearance:(on,photo)=>{$('appearance').setAttribute('aria-pressed',String(on));$('appearance').textContent=on?(photo?'사진 기물':'회전 사진'):'3D 조형'},
     progress:(i,n)=>$('stage-load').textContent='미니어처 준비 중 · '+i+' / '+n,
     moving:movingGroup,
-    route(p,points){
+    route(p,points,drag=false){
       const group=movingGroup(p).map(m=>({piece:{...m},x:m.x,z:m.z}));let distance=0;
+      const paths=Object.fromEntries(group.map(m=>[m.piece.id,[]]));
       for(let i=1;i<points.length;i++){
         const dx=points[i].x-points[i-1].x,dz=points[i].z-points[i-1].z;
         const step=translateFormation(group,dx,dz,game);
         if(Math.abs(Math.hypot(dx,dz)-step)>.015){toast('베이스가 보드 밖으로 나갑니다. 끝점을 조정하세요.');return false}
-        for(const m of group){m.x=m.piece.x;m.z=m.piece.z}distance+=step;
+        for(const m of group){m.x=m.piece.x;m.z=m.piece.z;paths[m.piece.id].push({x:m.x,z:m.z})}distance+=step;
       }
-      mutate(()=>{for(const m of group)Object.assign(piece(m.piece.id),{x:m.x,z:m.z})},p.name+' 경로 이동 · '+distance.toFixed(2)+'″ · '+(points.length-1)+'구간');
+      if(movingByRules(p)){
+        try{applyMovement(proposeMove(game,p,paths))}catch(e){toast(e.message);return false}
+      }else mutate(()=>{for(const m of group)Object.assign(piece(m.piece.id),{x:m.x,z:m.z})},p.name+(drag?' 이동':' 경로 이동')+' · '+distance.toFixed(2)+'″ · '+(points.length-1)+'구간');
       return true;
     },
-    moved:(p,d,n)=>{log(p.name+(n>1?' 외 '+(n-1)+'개':'')+' 이동 · '+d.toFixed(2)+'″');changed()},
     measure:n=>{if(n===1)$('hint').textContent='두 번째 기물 또는 지점을 선택하세요.';else $('hint').textContent='새 측정의 시작점을 클릭하세요.'}});
   scene.select(active);$('stage-load').hidden=true;persist();
   // Read-only diagnostics for the packaged Windows acceptance check.

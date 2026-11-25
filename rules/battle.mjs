@@ -15,7 +15,7 @@ export function startBattle(state,first,rounds) {
   return {...state,status:'playing',first,active:first,rounds,cp:{marines:1,orks:1}};
 }
 export function advance(state) {
-  if (state.status !== 'playing' || state.hazard) return state;
+  if (state.status !== 'playing' || state.hazard || state.declaration || state.movePlan) return state;
   if (state.step < steps.length - 1) return {...state,step:state.step+1};
   const next = opposite(state.active);
   const endRound = next === state.first;
@@ -127,7 +127,8 @@ export function resolveHazard(state,pieces,preferred=null,random=Math.random) {
   }
   const total=remaining;
   const hp={...state.hp},removed={};
-  let next={...state,hp,units:{...state.units,[pending.unit]:{...state.units[pending.unit],finishedAttack:state.step}}};
+  let next={...state,hp};
+  if(pending.reason!=='escape')next.units={...state.units,[pending.unit]:{...state.units[pending.unit],finishedAttack:state.step}};
   while (remaining>0) {
     const candidates=hazardCandidates(next,pieces);
     if (!candidates.length) {remaining=0;break;}
@@ -139,13 +140,14 @@ export function resolveHazard(state,pieces,preferred=null,random=Math.random) {
     preferred=null;
   }
   next.hazard=remaining?{...pending,dice,remaining}:null;
+  if(!remaining&&pending.reason==='escape')next.movePlan={...state.movePlan,desperateEscapeResolved:true};
   return {state:next,dice,total,remaining,removed};
 }
 
 // Resolve a single weapon profile. The defender chooses the order of models with
 // otherwise identical allocation priority. Each damage roll belongs to one attack.
 export function resolveAttack({weapon,targets,preferred,state,distance,cover=false,hitMod=0,
-  woundMod=0,extraAttacks=0,copies=1,lethal=false,sustained=false,ignorePenalties=false,random=Math.random}) {
+  woundMod=0,extraAttacks=0,copies=1,attackCount=null,lethal=false,sustained=false,ignorePenalties=false,random=Math.random}) {
   const living=targets.filter(p=>currentHP(state,p)>0);
   if (!living.length) throw new Error('생존한 표적이 없습니다.');
   const inRange=weapon.range===0 || distance<=weapon.range;
@@ -154,13 +156,14 @@ export function resolveAttack({weapon,targets,preferred,state,distance,cover=fal
   if (!Number.isInteger(copies) || copies<1 || copies>46) throw new RangeError('잘못된 무기 개수');
   const bonus=extraAttacks + (half ? weapon.rapid || 0 : 0)
     + Math.floor(living.length/5)*((weapon.blast || 0)+(weapon.cleave || 0));
-  let count=0;
-  for(let i=0;i<copies;i++) count+=diceValue(weapon.attacks,random)+bonus;
+  let count=attackCount??0;
+  if(attackCount===null)for(let i=0;i<copies;i++) count+=diceValue(weapon.attacks,random)+bonus;
   const defenders = living.map(p=>({...p,profile:modelProfile(state,p),hp:currentHP(state,p)}));
   const bodyguards=defenders.filter(p=>!character(p));
   const toughness=Math.max(...(bodyguards.length ? bodyguards : defenders).map(p=>p.profile.toughness));
   if (weapon.strength>toughness && hasWaaagh(state,defenders[0])) woundMod-=1;
-  if (ignorePenalties) {cover=false;hitMod=Math.max(0,hitMod);woundMod=Math.max(0,woundMod);}
+  if (ignorePenalties || weapon.psychic) {cover=false;hitMod=Math.max(0,hitMod);}
+  if (ignorePenalties) woundMod=Math.max(0,woundMod);
   const hitTarget=weapon.skill + Number(cover && weapon.range>0);
   const woundTarget=woundThreshold(weapon.strength,toughness);
   const hitDice=[],woundDice=[],saves=[],devastating=[],damage=[];
