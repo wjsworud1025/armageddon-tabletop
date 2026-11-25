@@ -1,6 +1,7 @@
 import {assessMove} from './movement.mjs';
 import {changeUnit,currentHP,groupId,roll,unitMembers} from './rules/battle.mjs';
 import {getProfile} from './rules/profiles.mjs';
+import {canCommandReroll,useCommandReroll} from './rules/command-reroll.mjs';
 
 const moveNames={normal:'일반 이동',advance:'전력 이동',fallback:'후퇴',remain:'정지'};
 const point=p=>({x:p.x,z:p.z,elevation:p.elevation??0,yaw:p.yaw??0});
@@ -67,6 +68,7 @@ export function beginMove(game,actor,type,options={}) {
   const fallbackMode=type==='fallback'?(options.fallbackMode??(existing.shocked?'desperate':'ordered')):'ordered';
   const takeToSkies=options.takeToSkies===true;
   const plan={unit,type,advanceRoll,origins,paths:{},takeToSkies,fallbackMode,desperateEscapeResolved:options.desperateEscapeResolved===true};
+  if(type==='advance'&&canCommandReroll(rules,unit,member.faction))plan.commandRerollOpen=true;
   const assessment=assessMove({game,pieces,...plan,phase:'path'});
   assertValid(assessment);
   const order=declaration(type,advanceRoll,takeToSkies,fallbackMode);
@@ -101,7 +103,9 @@ export function proposeMove(game,actor,paths) {
   requireEscapeRolls(plan);
   const nextPaths=appendUnitPaths(plan,survivors,paths);
   const next={...plan,paths:nextPaths};
-  if(plan.type==='advance' && Object.values(nextPaths).some(route=>route.length)) next.rerollClosed=true;
+  if(plan.type==='advance' && Object.values(nextPaths).some(route=>route.length)){
+    next.rerollClosed=true;delete next.commandRerollOpen;
+  }
   const assessment=assessPlan(game,next,survivors,'path');
   const poses=Object.fromEntries(Object.keys(paths).map(id=>[id,assessment.models[id].end]));
   return {rules:{...rules,movePlan:next},poses,message:'분대 이동 경로 갱신',manual:assessment.manual,assessment};
@@ -136,15 +140,22 @@ export function abandonInvalidMove(game){
   throw new Error('현재 배치는 이동을 완료할 수 있습니다.');
 }
 
-export function rerollMove(game,actor,d6) {
+export function rerollMove(game,actor,d6,{command=false,random=Math.random}={}) {
   const {rules,plan}=view(game,actor);
   const member=actingModel(game,actor);
-  if(plan.type!=='advance' || member.faction!=='orks' || rules.units[plan.unit]?.rerolled)
-    throw new Error('오크의 전력 이동 굴림은 한 번만 재굴림할 수 있습니다.');
+  if(plan.type!=='advance' || (!command&&member.faction!=='orks') || rules.units[plan.unit]?.rerolled)
+    throw new Error('전력 이동 주사위는 한 번만 재굴림할 수 있습니다.');
   if(plan.rerollClosed || Object.values(plan.paths).some(route=>route.length)) throw new Error('전력 이동 재굴림은 모델을 움직이기 전에 선언하세요.');
-  const advanceRoll=d6??roll();
+  let next=rules,advanceRoll;
+  if(command){
+    const event={kind:'advance',team:member.faction,unit:plan.unit,sides:6,dice:[plan.advanceRoll]};
+    const paid=plan.commandRerollOpen&&useCommandReroll(rules,event,0,random);
+    if(!paid)throw Error('이 전력 이동 굴림에 지휘 재굴림을 사용할 수 없습니다.');
+    next=paid.rules;[advanceRoll]=paid.dice;
+  }else advanceRoll=d6??roll();
   if(!Number.isInteger(advanceRoll) || advanceRoll<1 || advanceRoll>6) throw new Error('재굴림 결과는 D6이어야 합니다.');
   const order=declaration('advance',advanceRoll,plan.takeToSkies,plan.fallbackMode);
-  const next=changeUnit(rules,member,{order,rerolled:true});
-  return {rules:{...next,movePlan:{...plan,advanceRoll}},message:member.name+' · 재굴림 · '+order};
+  next=changeUnit(next,member,{order,rerolled:true});
+  const nextPlan={...plan,advanceRoll};delete nextPlan.commandRerollOpen;
+  return {rules:{...next,movePlan:nextPlan},message:member.name+' · '+(command?'지휘 재굴림 (1 CP)':'전력 이동 재굴림')+' · D6 '+plan.advanceRoll+' → '+advanceRoll};
 }

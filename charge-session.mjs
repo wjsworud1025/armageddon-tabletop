@@ -1,4 +1,5 @@
 import {assessCharge,chargeOptions} from './charge.mjs';
+import {canCommandReroll,useCommandReroll} from './rules/command-reroll.mjs';
 import {appendUnitPaths} from './move-session.mjs';
 import {changeUnit,currentHP,roll as rollDie} from './rules/battle.mjs';
 
@@ -48,7 +49,23 @@ export function beginCharge(game,actor,options={}) {
     next={...next,cp:{...next.cp,[model.faction]:next.cp[model.faction]-declaration.cost},patrol:{...next.patrol,
       spent:{...next.patrol.spent,heroicIntervention:key},tactics:{...next.patrol.tactics,heroicIntervention:key+'/'+plan.unit}}};
   }
+  if(canCommandReroll(next,plan.unit,model.faction))plan.commandRerollOpen=true;
   return {rules:{...next,chargePlan:plan},message:model.name+' · '+name[mode]+' '+dice.join(' + ')+' → '+plan.roll+'″',assessment:rolled};
+}
+
+export function rerollCharge(game,random=Math.random){
+  const {rules,plan,survivors}=draft(game);
+  const actor=survivors.find(p=>p.id===plan.actor);
+  if(!actor||!plan.commandRerollOpen||plan.targets.length||Object.keys(plan.paths).length)
+    throw Error('돌격 표적을 확정하기 전에만 지휘 재굴림을 사용할 수 있습니다.');
+  const paid=useCommandReroll(rules,{kind:'charge',unit:plan.unit,team:actor.faction,sides:6,dice:plan.dice},0,random);
+  if(!paid)throw Error('이 돌격 굴림에 지휘 재굴림을 사용할 수 없습니다.');
+  const rolled=chargeOptions(game,actor,{mode:plan.mode,roll:paid.dice[0]+paid.dice[1],declared:true,endOfPhase:plan.mode!=='normal'});
+  requireValid(rolled);
+  const next=changeUnit(paid.rules,actor,{charge:rolled.limit});
+  const chargePlan={...plan,dice:paid.dice,roll:rolled.limit};delete chargePlan.commandRerollOpen;
+  return {rules:{...next,chargePlan},message:actor.name+' · 지휘 재굴림 (1 CP) · 2D6 ['+plan.dice.join(' + ')+'] → ['+
+    paid.dice.join(' + ')+'] · 돌격 한도 '+rolled.limit+'″'};
 }
 
 export function selectChargeTargets(game,targets,{takeToSkies=false}={}) {
@@ -56,6 +73,7 @@ export function selectChargeTargets(game,targets,{takeToSkies=false}={}) {
   if(Object.values(plan.paths).some(path=>path.length)) throw new Error('표적이나 비행을 바꾸려면 먼저 원점으로 되돌리세요.');
   if(!Array.isArray(targets)||!targets.length) throw new Error('돌격할 적 표적 분대를 선택하세요.');
   const next={...plan,targets:[...targets],takeToSkies:takeToSkies===true};
+  delete next.commandRerollOpen;
   const assessment=evaluate(game,next,survivors,'path');
   return {rules:{...rules,chargePlan:next},assessment,manual:assessment.manual,message:'돌격 표적 '+targets.length+'개 확정 · '+assessment.limit+'″'};
 }

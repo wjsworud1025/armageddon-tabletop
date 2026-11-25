@@ -1,6 +1,7 @@
 import {profiles,getProfile,unitId} from './profiles.mjs';
 import {validFightSequence} from '../fight-sequence.mjs';
 import {doctrines,enhancements,tactics,effectWeapon} from './patrol.mjs';
+import {canCommandReroll} from './command-reroll.mjs';
 
 const boolean = value => typeof value === 'boolean';
 const string = value => typeof value === 'string';
@@ -50,7 +51,7 @@ const unit = fields({
   counterCharge:boolean,reaction:boolean,reactionTracked:boolean,fightsFirst:boolean,shotAt:boolean,suppressedEnemy:boolean,hitTargets:list(group,12),suppressionTargets:list(group,12)
 });
 const doctrine=oneOf(Object.keys(doctrines)),tactic=oneOf(Object.keys(tactics));
-const coreKeys=['marines','orks'].flatMap(team=>['insaneBravery-'+team,'epicChallenge-'+team]);
+const coreKeys=['marines','orks'].flatMap(team=>['insaneBravery-'+team,'epicChallenge-'+team,'commandReroll-'+team]);
 const tacticKey=oneOf([...Object.keys(tactics),'heroicIntervention','counteroffensive',...coreKeys]);
 const patrol=fields({
   doctrine:nullable(doctrine),usedDoctrines:list(doctrine,3),waaagh:int(0,2),waaaghUsed:boolean,
@@ -62,7 +63,7 @@ const objective=fields({name:string,home:nullable(team),owner:nullable(team),sec
 const pose=fields({x:Number.isFinite,z:Number.isFinite,elevation:n=>Number.isFinite(n)&&n>=0&&n<=20,yaw:Number.isFinite},['x','z','elevation','yaw']);
 const chargeFields={unit:group,actor:model,mode:oneOf(['normal','masterOfBattle','leapToDefend','intoTheFray']),
   roll:int(2,12),dice:list(int(1,6),2),targets:list(group,12),origins:map(model,pose),paths:map(model,list(pose,512)),takeToSkies:boolean};
-const chargePlan=fields(chargeFields,Object.keys(chargeFields));
+const chargePlan=fields({...chargeFields,commandRerollOpen:boolean},Object.keys(chargeFields));
 const fightFields={unit:group,type:oneOf(['pile-in','consolidate']),mode:oneOf(['pile-in','ongoing','engaging','objective']),
   targets:list(identifier,16),origins:map(model,pose),paths:map(model,list(pose,512))};
 const fightPlan=fields(fightFields,Object.keys(fightFields));
@@ -71,7 +72,7 @@ const reactionFields={unit:group,mode:oneOf(['rapid','surge']),shooter:group,tar
   origins:map(model,pose),paths:map(model,list(pose,512))};
 const movePlan=fields({unit:group,type:oneOf(['advance','normal','fallback']),advanceRoll:int(0,6),
   origins:map(model,pose),paths:map(model,list(pose,512)),takeToSkies:boolean,fallbackMode:oneOf(['ordered','desperate']),
-  desperateEscapeResolved:boolean,rerollClosed:boolean},['unit','type','advanceRoll','origins','paths','takeToSkies','fallbackMode','desperateEscapeResolved']);
+  desperateEscapeResolved:boolean,rerollClosed:boolean,commandRerollOpen:boolean},['unit','type','advanceRoll','origins','paths','takeToSkies','fallbackMode','desperateEscapeResolved']);
 const battle=fields({
   version:oneOf([1]),status:oneOf(['setup','playing','finished']),first:team,active:team,
   round:int(1,20),rounds:int(1,20),step:int(0,5),cp:totals,vp:totals,hp,
@@ -109,7 +110,8 @@ export function validateRulesState(value) {
     const unit=target?.split('/')[1];
     if(!group(unit)||groupTeam(unit)!==team||target!==stamp+'/'+unit||
       !int(1,value.round)(Number(round))||String(Number(round))!==round||!['marines','orks'].includes(active)||
-      stamp!==[round,active,step].join('-')||(ability==='insaneBravery'?(active!==team||step!=='0'):step!=='4'))return false;
+      stamp!==[round,active,step].join('-')||!['0','1','2','3','4','5'].includes(step)||
+      (ability==='insaneBravery'&&(active!==team||step!=='0'))||(ability==='epicChallenge'&&step!=='4'))return false;
   }
   for(const [unit,flags] of Object.entries(value.units??{})){
     const id=flags.epicChallengeModel;
@@ -153,6 +155,8 @@ export function validateRulesState(value) {
   }
   if(value.chargePlan){
     const p=value.chargePlan,ids=Object.keys(p.origins),sum=p.dice.reduce((a,b)=>a+b,0);
+    if(p.commandRerollOpen&&(p.targets.length||Object.keys(p.paths).length||!['normal','masterOfBattle'].includes(p.mode)||
+      !canCommandReroll(value,p.unit,groupTeam(p.unit))))return false;
     const expected=['masterOfBattle','intoTheFray'].includes(p.mode)?Math.min(sum,6):sum;
     return value.step===3&&value.status==='playing'&&!value.declaration&&!value.hazard&&!value.movePlan&&
       ids.includes(p.actor)&&ids.every(id=>(value.attachments?.[id]||unitId(models.get(id)))===p.unit)&&
@@ -161,6 +165,8 @@ export function validateRulesState(value) {
   }
   if(value.movePlan){
     const m=value.movePlan,ids=Object.keys(m.origins);
+    if(m.commandRerollOpen&&(m.type!=='advance'||m.rerollClosed||Object.keys(m.paths).length||value.units?.[m.unit]?.rerolled||
+      value.active!==groupTeam(m.unit)||!canCommandReroll(value,m.unit,value.active)))return false;
     if(value.step!==1||value.status!=='playing'||value.declaration||!ids.length||value.units?.[m.unit]?.movement!==m.type||
       !ids.every(id=>(value.attachments?.[id]||unitId(models.get(id)))===m.unit)||
       !Object.keys(m.paths).every(id=>ids.includes(id))||(m.type==='advance'?m.advanceRoll<1:m.advanceRoll!==0))return false;

@@ -6,6 +6,9 @@ import {reinforcementOptions,expiringReserves,reserveCapacity} from './reinforce
 import {attachForDeployment} from './reinforcement-session.mjs';
 import {openShootingReaction,shootingReactionOptions} from './shooting-reaction.mjs';
 import {useInsaneBravery,useEpicChallenge} from './core-stratagems.mjs';
+import {acceptMovementRoll} from './command-reroll.mjs';
+import {rerollMove} from '../move-session.mjs';
+import {rerollCharge} from '../charge-session.mjs';
 import {coherency,travelCost,moveLimit} from '../movement.mjs';
 import {newBattle,startBattle,advance,opposite,steps,teams,roll,currentHP,unitMembers,
   groupId,changeUnit,needsShock,shockTest,adjustHP,controlObjective,engaged,modelProfile,
@@ -75,6 +78,9 @@ export function mountRules(container,api) {
   function commit(state,message,changes={}) {
     writing=true;
     try {
+      const previous=api.getRulesState();
+      if((previous?.movePlan?.commandRerollOpen&&state.movePlan?.commandRerollOpen)||
+        (previous?.chargePlan?.commandRerollOpen&&state.chargePlan?.commandRerollOpen))state=acceptMovementRoll(state);
       if (state.status==='playing') state=recordLosses(state,contents().map(p=>Object.hasOwn(changes,p.id)?{...p,removed:changes[p.id]}:p));
       state.last=message;
       if (api.commitRules) api.commitRules(state,changes,message);
@@ -365,6 +371,13 @@ export function mountRules(container,api) {
       return;
     }
     if(state.step===3)top+=chargeControls(api.getTable());
+    if(state.movePlan?.commandRerollOpen||state.chargePlan?.commandRerollOpen){
+      const moving=!!state.movePlan,plan=state.movePlan??state.chargePlan;
+      const dice=moving?'D6 ['+plan.advanceRoll+']':'2D6 ['+plan.dice.join(' + ')+']';
+      top+=chunk('지휘 재굴림 · '+(moving?'전력 이동':'돌격'),
+        '<p>'+dice+' · '+(moving?'경로를 지정하기 전에 이 주사위를':'표적을 확정하기 전에 두 주사위를 모두')+' 다시 굴릴 수 있습니다.</p>'+
+        row(btn('command-reroll','1 CP · '+(moving?'D6':'2D6')+' 다시 굴리기')+btn('command-keep','현재 굴림 유지')));
+    }
     if(fightView){
       if(state.fightPlan){
         const title=state.fightPlan.type==='pile-in'?'밀착 이동':'재정비 이동';
@@ -454,6 +467,16 @@ export function mountRules(container,api) {
     if(state.fightSequence?.counterAfter&&!(state.hazard?action.startsWith('hazard-'):action.startsWith('fight-counter-')))return;
     const val=id=>field(id)?.value??choices[id];
     const integer=(id,min,max)=>Math.max(min,Math.min(max,Math.trunc(Number(val(id)))||0));
+    if(action==='command-reroll'||action==='command-keep'){
+      if(!state.movePlan?.commandRerollOpen&&!state.chargePlan?.commandRerollOpen)return;
+      if(action==='command-keep')return commit(acceptMovementRoll(state),'지휘 재굴림 생략 · 현재 결과 유지');
+      const game={...api.getTable(),rules:state};
+      try{
+        const member=state.movePlan&&living(state).find(p=>Object.hasOwn(state.movePlan.origins,p.id));
+        const result=state.movePlan?rerollMove(game,member,undefined,{command:true}):rerollCharge(game);
+        return commit(result.rules,result.message);
+      }catch(error){feedback=error.message;return refresh()}
+    }
     if(state.units.wartrakk?.suppressionTargets?.length){
       if(action==='suppress-shot'){
         const target=val('suppressTarget'),next=chooseSuppression(state,target);
