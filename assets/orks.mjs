@@ -1,6 +1,7 @@
 import {paint as p} from './sculpt.mjs';
+import {sculptOrkPose} from './ork-poses-sculpt.mjs';
 
-function face(s, grot, index) {
+function face(s, grot, index, plain=false) {
   const skin=[p.green,0x73883b,0x829741,0x657f36][index%4];
   s.oval(skin,[0,.023,0],[.156,.135,.128]);
   s.oval(p.olive,[0,-.080,.075],[.148,.084,.124]);
@@ -14,6 +15,7 @@ function face(s, grot, index) {
     s.link(p.bone,[sign*.091,-.077,.178],[sign*.112,-.004,.207],.022,.003,7);
     if(!grot) s.oval(p.green,[sign*.115,-.030,.095],[.059,.06,.085]);
   }
+  if(plain)return;
   if(index%4===1) {
     s.oval(p.iron,[0,.090,-.01],[.159,.086,.126]);
     s.box(p.brass,[0,.095,.099],[.1,.046,.05]);
@@ -31,16 +33,6 @@ function pistol(s, position, rot, size=1) {
   gun.cylinder(p.black,[0,.018,.285],.026,.026,.008,8,[Math.PI/2,0,0]);
   gun.box(p.leather,[0,-.078,-.014],[.062,.103,.066],[-.18,0,0]);
   gun.box(p.brass,[.06,.008,.065],[.01,.036,.083]);
-}
-
-function choppa(s, position, rotation, form) {
-  const w=s.child(position,rotation);
-  w.cylinder(p.leather,[0,.06,0],.032,.035,.31,8);
-  const blade=form%2===0 ? [[-.025,0],[.14,.036],[.20,.22],[.12,.42],[-.044,.38],[-.058,.11]] :
-    [[-.045,0],[.044,.002],[.089,.135],[.143,.38],[.044,.47],[-.045,.33]];
-  w.plate(p.iron,blade,.047,[0,.19,0]);
-  w.plate(p.steel,blade.slice(1,4).concat([[.058,.223]]),.049,[0,.19,.002]);
-  w.cylinder(p.brass,[0,.199,0],.05,.05,.047);
 }
 
 function checks(s, pos, rot, unit, rows, columns) {
@@ -61,9 +53,12 @@ function flag(s) {
 }
 
 export function greenskin(s,kind,variant=0) {
-  const grot=kind==='gretchin', boss=kind==='warboss', wyrd=kind==='weirdboy';
-  const nob=kind==='boy' && variant%10===0;
-  const scale=grot?.59:boss?1.39:nob?1.18:wyrd?1.14:1;
+  if(kind==='boy' || kind==='gretchin') {
+    sculptOrkPose(s,kind,variant,face);
+    return;
+  }
+  const boss=kind==='warboss', wyrd=kind==='weirdboy';
+  const scale=boss?1.39:1.14;
   const body=s.child([0,0,0],[0,[.02,-.18,.15,-.055,.20][variant%5],0],[scale,scale,scale]);
   const skin=[p.green,0x73883b,0x829741,0x657f36][variant%4];
   const cloth=[p.leather,0x655c42,0x594c3d,p.black][variant%4];
@@ -84,8 +79,8 @@ export function greenskin(s,kind,variant=0) {
   for(const side of [-1,1]) {
     body.box(p.leather,[side*.142,.542,.142],[.083,.108,.058],[0,side*.19,side*.14]);
   }
-  const head=body.child([0,1.051,.075],[.065,[-.11,.23,-.22,.07,.14][variant%5],0],grot?[1.23,1.24,1.21]:undefined);
-  face(head,grot,variant);
+  const head=body.child([0,1.051,.075],[.065,[-.11,.23,-.22,.07,.14][variant%5],0]);
+  face(head,false,variant);
   const wide=wyrd?.357:.335, raise=wyrd?.76:boss?.85:.815;
   for(const side of [-1,1]) {
     const lifted=boss&&side>0;
@@ -97,9 +92,9 @@ export function greenskin(s,kind,variant=0) {
     body.link(skin,elbow,hand,.089,.079);
     body.oval(skin,hand,[.085,.074,.088]);
     for(let n=0;n<3;n++) body.oval(skin,[hand[0]+side*.055,hand[1]-.030+n*.027,hand[2]+.042],[.027,.018,.036]);
-    if(!grot) body.link(p.leather,elbow.map((v,i)=>v*.24+hand[i]*.76),hand,.084,.081);
+    body.link(p.leather,elbow.map((v,i)=>v*.24+hand[i]*.76),hand,.084,.081);
   }
-  if(!grot && !wyrd) {
+  if(boss) {
     body.plate(boss?p.orange:p.iron,[[-.164,.04],[-.076,.124],[.083,.092],[.163,.015],[.12,-.093],[-.125,-.088]],.145,[-.251,.97,.003],[.10,-.12,-.28]);
     if(variant%4===0) checks(body,[-.25,.96,.09],[0,0,-.24],.038,2,4);
   }
@@ -136,12 +131,6 @@ export function greenskin(s,kind,variant=0) {
     body.oval(p.leather,[0,1.105,.189],[.057,.067,.022]);
     body.oval(p.orange,[0,1.077,.207],[.039,.020,.013]);
     for(const side of [-1,1]) for(let n=0;n<3;n++) body.link(p.cream,[side*.16,.16+n*.053,.014],[side*.18,.19+n*.053,.021],.082,.082,8);
-  } else if(grot) {
-    pistol(body,[wide,.85+(variant%3)*.07,.20],[-.09,.37,-.1],.78);
-    if(variant%3===0) choppa(body,[-wide,.80,.19],[.33,-.3,.70],1);
-  } else {
-    pistol(body,[wide,.817+(variant%3)*.07,.223],[-.11,.22,-.06],nob?1.2:1);
-    choppa(body,[-wide,.79,.202],[.16,variant*.3,variant%2===0?.24:.68],variant);
   }
 }
 

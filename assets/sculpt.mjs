@@ -45,9 +45,10 @@ function primitive(T, key, create) {
 }
 
 export class Sculpt {
-  constructor(T, group = new T.Group()) {
+  constructor(T, group = new T.Group(), compactCurves = false) {
     this.T = T;
     this.group = group;
+    this.compactCurves = compactCurves;
   }
   place(object, xyz, rotation = [0,0,0], scale = [1,1,1]) {
     object.position.set(...xyz);
@@ -57,7 +58,7 @@ export class Sculpt {
     return object;
   }
   child(xyz = [0,0,0], rotation, scale) {
-    return new Sculpt(this.T, this.place(new this.T.Group(), xyz, rotation, scale));
+    return new Sculpt(this.T, this.place(new this.T.Group(), xyz, rotation, scale),this.compactCurves);
   }
   part(geometry, color, xyz, size, rotation) {
     const node = new this.T.Object3D();
@@ -68,7 +69,9 @@ export class Sculpt {
     return this.part(primitive(this.T, 'box', () => new this.T.BoxGeometry(1,1,1)), color, xyz, size, rotation);
   }
   oval(color, xyz, radii, rotation) {
-    return this.part(primitive(this.T, 'sphere', () => new this.T.SphereGeometry(1,12,8)), color, xyz, radii, rotation);
+    const sides=this.compactCurves?(Math.max(...radii)<.061?6:9):12;
+    const rings=Math.round(sides*2/3);
+    return this.part(primitive(this.T,'sphere'+sides,()=>new this.T.SphereGeometry(1,sides,rings)),color,xyz,radii,rotation);
   }
   cylinder(color, xyz, top, bottom, height, segments = 12, rotation, stretch = [1,1,1]) {
     const widest = Math.max(top,bottom);
