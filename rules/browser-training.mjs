@@ -39,6 +39,7 @@ export async function checkTraining({save,upload,click,state,js,reload}){
     assert.equal(scene.count,2);
     assert.deepEqual(Object.keys(scene.poses).filter(id=>scene.poses[id]).sort(),participants);
     const [a,b]=participants.map(id=>scene.poses[id]);
+    assert.ok(b.x<a.x&&Math.sin(a.yaw)<0&&Math.sin(b.yaw)>0,'Warboss starts on the left facing the Captain as pictured on p. 53');
     const contact=participants.reduce((sum,id)=>sum+catalog.find(p=>p.id===id).baseWidth/2,0);
     assert.ok(Math.abs(Math.hypot(a.x-b.x,a.z-b.z)-contact)<.015,'Bases must touch');
     assert.ok(Math.hypot((a.x+b.x)/2,(a.z+b.z)/2)<.25,'Duel must be centered');

@@ -30,7 +30,7 @@ const duelTable=structuredClone(template);
 const duelists={orks:duelTable.pieces.find(p=>p.kind==='warboss'),marines:duelTable.pieces.find(p=>p.kind==='captain')};
 for(const p of duelTable.pieces)p.removed=true;
 for(const [team,p] of Object.entries(duelists)){
-  const sign=team==='marines'?-1:1;
+  const sign=team==='orks'?-1:1;
   Object.assign(p,{x:sign*p.baseWidth/2,z:0,yaw:-sign*Math.PI/2,elevation:0});
 }
 function shownTable(){
