@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createTable} from '../data/catalog.mjs';
-import {patrolTerrainPlacement as check,patrolTerrainLevels as levels} from './patrol-terrain-placement.mjs';
+import {patrolTerrainPlacement as check,patrolTerrainLevels as levels,patrolHighGround,patrolGroundLevel} from './patrol-terrain-placement.mjs';
 import {applyLayout} from '../layouts.mjs';
 
 const catalog=createTable().pieces;
@@ -73,6 +73,55 @@ test('openings and separated feet are resolved from the actual cast',()=>{
     assert.ok(check(through,[object]).error,id);
     assert.equal(check(through,[{...object,removed:true}]).error,'');
   }
+});
+
+test('22.05 measures the supporting floor under the base, independent of where the ruin is placed',()=>{
+  const tall=piece('largeRuin-1'),lower=piece('largeRuin-2');
+  const shooter=piece('intercessor-1',-.9,-.55,3.37);
+  const lowerShooter=piece('intercessor-1',-1.3,.65,2.30);
+  assert.equal(check(lowerShooter,[lower]).error,'');
+  assert.equal(patrolHighGround(lowerShooter,[lower]),false,'its nearby wall rises above 3 inches');
+  for(const yaw of [0,.83,Math.PI]){
+    const terrain=turn(tall,yaw,-4,2);
+    const high=p=>patrolHighGround(turn(p,yaw,-4,2),[terrain]);
+    assert.equal(high(shooter),true);
+    assert.equal(high({...shooter,elevation:3.374}),true,'within the floor height displayed to 0.01 inch');
+    assert.equal(high({...shooter,elevation:3.40}),false,'clear space above the floor');
+    assert.equal(high({...shooter,elevation:3}),false,'clear space below the floor');
+    assert.equal(high({...shooter,x:.1}),false,'rim overhangs the torn edge');
+    assert.equal(high({...shooter,x:.65,z:.9}),false,'open L-shaped courtyard');
+  }
+  assert.equal(patrolHighGround({...shooter,removed:true},[tall]),false);
+  assert.equal(patrolHighGround(shooter,[{...tall,removed:true}]),false);
+  assert.equal(patrolHighGround(shooter,[]),false);
+  assert.equal(patrolHighGround({...lowerShooter,elevation:3.37},[lower]),false,'editing only the height does not add a floor');
+  assert.equal(patrolHighGround({...lowerShooter,elevation:3.30},[{...lower,elevation:1}]),false,'unsupported floating terrain');
+  assert.equal(patrolHighGround({...shooter,kind:'wartrakk'},[tall]),false);
+});
+
+test('a second terrain piece may provide support or obstruct it, but separate edges cannot be combined',()=>{
+  const first=piece('largeRuin-1');
+  const atEdge=piece('intercessor-1',.1,-.55,3.37);
+  const second=turn(first,Math.PI,.2,-1.1);
+  assert.equal(patrolHighGround(atEdge,[first]),false);
+  assert.equal(patrolHighGround(atEdge,[second]),false);
+  assert.equal(patrolHighGround(atEdge,[first,second]),false);
+  const actualSupport={...first,x:1};
+  assert.equal(patrolHighGround(atEdge,[first,actualSupport]),true);
+  // The other cast's high corner intrudes into the supported base.
+  const obstacle={...first,x:atEdge.x+2.355,z:atEdge.z+1.614};
+  assert.equal(patrolHighGround(atEdge,[actualSupport,obstacle]),false);
+});
+
+test('the ground-level target condition uses the model base, including terrain ground floors and flight stands',()=>{
+  assert.equal(patrolGroundLevel(piece('intercessor-1',.65,.9)),true);
+  assert.equal(patrolGroundLevel({...piece('landSpeeder-1'),elevation:undefined}),true);
+  for(const elevation of [.01,2.30,3.37,-.1,NaN]){
+    assert.equal(patrolGroundLevel(piece('boy-1',0,0,elevation)),false);
+  }
+  assert.equal(patrolGroundLevel({...piece('boy-1'),removed:true}),false);
+  assert.equal(patrolGroundLevel(piece('largeRuin-1')),false);
+  assert.equal(patrolGroundLevel(null),false);
 });
 
 test('recommended patrol placements avoid cast walls on every deployment map',()=>{

@@ -7,6 +7,7 @@ import {validatePatrolSetup,patrolSetupView} from './patrol-setup.mjs';
 import {validPatrolFormations} from './patrol-formations.mjs';
 import {createTable} from '../data/catalog.mjs';
 import {sightBoardMatches,sightHP} from './patrol-sight.mjs';
+import {plungingFireAtDeclaration} from './declarations.mjs';
 
 const boolean = value => typeof value === 'boolean';
 const string = value => typeof value === 'string';
@@ -28,11 +29,11 @@ for (const kind of Object.keys(profiles)) for(let i=0;i<(count[kind]||1);i++) {
 }
 const model = value => models.has(value);
 const group = value => groups.has(value);
-const sightIds=new Set(createTable().pieces.map(p=>p.id));
+const catalog=new Map(createTable().pieces.map(p=>[p.id,p]));
 const sightPose=value=>Array.isArray(value)&&value.length===6&&value.slice(0,4).every(Number.isFinite)&&
   value[2]>=0&&value[2]<=20&&boolean(value[4])&&(value[5]===null||int(0,100)(value[5]));
 const sightPairs=map(model,map(model,oneOf(['visible','blocked'])));
-const shootingSight=fields({round:int(1,20),active:team,board:map(id=>sightIds.has(id),sightPose),pairs:sightPairs},
+const shootingSight=fields({round:int(1,20),active:team,board:map(id=>catalog.has(id),sightPose),pairs:sightPairs},
   ['round','active','board','pairs']);
 const groupTeam=key=>['captain','librarian','intercessor','vanguard','landSpeeder'].includes(key)?'marines':'orks';
 const faction=id=>groupTeam(models.get(id).kind);
@@ -51,7 +52,7 @@ const rowFields={
   size:int(1,46),assigned:int(0,45),hit:int(-2,1),wound:int(-2,1),extra:int(0,30),
   cover:boolean,lethal:boolean,sustained:boolean,ignore:boolean,guard:boolean,done:boolean
 };
-const validRow=fields({...rowFields,vehiclePenalty:int(0,2)},Object.keys(rowFields));
+const validRow=fields({...rowFields,vehiclePenalty:int(0,2),plunging:boolean,plungingVisible:list(model,46)},Object.keys(rowFields));
 const diceArray=list(int(1,6),40000);
 const precisionRoll=fields({index:int(0,275),count:int(1,20000),hits:int(1,40000),wounds:int(1,40000),
   hitDice:diceArray,woundDice:diceArray,devastating:int(0,40000)},['index','count','hits','wounds','hitDice','woundDice','devastating']);
@@ -152,13 +153,14 @@ function officialStateOK(r,records){
 export function validateRulesState(value,pieceRecords=null) {
   if (value==null) return true;
   if (fields({hp},['hp'])(value)) return true;
+  if(pieceRecords&&(!Array.isArray(pieceRecords)||pieceRecords.some(p=>!p||!catalog.has(p.id))))return false;
   if(!battle(value) || value.round>value.rounds||!officialStateOK(value,pieceRecords))return false;
   if(value.hazard?.commandDice&&!canCommandReroll(value,value.hazard.unit,groupTeam(value.hazard.unit)))return false;
   const modelGroup=id=>value.attachments?.[id]||unitId(models.get(id));
   if(value.shootingSight){
     const s=value.shootingSight,rows=Object.entries(s.pairs);
     if(value.status!=='playing'||value.step!==2||value.round!==s.round||value.active!==s.active||
-      Object.keys(s.board).length!==sightIds.size||!rows.length||
+      Object.keys(s.board).length!==catalog.size||!rows.length||
       Object.entries(s.board).some(([id,p])=>p[5]!==sightHP(value,id))||
       pieceRecords&&!sightBoardMatches(value,pieceRecords,s.board))return false;
     const live=id=>!s.board[id][4]&&s.board[id][5]!==0;
@@ -267,10 +269,26 @@ export function validateRulesState(value,pieceRecords=null) {
   }
   if(!plan.rows.every(r=>{
     const weapon=getProfile(models.get(r.actor)).weapons[r.weapon];
-    return weapon && !!weapon.range===(value.step===2) && modelGroup(r.actor)===plan.unit && modelGroup(r.preferred)===r.target &&
+    const visible=r.plungingVisible;
+    return weapon && (r.plunging?weapon.range>0&&!weapon.torrent&&visible?.length&&
+      new Set(visible).size===visible.length&&visible.every(id=>modelGroup(id)===r.target):visible===undefined) &&
+      !!weapon.range===(value.step===2) && modelGroup(r.actor)===plan.unit && modelGroup(r.preferred)===r.target &&
       faction(r.actor)!==faction(r.preferred) && (value.step!==2 || faction(r.actor)===value.active) &&
       (weapon.range?r.assigned===0:r.assigned>=1&&r.assigned<=weapon.attacks+r.extra);
   }))return false;
+  const savedPieces=()=>pieceRecords.map(({id,x,z,elevation,yaw,removed})=>({...catalog.get(id),x,z,elevation,yaw,removed:!!removed}));
+  // An intact sight record refers to this exact board. Once casualties or
+  // movement invalidate it, original row qualifiers remain historical.
+  if(pieceRecords&&plan.locked&&value.shootingSight&&plan.rows.some(r=>r.plunging)){
+    const pieces=savedPieces();
+    for(const r of plan.rows.filter(r=>r.plunging)){
+      const actor=pieces.find(p=>p.id===r.actor),weapon=getProfile(actor)?.weapons[r.weapon];
+      const targets=pieces.filter(p=>model(p.id)&&modelGroup(p.id)===r.target);
+      const visible=value.shootingSight.pairs[r.actor];
+      if(!actor||!weapon||!r.plungingVisible.every(id=>visible?.[id]==='visible')||
+        !plungingFireAtDeclaration(value,pieces,actor,weapon,targets,true))return false;
+    }
+  }
   if(plan.attackRoll){
     const progress=plan.attackRoll,entry=plan.rows[progress.index];
     if(!plan.locked||plan.precisionRoll||!entry||entry.done||entry.target!==plan.focus||
@@ -290,9 +308,7 @@ export function validateRulesState(value,pieceRecords=null) {
       }
     }
     if(pieceRecords){
-      const removed=new Map(pieceRecords.map(p=>[p?.id,p?.removed]));
-      const pieces=[...models].map(([id,p])=>({...p,id,faction:faction(id),removed:!!removed.get(id)}));
-      const event=inspectAttackRoll(value,pieces);
+      const event=inspectAttackRoll(value,savedPieces());
       if(!event||event.sizes&&!canCommandReroll(value,event.unit,event.team))return false;
     }
   }

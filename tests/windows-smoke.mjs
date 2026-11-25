@@ -12,6 +12,7 @@ import {baseDistance} from '../state.mjs';
 import {checkPatrolSetup} from '../rules/browser-patrol-setup.mjs';
 import {checkRuinSight} from './browser-ruin-sight.mjs';
 import {checkShooterSight} from './browser-shooter-sight.mjs';
+import {checkPlungingFire} from './browser-plunging-fire.mjs';
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 // --public-exe <file> exercises a clean distribution using the same native host.
 const publicFlag=process.argv.indexOf('--public-exe');
@@ -54,9 +55,11 @@ try{
   const stats=await js('tabletopView.stats()');assert.equal(stats.pieces,61);
   async function screenshot(name){await delay(500);const img=await send('Page.captureScreenshot',{format:'png'});writeFileSync(join(evidence,name),Buffer.from(img.data,'base64'))}
   await checkRuinSight({save:await state(),upload,state,js,click,send,screenshot});
-  await checkShooterSight({save:await state(),upload,state,js,click,screenshot,reload:async()=>{
+  const shootingTools={save:await state(),upload,state,js,click,screenshot,reload:async()=>{
     await send('Page.reload');await until(()=>js('!!window.tabletopView'));await click('[data-tab=battle]');
-  }});
+  }};
+  await checkShooterSight(shootingTools);
+  await checkPlungingFire(shootingTools);
   await screenshot('01-table.png');
   const studioInstalled=await js('!document.querySelector("#appearance").hidden');
   if(publicFlag!==-1)assert.equal(studioInstalled,false,'Public executable must run without the studio pack');

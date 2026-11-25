@@ -1,4 +1,4 @@
-import {castPiece, plinth} from './sculpt.mjs';
+import {castPiece, castGeometry, plinth} from './sculpt.mjs';
 import {marine, speeder} from './marines.mjs';
 import {greenskin, wartrakk} from './orks.mjs';
 import {scenery,legacySecondRuin} from './terrain.mjs';
@@ -9,11 +9,21 @@ const terrain=new Set(['largeRuin','smallRuin','shockArray','capacitorStack','ba
 
 /** Model faces +Z, Y up, origin at ground in inches. */
 export function createPiece(THREE,item) {
+  return buildPiece(THREE,item,castPiece);
+}
+
+// Scene construction prepares these immutable casts. Rules queries reuse
+// them directly: creating a Three Group or Mesh also allocates a random UUID.
+export function pieceGeometry(THREE,item) {
+  return buildPiece(THREE,item,castGeometry);
+}
+
+function buildPiece(THREE,item,cast) {
   if(item.previousSecondRuin&&item.kind==='largeRuin'&&item.variant===1){
     const previous={...item,kind:'previous-second-ruin',baseWidth:5.2,baseDepth:4.10};
-    return castPiece(THREE,previous,s=>legacySecondRuin(s,previous));
+    return cast(THREE,previous,s=>legacySecondRuin(s,previous));
   }
-  return castPiece(THREE,item,s=>{
+  return cast(THREE,item,s=>{
     if(terrain.has(item.kind)) {
       scenery(s,item);
       return;

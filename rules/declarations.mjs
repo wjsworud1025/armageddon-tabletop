@@ -1,8 +1,9 @@
 import {getProfile} from './profiles.mjs';
-import {character,currentHP,groupId,weaponSlot,diceValue,resolveAttack,queueHazard} from './battle.mjs';
+import {attackSkill,character,currentHP,groupId,weaponSlot,diceValue,resolveAttack,queueHazard} from './battle.mjs';
 import {effectWeapon} from './patrol.mjs';
 import {openCounteroffensive} from '../fight-sequence.mjs';
 import {forgetPatrolSightUnit,patrolSightTarget} from './patrol-sight.mjs';
+import {patrolHighGround,patrolGroundLevel} from './patrol-terrain-placement.mjs';
 
 const unitOrder=(s,id)=>s.units[id]||{};
 export const weaponFor=(state,p,i)=>effectWeapon(state,p,getProfile(p).weapons[i],groupId(state,p));
@@ -64,16 +65,28 @@ export function lockDeclaration(state,pieces,eligibleMelee=[]) {
   return {...state,declaration:{...plan,locked:true}};
 }
 
+export function plungingFireAtDeclaration(state,pieces,actor,weapon,targets,visible){
+  return visible===true&&state.status==='playing'&&state.step===2&&!!actor&&state.active===actor.faction&&
+    currentHP(state,actor)>0&&weapon.range>0&&!weapon.torrent&&
+    targets.some(t=>getProfile(t)&&t.faction!==actor.faction&&currentHP(state,t)>0&&patrolGroundLevel(t))&&
+    patrolHighGround(actor,pieces);
+}
+
 function sightedRows(state,pieces,rows,distance){
   if(state.step!==2)return rows;
   const checked=[];
   for(const row of rows){
     const actor=item(pieces,row.actor),profile=getProfile(actor);
     if(!profile?.weapons[row.weapon])return null;
-    const targets=pieces.filter(p=>getProfile(p)&&groupId(state,p)===row.target).map(p=>p.id);
-    const target=patrolSightTarget(state,pieces,row.actor,targets,weaponFor(state,actor,row.weapon).range,distance);
+    const weapon=weaponFor(state,actor,row.weapon);
+    const targets=pieces.filter(p=>getProfile(p)&&groupId(state,p)===row.target);
+    const target=patrolSightTarget(state,pieces,row.actor,targets.map(p=>p.id),weapon.range,distance);
     if(!target.visible.length)return null;
-    checked.push({...row,distance:target.distance});
+    const plunging=plungingFireAtDeclaration(state,pieces,actor,weapon,targets,true);
+    const updated={...row,distance:target.distance,plunging};
+    if(plunging)updated.plungingVisible=target.visible;
+    else delete updated.plungingVisible;
+    checked.push(updated);
   }
   return checked;
 }
@@ -91,19 +104,48 @@ export function lockSightedDeclaration(state,pieces,eligibleMelee=[],distance){
   return checked&&lockDeclaration({...state,declaration:{...plan,rows:checked}},pieces,eligibleMelee);
 }
 
-function packetKey(w,r) {
+// Recheck only visibility for an unresolved 22.05 modifier. Original
+// weapon, unit target, distance, and damage allocation remain untouched.
+export function plungingSightCandidates(state,pieces,index){
+  const plan=state.declaration,row=plan?.rows[index];
+  if(state.status!=='playing'||state.step!==2||!Number.isInteger(index)||!plan?.locked||plan.attackRoll||plan.precisionRoll||
+    !row?.plunging||row.done||plan.focus&&plan.focus!==row.target)return [];
+  const actor=item(pieces,row.actor),weapon=getProfile(actor)?.weapons[row.weapon];
+  if(!weapon)return [];
+  const targets=pieces.filter(p=>getProfile(p)&&groupId(state,p)===row.target&&currentHP(state,p)>0);
+  if(targets.some(p=>row.plungingVisible.includes(p.id))||
+    !plungingFireAtDeclaration(state,pieces,actor,weapon,targets,true))return [];
+  return targets;
+}
+
+export function confirmPlungingSight(state,pieces,index,targetId){
+  if(!plungingSightCandidates(state,pieces,index).some(p=>p.id===targetId))return null;
+  const plan=state.declaration;
+  const rows=plan.rows.map((r,i)=>i===index?{...r,plungingVisible:[...r.plungingVisible,targetId]}:r);
+  return {...state,declaration:{...plan,rows}};
+}
+
+function packetKey(w,r,plunging) {
   const half=w.range>0&&r.distance<=w.range/2;
   return JSON.stringify([r.target,w.skill,w.strength,w.ap+Number(r.guard&&w.ap<0),w.damage,half?w.melta||0:0,
-    !!w.precision,!!w.torrent,!!w.devastating,!!w.psychic,w.antiVehicle||0,r.cover,r.hit-(r.vehiclePenalty||0),r.wound,r.lethal,r.sustained,r.ignore]);
+    !!w.precision,!!w.torrent,!!w.devastating,!!w.psychic,w.antiVehicle||0,r.cover,r.hit-(r.vehiclePenalty||0),r.wound,r.lethal,r.sustained,r.ignore,plunging]);
 }
 export function attackPackets(state,pieces) {
   const plan=state.declaration;
   if(!plan?.locked)return [];
   const packets=new Map();
+  const hasTerrain=pieces.some(p=>p.faction==='terrain');
+  const living=pieces.filter(p=>getProfile(p)&&currentHP(state,p)>0);
+  const liveIds=new Set(living.map(p=>p.id));
+  const grounded=new Set(living.filter(patrolGroundLevel).map(p=>groupId(state,p)));
   for(const [i,r] of plan.rows.entries()){
     if(r.done || (plan.focus && plan.focus!==r.target))continue;
-    const w=weaponFor(state,item(pieces,r.actor),r.weapon),key=packetKey(w,r);
-    if(!packets.has(key))packets.set(key,{index:i,target:r.target,indices:[],names:new Set()});
+    const actor=item(pieces,r.actor),w=weaponFor(state,actor,r.weapon);
+    const plunging=r.plunging===true&&actor.elevation>=3&&grounded.has(r.target)&&r.plungingVisible.some(id=>liveIds.has(id))&&
+      (!hasTerrain||patrolHighGround(actor,pieces));
+    const key=packetKey(w,r,plunging);
+    if(!packets.has(key))packets.set(key,{index:i,target:r.target,indices:[],names:new Set(),plunging,
+      skill:attackSkill(w,{cover:r.cover,plunging,ignorePenalties:r.ignore})});
     const packet=packets.get(key);
     packet.indices.push(i);packet.names.add(w.name);
   }
@@ -135,7 +177,7 @@ export function resolvePacket(state,pieces,index,preferred=null,random=Math.rand
     }
   }
   const result=count&&defenders.length?resolveAttack({weapon:w,targets:defenders,state,preferred:preferred||first.preferred,precisionTarget,awaitAllocation,rolled,distance:first.distance,
-    attackCount:count,hitMod:first.hit-(first.vehiclePenalty||0),woundMod:first.wound,cover:first.cover,lethal:first.lethal,
+    attackCount:count,hitMod:first.hit-(first.vehiclePenalty||0),woundMod:first.wound,cover:first.cover,plunging:packet.plunging,lethal:first.lethal,
     sustained:first.sustained,ignorePenalties:first.ignore,random}):null;
   if(awaitAllocation&&result?.wounds){
     const precisionRoll={index,...result};

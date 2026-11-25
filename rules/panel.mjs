@@ -14,8 +14,9 @@ import {rerollCharge} from '../charge-session.mjs';
 import {coherency,travelCost,moveLimit} from '../movement.mjs';
 import {newBattle,startBattle,advance,opposite,steps,teams,roll,currentHP,unitMembers,
   groupId,changeUnit,needsShock,shockTest,adjustHP,controlObjective,engaged,modelProfile,
-  character,hazardCandidates,resolveHazard} from './battle.mjs';
-import {draftRestriction,appendSightedDeclaration,lockSightedDeclaration,attackPackets,resolvePacket,chooseSuppression} from './declarations.mjs';
+  character,hazardCandidates,resolveHazard,attackSkill} from './battle.mjs';
+import {draftRestriction,appendSightedDeclaration,lockSightedDeclaration,attackPackets,resolvePacket,chooseSuppression,
+  plungingFireAtDeclaration,plungingSightCandidates,confirmPlungingSight} from './declarations.mjs';
 import {canSetPatrolSight,patrolSightStatus,setPatrolSight,visibleInRange} from './patrol-sight.mjs';
 import {doctrines,enhancements,tactics,selectOrder,useTactic,inDoctrine,hasWaaagh,effectWeapon} from './patrol.mjs';
 import {patrolMissions,recordLosses,objectiveSnapshot,missionAward} from './missions.mjs';
@@ -47,6 +48,11 @@ const unitLabel=(p)=>p.kind==='boy' ? '보이즈 '+(Math.floor(p.variant/10)+1)+
 const pieceLabel=p=>p.name+' · '+p.id;
 const chunk=(title,body)=>'<section class="br-card"><h3>'+title+'</h3>'+body+'</section>';
 const sightLabels={unknown:'미확인',visible:'보임',blocked:'가림'};
+function shootingSkillLabel(weapon,skill,plunging){
+  if(!weapon.range)return '';
+  if(weapon.torrent)return '자동 명중';
+  return 'BS '+skill+'+'+(plunging?' · 고지 사격':'');
+}
 
 export function mountRules(container,api) {
   const root=document.createElement('div');
@@ -148,16 +154,19 @@ export function mountRules(container,api) {
     const signature=JSON.stringify(weapon);
     const friends=unitMembers(state,living(state),actor);
     const targetIds=targets.map(t=>t.id),pieces=api.getPieces();
+    const ignorePenalties=friends.some(p=>p.kind==='librarian');
     return [actor,...friends.filter(p=>p.id!==actor.id)].filter(p=>getProfile(p).weapons
       .some(w=>JSON.stringify(effectWeapon(state,p,w,groupId(state,p)))===signature)).map(p=>{
       const distance=Math.min(...targets.map(t=>api.getDistance(p.id,t.id)));
       const visible=weapon.range?visibleInRange(state,pieces,p.id,targetIds,weapon.range,api.getDistance):[];
-      return {p,distance,visible,problem:attackRestriction(state,p,weapon,targets,distance,visible)};
+      const plunging=plungingFireAtDeclaration(state,pieces,p,weapon,targets,visible.length>0);
+      const skill=attackSkill(weapon,{cover:choices.cover,plunging,ignorePenalties});
+      return {p,distance,visible,skill,plunging,problem:attackRestriction(state,p,weapon,targets,distance,visible)};
     });
   }
-  function renderShooterSight(state,shooters,target){
+  function renderShooterSight(state,shooters,target,weapon){
     const pieces=api.getPieces();
-    const rows=shooters.map(({p,distance,visible,problem})=>{
+    const rows=shooters.map(({p,distance,visible,skill,plunging,problem})=>{
       const attrs=' data-shooter="'+esc(p.id)+'" data-target="'+esc(target.id)+'"';
       const status=patrolSightStatus(state,pieces,p.id,target.id);
       const enabled=canSetPatrolSight(state,pieces,p.id,target.id);
@@ -167,7 +176,8 @@ export function mountRules(container,api) {
       const view=api.inspectSight?'<button type="button" data-act="inspect-sight"'+attrs+'>사수 시점</button>':'';
       const witness=status!=='visible'&&visible.length?' · '+getPiece(visible[0]).name+' 보임':'';
       return '<div class="br-sight-pair" data-sight-row="'+esc(p.id)+'"><strong>'+esc(p.name)+'</strong>'+view+
-        '<p class="br-sub">분대까지 '+distance.toFixed(1)+'″ · '+esc((problem||'선언 가능')+witness)+'</p>'+
+        '<p class="br-sub">분대까지 '+distance.toFixed(1)+'″ · <span data-ballistic-skill="'+(weapon.torrent?'':skill)+'">'+
+        shootingSkillLabel(weapon,skill,plunging)+'</span> · '+esc((problem||'선언 가능')+witness)+'</p>'+
         '<div class="br-row" role="group" aria-label="'+esc(p.name+' → '+target.name+' 시야')+'">'+choices+'</div></div>';
     }).join('');
     return '<section class="br-card br-sight"><h3>'+esc(target.name)+'의 시야</h3>'+
@@ -188,7 +198,7 @@ export function mountRules(container,api) {
       select('target','공격할 분대의 모델',candidates.map(p=>opt(p.id,pieceLabel(p),choices.target)).join(''))+
       '<p class="br-sub">분대까지 최단 거리 '+dist.toFixed(1)+'″ · 사거리 '+range+' · A '+weapon.attacks+' · S '+weapon.strength+
       ' · AP '+weapon.ap+' · D '+weapon.damage+'</p>'+
-      (weapon.range?renderShooterSight(state,shooters,target):'')+
+      (weapon.range?renderShooterSight(state,shooters,target,weapon):'')+
       (weapon.range?'<label><input data-field="cover" type="checkbox"'+(choices.cover?' checked':'')+'> 표적 분대에 엄폐 적용</label>':'')+
       detail('mods','무기 및 분대 보정',row(number('hitMod','명중 보정',-1,1,choices.hitMod)+number('woundMod','상처 보정',-1,1,choices.woundMod)+number('extra','추가 공격',0,30,choices.extra))+
         '<label><input type="checkbox" data-field="lethal"'+(choices.lethal?' checked':'')+'>치명적 명중 (Lethal Hits)</label>')+
@@ -222,7 +232,7 @@ export function mountRules(container,api) {
         row(btn('lock','분대 전체 선언 확정',cannotLock)+btn('cancel-plan','선언 취소')));
     }
     if(plan.attackRoll){
-      const event=inspectAttackRoll(state,all);
+      const event=inspectAttackRoll(state,api.getPieces());
       if(!event)return chunk(header,'진행 중인 공격 기록을 확인하세요.');
       const who=esc(teams[event.team])+' · '+esc(unitLabel(all.find(p=>groupId(state,p)===event.unit)));
       const names=ids=>ids.map(id=>pieceLabel(getPiece(id))).join(', ');
@@ -244,14 +254,26 @@ export function mountRules(container,api) {
           select('attack-model',title,event.choices.map((id,i)=>opt(id??'',id?pieceLabel(getPiece(id)):'정밀 배정 생략',event.choices[0]??'')).join(''))+
           btn('packet-select','배정 확정');
       }
-      return chunk(header,'<p>'+who+'</p>'+body+(state.last?'<p class="br-latest">'+esc(state.last)+'</p>':''));
+      const r=plan.rows[event.packet.index],w=getProfile(getPiece(r.actor)).weapons[r.weapon];
+      const skillLabel=shootingSkillLabel(w,event.packet.skill,event.packet.plunging);
+      return chunk(header,'<p>'+who+(skillLabel?' · '+skillLabel:'')+'</p>'+body+(state.last?'<p class="br-latest">'+esc(state.last)+'</p>':''));
     }
-    const groups=attackPackets(state,all);
+    const groups=attackPackets(state,api.getPieces());
     const rolled=plan.precisionRoll;
-    return chunk(header,'<p>동일 판정은 함께 굴립니다. 한 표적을 골랐다면 그 표적의 남은 공격부터 해결하세요.</p>'+
+    const rechecks=plan.rows.map((r,i)=>{
+      const targets=plungingSightCandidates(state,api.getPieces(),i);
+      if(!targets.length)return '';
+      const fieldName='plunge-target-'+i;
+      return '<p>'+esc(getPiece(r.actor).name)+'에게 보이던 적이 제거됐습니다. 같은 분대의 다른 모델이 보이면 고지 사격을 다시 적용할 수 있습니다.</p>'+
+        select(fieldName,'시야를 확인할 생존 모델',targets.map(p=>opt(p.id,pieceLabel(p),choices[fieldName])).join(''))+
+        row(btn('plunge-view-'+i,'사수 시점')+btn('plunge-confirm-'+i,'보임 · 고지 사격 적용'));
+    }).join('');
+    return chunk(header,rechecks+'<p>동일 판정은 함께 굴립니다. 한 표적을 골랐다면 그 표적의 남은 공격부터 해결하세요.</p>'+
       groups.map(p=>{
         const r=plan.rows[p.index],defenders=living(state).filter(t=>groupId(state,t)===p.target);
-        const label=unitLabel(getPiece(r.preferred))+' · '+[...p.names].join(' / ')+' × '+p.indices.length;
+        const w=getProfile(getPiece(r.actor)).weapons[r.weapon];
+        const skillLabel=shootingSkillLabel(w,p.skill,p.plunging);
+        const label=unitLabel(getPiece(r.preferred))+' · '+[...p.names].join(' / ')+' × '+p.indices.length+(skillLabel?' · '+skillLabel:'');
         const pref=defenders.some(t=>t.id===choices['allocate-'+p.index])?choices['allocate-'+p.index]:r.preferred;
         let precision='';
         if(rolled){
@@ -595,6 +617,16 @@ export function mountRules(container,api) {
       return;
     }
     const actor=getPiece(choices.fighter);
+    if(action.startsWith('plunge-view-')||action.startsWith('plunge-confirm-')){
+      const index=Number(action.split('-').at(-1)),target=field('plunge-target-'+index)?.value;
+      const pieces=api.getPieces();
+      if(!plungingSightCandidates(state,pieces,index).some(p=>p.id===target))return;
+      const shooter=state.declaration.rows[index].actor;
+      if(action.startsWith('plunge-view-'))return api.inspectSight?.(shooter,target);
+      const next=confirmPlungingSight(state,pieces,index,target);
+      if(next)return commit(next,getPiece(shooter).name+' → '+getPiece(target).name+' · 고지 사격 시야 재확인');
+      return;
+    }
     if(action==='inspect-sight'||action==='shot-sight'){
       if(state.step!==2||state.status!=='playing'||!actor||state.declaration?.locked)return;
       const {shooter,target,status}=button.dataset,from=getPiece(shooter),to=getPiece(target);
@@ -755,8 +787,8 @@ export function mountRules(container,api) {
       const choice=action==='packet-select'?{type:'select',choice:field('attack-model').value||null}:
         action==='packet-reroll'?{type:'reroll',index:Number(field('attack-die').value)}:
         action==='packet-keep'?{type:'keep'}:{type:'begin',preferred};
-      const resolved=action.startsWith('resolve-')?resolvePacket(state,contents(),index,preferred,Math.random,precisionTarget):
-        stepAttackRoll(state,contents(),index,choice);
+      const resolved=action.startsWith('resolve-')?resolvePacket(state,api.getPieces(),index,preferred,Math.random,precisionTarget):
+        stepAttackRoll(state,api.getPieces(),index,choice);
       if(!resolved)return;
       if(resolved.event){
         const e=resolved.event,label=attackRollNames[e.kind];
@@ -957,7 +989,7 @@ export function mountRules(container,api) {
     }
     if(['fighter','weapon','target'].includes(key))choices.allocation='';
     if (['fighter','target'].includes(key))api.exitSight?.();
-    if (['fighter','weapon','target','objective'].includes(key)) refresh();
+    if (['fighter','weapon','target','objective','cover'].includes(key)) refresh();
   }
   function toggle(event) {
     const id=event.target.dataset.detail;

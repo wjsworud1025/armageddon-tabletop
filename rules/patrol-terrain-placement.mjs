@@ -1,5 +1,5 @@
 import * as T from '../vendor/three.module.min.js';
-import {createPiece} from '../assets/pieces.mjs';
+import {pieceGeometry} from '../assets/pieces.mjs';
 
 // Core Rules 13.06, p.48: a non-ground surface must support the model
 // stably with its entire base inside the outer edge. Of these patrols'
@@ -17,7 +17,7 @@ const review=manual=>({error:'',manual});
 const cross=(a,b,p)=>(b.x-a.x)*(p.z-a.z)-(b.z-a.z)*(p.x-a.x);
 
 function cast(t){
-  const geometry=createPiece(T,t).children[0].geometry;
+  const geometry=pieceGeometry(T,t);
   if(casts.has(geometry))return casts.get(geometry);
   const position=geometry.attributes.position,indices=geometry.index.array;
   const vertices=Array.from({length:position.count},(_,i)=>({x:position.getX(i),y:position.getY(i),z:position.getZ(i)}));
@@ -178,6 +178,28 @@ export function patrolTerrainPlacement(p,terrain){
     return review('베이스 전체가 같은 상판 가장자리 안에 있고, 모델이 흔들리지 않으며 장식과 간섭하지 않는지 확인하세요.');
   }
   return fail('이 높이에 베이스 전체를 지지할 상판이 없거나 베이스가 가장자리 밖으로 돌출됩니다.');
+}
+
+// Core Rules 22.05, p.73. The target condition uses the base's ground
+// level, including on the ground floor inside a ruin. A FLY model's display
+// stand or an upper floor somewhere above its head does not raise its base.
+export function patrolGroundLevel(piece){
+  return !!piece && !piece.removed && piece.faction!=='terrain' && (piece.elevation??0)===0;
+}
+
+// The shooter must stand on the qualifying section itself. Casting and
+// testing each terrain piece separately prevents neighbouring balconies or
+// the tallest point of a wall from supplying missing support. For this kit
+// we can certify cast terrain resting on the board. An elevated terrain
+// prop's supporting assembly is not represented by its edited Y alone.
+export function patrolHighGround(piece,terrain){
+  if(!piece || piece.removed || !upperFloorKinds.has(piece.kind) ||
+      !Number.isFinite(piece.elevation) || piece.elevation<3 ||
+      !Number.isFinite(piece.x) || !Number.isFinite(piece.z) ||
+      !(piece.baseWidth>0) || !(piece.baseDepth>0))return false;
+  const y=piece.elevation,sites=nearby(piece,terrain);
+  if(sites.some(site=>hitsBase(site,y)))return false;
+  return sites.some(site=>site.ground===0 && supported(site,y));
 }
 
 export function patrolTerrainLevels(p,terrain){

@@ -1,6 +1,6 @@
 import * as T from 'three';
 import {photoCamera} from './photo-camera.mjs';
-import {createPiece} from './assets/pieces.mjs';
+import {createPiece,pieceGeometry} from './assets/pieces.mjs';
 import {sightHiddenPieces} from './assets/sight-units.mjs';
 import {sightObstructions} from './assets/sight-line.mjs';
 import {createSightPicker} from './assets/sight-picker.mjs';
@@ -88,6 +88,8 @@ export async function buildScene(canvas,api) {
   for(let i=0;i<game.pieces.length;i++){
     const p=game.pieces[i];
     const obj=(localArt?await loadReconstruction(T,p):null) ?? createPiece(T,p);
+    // The photo build also needs the terrain surface used for placement and combat.
+    if(p.faction==='terrain'&&obj.userData.reconstruction)pieceGeometry(T,p);
     obj.userData.pieceId=p.id;
     objects.set(p.id,obj);scene.add(obj);
     if(i%5===0){api.progress(i,game.pieces.length);await new Promise(requestAnimationFrame)}

@@ -127,9 +127,30 @@ function selection(){
   $('piece-spec').textContent=factionNames[p.faction]+' · '+(p.faction==='terrain'?'지면 점유 폭':'베이스')+' '+Math.round(p.baseWidth*25.4)+' × '+Math.round(p.baseDepth*25.4)+' mm';
   const inReserve=Object.values(game.rules?.reserves??{}).some(ids=>ids.includes(p.id));
   $('elevation').value=p.elevation||0;
+  showFloorLevels(p);
   $('remove').disabled=inReserve||!!(game.rules?.reinforcePlan||game.rules?.shootingReaction||game.rules?.reactionPlan||pendingAttack());
   $('remove').textContent=inReserve?(p.removed?'예비대 대기 중':'예비대 배치 중'):p.removed?'전장 복귀':'전장에서 제거';
   $('focus').disabled=!!p.removed;
+}
+function showFloorLevels(p){
+  const controls=$('floor-levels'),r=game.rules;
+  controls.replaceChildren();
+  controls.hidden=true;
+  if(game.training||p.removed||p.faction==='terrain')return;
+  if(officialPreparing(r)&&!pendingPatrolPiece(r,p))return;
+  if(r?.status==='playing'&&![r.movePlan,r.chargePlan,r.fightPlan,r.reactionPlan,r.reinforcePlan]
+    .some(plan=>Object.hasOwn(plan?.origins??{},p.id)))return;
+  const levels=patrolTerrainLevels(p,game.pieces);
+  if(levels.length<2)return;
+  controls.hidden=false;
+  for(const h of levels){
+    const b=document.createElement('button');
+    b.type='button';b.dataset.floorHeight=String(h);
+    b.textContent=h?h.toFixed(2)+'″ 상판으로':'지면으로';
+    b.disabled=Math.abs(h-(p.elevation||0))<.001;
+    b.onclick=()=>editPose(p,{elevation:h},p.name+' · '+(h?h.toFixed(2)+'″ 상판':'지면')+'으로 이동');
+    controls.append(b);
+  }
 }
 function roster(){
   const list=$('army-list'),initialized=list.children.length>0,opened=new Set([...list.querySelectorAll('details[open]')].map(d=>d.dataset.key));

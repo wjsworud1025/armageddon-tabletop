@@ -140,7 +140,7 @@ function bake(T, group) {
   return combined;
 }
 
-export function castPiece(T, item, draw) {
+export function castGeometry(T, item, draw) {
   const lib = resources(T);
   const key = [item.kind,item.variant ?? 0,item.baseWidth,item.baseDepth].join('/');
   if (!lib.finished.has(key)) {
@@ -148,7 +148,12 @@ export function castPiece(T, item, draw) {
     draw(sculpt);
     lib.finished.set(key,bake(T,sculpt.group));
   }
-  const group = new T.Group(), mesh = new T.Mesh(lib.finished.get(key),lib.material);
+  return lib.finished.get(key);
+}
+
+export function castPiece(T, item, draw) {
+  const geometry=castGeometry(T,item,draw);
+  const group = new T.Group(), mesh = new T.Mesh(geometry,resources(T).material);
   group.name = item.kind;
   mesh.castShadow = true;
   mesh.receiveShadow = true;

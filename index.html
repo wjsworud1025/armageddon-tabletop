@@ -29,7 +29,9 @@
     <aside><nav aria-label="전장 패널"><button data-tab="roster" aria-selected="true">편성</button><button data-tab="battle" aria-selected="false">대전</button><button data-tab="history" aria-selected="false">기록</button></nav>
       <section id="roster" class="pane">
         <div class="section-heading"><h2>전장 편성</h2><span id="total"></span></div>
-        <div id="selection" hidden><small>선택한 기물</small><h3 id="piece-name"></h3><p id="piece-spec"></p><div class="row"><button id="focus">가까이 보기</button><button id="rotate">15° 회전</button><button id="remove">제거</button></div><label class="alt">바닥에서 높이 <input id="elevation" type="number" step="0.25" min="0" max="20" value="0"> 인치</label></div>
+        <div id="selection" hidden><small>선택한 기물</small><h3 id="piece-name"></h3><p id="piece-spec"></p><div class="row"><button id="focus">가까이 보기</button><button id="rotate">15° 회전</button><button id="remove">제거</button></div><label class="alt">바닥에서 높이 <input id="elevation" type="number" step="0.01" min="0" max="20" value="0"> 인치</label>
+          <div id="floor-levels" class="row" role="group" aria-label="현재 위치의 지형 높이" hidden></div>
+        </div>
         <div id="studio-tools" hidden><button id="studio-view">실물 360° 보기</button></div>
         <div id="sight-tools" hidden><button id="sight">이 기물에서 시선 확인</button></div>
         <label class="squad-control"><input type="checkbox" id="squad"> 분대 단위로 이동</label>

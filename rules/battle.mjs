@@ -169,13 +169,22 @@ export function allocationGroups(defenders,weapon,preferred,precisionTarget){
       || Number(b.id===preferred)-Number(a.id===preferred)));
 }
 
-export function attackThresholds(state,defenders,weapon,{cover,hitMod,woundMod,ignorePenalties}){
+// BS/WS characteristic modifiers apply together before their 2+..6+ limits.
+// A separate, capped modifier is then applied to the die in attackThresholds.
+export function attackSkill(weapon,{cover=false,plunging=false,ignorePenalties=false}={}){
+  if(weapon.torrent||!weapon.skill)return weapon.skill;
+  const ranged=weapon.range>0;
+  const covered=ranged&&cover&&!ignorePenalties&&!weapon.psychic;
+  return clamp(weapon.skill+Number(covered)-Number(ranged&&plunging),2,6);
+}
+
+export function attackThresholds(state,defenders,weapon,{cover,plunging=false,hitMod,woundMod,ignorePenalties}){
   const bodyguards=defenders.filter(p=>!character(p));
   const toughness=Math.max(...(bodyguards.length ? bodyguards : defenders).map(p=>p.profile.toughness));
   if (weapon.strength>toughness && hasWaaagh(state,defenders[0])) woundMod-=1;
-  if (ignorePenalties || weapon.psychic) {cover=false;hitMod=Math.max(0,hitMod);}
+  if (ignorePenalties || weapon.psychic) hitMod=Math.max(0,hitMod);
   if (ignorePenalties) woundMod=Math.max(0,woundMod);
-  const hitTarget=weapon.skill + Number(cover && weapon.range>0);
+  const hitTarget=attackSkill(weapon,{cover,plunging,ignorePenalties});
   const woundTarget=woundThreshold(weapon.strength,toughness);
   const anti=weapon.antiVehicle&&defenders.some(p=>p.kind==='landSpeeder');
   const critical=d=>d===6||!!anti&&d>=weapon.antiVehicle;
@@ -186,7 +195,7 @@ export function attackThresholds(state,defenders,weapon,{cover,hitMod,woundMod,i
 // Resolve a single weapon profile. The defender chooses the order of models with
 // otherwise identical allocation priority. Each damage roll belongs to one attack.
 export function resolveAttack({weapon,targets,preferred,precisionTarget=null,awaitAllocation=false,rolled=null,state,distance,cover=false,hitMod=0,
-  woundMod=0,extraAttacks=0,copies=1,attackCount=null,lethal=false,sustained=false,ignorePenalties=false,random=Math.random}) {
+  woundMod=0,extraAttacks=0,copies=1,attackCount=null,lethal=false,sustained=false,ignorePenalties=false,plunging=false,random=Math.random}) {
   const living=targets.filter(p=>currentHP(state,p)>0);
   if (!living.length) throw new Error('생존한 표적이 없습니다.');
   const inRange=weapon.range===0 || distance<=weapon.range;
@@ -198,7 +207,7 @@ export function resolveAttack({weapon,targets,preferred,precisionTarget=null,awa
   let count=attackCount??0;
   if(attackCount===null)for(let i=0;i<copies;i++) count+=diceValue(weapon.attacks,random)+bonus;
   const defenders = living.map(p=>({...p,profile:modelProfile(state,p),hp:currentHP(state,p)}));
-  const required=attackThresholds(state,defenders,weapon,{cover,hitMod,woundMod,ignorePenalties});
+  const required=attackThresholds(state,defenders,weapon,{cover,plunging,hitMod,woundMod,ignorePenalties});
   const hitDice=rolled?.hitDice??[],woundDice=rolled?.woundDice??[],saves=[],damage=[];
   let hits=rolled?.hits??0,wounds=rolled?.wounds??0,devastating=rolled?.devastating??0;
   const woundOnce=autoWound=>{

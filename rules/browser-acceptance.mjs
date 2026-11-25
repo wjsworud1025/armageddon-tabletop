@@ -5,7 +5,7 @@ import {once} from 'node:events';
 import {spawn} from 'node:child_process';
 import {createServer} from 'node:http';
 import {existsSync,readFileSync,mkdtempSync} from 'node:fs';
-import {readFile} from 'node:fs/promises';
+import {mkdir,readFile,writeFile} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {resolve,join,dirname,extname,sep} from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -22,6 +22,7 @@ import {checkTrainingFour} from './browser-training-four.mjs';
 import {checkPatrolSetup} from './browser-patrol-setup.mjs';
 import {checkRuinSight} from '../tests/browser-ruin-sight.mjs';
 import {checkShooterSight,sightButton,inspectButton} from '../tests/browser-shooter-sight.mjs';
+import {checkPlungingFire} from '../tests/browser-plunging-fire.mjs';
 
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const server=createServer(async(req,res)=>{
@@ -90,6 +91,13 @@ try {
   console.log('Passed both surface picks through the ruin window and into its crossbar');
   await checkShooterSight(trainingTools);
   console.log('Passed individual sight records, unit range, declaration locks and persistence');
+  await checkPlungingFire({...trainingTools,screenshot:async name=>{
+    const folder=join(root,'.build','qa',localArt?'browser-studio':'browser-public');
+    await mkdir(folder,{recursive:true});
+    const {data}=await send('Page.captureScreenshot',{format:'png'});
+    await writeFile(join(folder,name),Buffer.from(data,'base64'));
+  }});
+  console.log('Passed upper-floor and ground shooters, locked BS packets, and hit-roll outcomes');
   await checkPatrolSetup(trainingTools);
   console.log('Passed the official mission sequence, private formations, deployment and separate roll-offs');
   await checkTraining(trainingTools);
