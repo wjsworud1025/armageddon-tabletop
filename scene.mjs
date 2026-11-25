@@ -7,7 +7,8 @@ import {studioScene} from './studio-scene.mjs';
 import {loadReconstruction} from './reconstruction/mesh.mjs';
 import {loadWallSurvey} from './assets/wall-relief.mjs';
 import {fieldTexture} from './media.mjs';
-import {baseDistance,translateFormation} from './state.mjs';
+import {translateFormation} from './state.mjs';
+import {measureFootprints} from './ruler.mjs';
 
 const up = new T.Vector3(0,1,0);
 const floor = new T.Plane(up,0);
@@ -162,12 +163,14 @@ export async function buildScene(canvas,api) {
     if(dragging){a=gesture.start;b=lookup(gesture.id)}
     label.hidden=!a||!b;tape.visible=!!a&&!!b;
     if(!a||!b)return;
-    const pa=new T.Vector3(a.x,(a.elevation||0)+.22,a.z),pb=new T.Vector3(b.x,(b.elevation||0)+.22,b.z);
+    const measured=dragging?{from:a,to:b,distance:gesture.distance??0}:measureFootprints(a,b);
+    const position=p=>new T.Vector3(p.x,(p.elevation||0)+.06,p.z);
+    const pa=position(measured.from),pb=position(measured.to);
     tape.geometry.dispose();tape.geometry=new T.BufferGeometry().setFromPoints([pa,pb]);
     const projected=pa.clone().lerp(pb,.5).project(camera);
     label.style.left=(projected.x*.5+.5)*canvas.clientWidth+'px';label.style.top=(.5-projected.y*.5)*canvas.clientHeight+'px';
-    const dist=a.id&&b.id?Math.hypot(baseDistance(a,b),(a.elevation||0)-(b.elevation||0)):pa.distanceTo(pb);
-    label.textContent=(dragging?gesture.distance??0:dist).toFixed(2)+'″ '+(dragging?'이동':a.id&&b.id?'베이스 간격':'지점 거리');
+    const kind=dragging?'이동':a.id&&b.id?'베이스 간격':a.id||b.id?'베이스–지점':'지점 거리';
+    label.textContent=measured.distance.toFixed(2)+'″ '+kind;
   }
   function start(e){
     if(gesture||![0,1,2].includes(e.button))return;

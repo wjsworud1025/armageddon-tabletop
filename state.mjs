@@ -1,4 +1,5 @@
 import {validateRulesState} from './rules/validate.mjs';
+import {measureFootprints} from './ruler.mjs';
 
 const clamp = (n, low, high) => Math.max(low, Math.min(high, n));
 const finite = Number.isFinite;
@@ -11,29 +12,8 @@ function support(piece, nx, nz) {
   return piece.faction === 'terrain' ? Math.abs(u) + Math.abs(v) : Math.hypot(u, v);
 }
 
-// For two convex footprints the largest gap on a separating axis is their
-// Euclidean distance. Refine the best sampled axis including box-face normals.
 export function baseDistance(a, b) {
-  const dx = b.x - a.x, dz = b.z - a.z;
-  const gap = angle => {
-    const x = Math.cos(angle), z = Math.sin(angle);
-    return dx * x + dz * z - support(a,x,z) - support(b,x,z);
-  };
-  const step = Math.PI / 48;
-  let angle = Math.atan2(dz,dx), best = gap(angle);
-  for (let i = -48; i <= 48; i++) {
-    const axis = i * step, d = gap(axis);
-    if (d > best) { angle = axis; best = d; }
-  }
-  let lo = angle - step, hi = angle + step;
-  for (let i = 0; i < 36; i++) {
-    const left = (2*lo + hi)/3, right = (lo + 2*hi)/3;
-    if (gap(left) < gap(right)) lo = left; else hi = right;
-  }
-  for (const piece of [a,b]) if (piece.faction === 'terrain') {
-    for (let i = 0; i < 4; i++) best = Math.max(best, gap(-piece.yaw + i*Math.PI/2));
-  }
-  return Math.max(0, best, gap((lo+hi)/2));
+  return measureFootprints(a,b).horizontal;
 }
 
 export function place(piece, x, z, board) {
