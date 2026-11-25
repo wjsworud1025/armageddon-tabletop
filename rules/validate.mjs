@@ -3,6 +3,8 @@ import {profiles,getProfile,unitId} from './profiles.mjs';
 import {validFightSequence} from '../fight-sequence.mjs';
 import {doctrines,enhancements,tactics,effectWeapon} from './patrol.mjs';
 import {canCommandReroll} from './command-reroll.mjs';
+import {validatePatrolSetup,patrolSetupView} from './patrol-setup.mjs';
+import {validPatrolFormations} from './patrol-formations.mjs';
 
 const boolean = value => typeof value === 'boolean';
 const string = value => typeof value === 'string';
@@ -87,14 +89,58 @@ const battle=fields({
   shootingReaction:nullable(reactionWindow),reactionPlan:nullable(fields(reactionFields,Object.keys(reactionFields))),
   reinforcePlan:nullable(fields({unit:group,mode:oneOf(['edge','deep-strike']),origins:map(model,pose)},['unit','mode','origins'])),
   reserves:map(group,list(model,46)),patrol,notes:string,mission:string,last:string,
-  deployment:fields({defender:team,next:team,placed:list(group,12)},['defender','next','placed']),
+  officialSetup:validatePatrolSetup,formations:validPatrolFormations,
+  deployment:fields({defender:team,next:team,placed:list(group,12),pending:group},['defender','next','placed']),
   destroyedUnits:map(group,boolean),lossEvents:list(fields({id:group,faction:team,turn:int(1,40)},['id','faction','turn']),20000)
 },['version','status','first','active','round','rounds','step']);
+
+function officialStateOK(r,records){
+  const f=r.formations,d=r.deployment,s=r.officialSetup;
+  if(!s)return !f&&!d?.pending;
+  const v=patrolSetupView(s),setup=r.status==='setup';
+  if(r.rounds!==5||r.mission!==''||!setup&&(v.stage!=='ready'||r.first!==v.first))return false;
+  if(setup&&(r.round!==1||r.step!==0||r.active!=='marines'||r.first!=='marines'||
+    Object.keys(r.hp??{}).length||Object.keys(r.units??{}).length||
+    !r.cp||!r.vp||r.cp.orks||r.cp.marines||r.vp.orks||r.vp.marines))return false;
+  if(!!f!==!!v.defender||!!d!==s.formationsRevealed||(f?.stage==='revealed')!==s.formationsRevealed)return false;
+  const drafts=s.formationsRevealed?Object.values(f.drafts):[];
+  const attachments=Object.assign({},...drafts.map(x=>x.attachments));
+  const reserved=new Set(drafts.flatMap(x=>x.reserves));
+  const initialGroups=new Map();
+  for(const [id,p] of models){
+    const key=attachments[id]??unitId(p);
+    if(!initialGroups.has(key))initialGroups.set(key,[]);
+    initialGroups.get(key).push(id);
+  }
+  if(setup){
+    if(!r.attachments||!r.reserves||!r.patrol||Object.keys(attachments).length!==Object.keys(r.attachments).length||
+      Object.entries(attachments).some(([k,val])=>r.attachments[k]!==val))return false;
+    if(reserved.size!==Object.keys(r.reserves).length)return false;
+    for(const key of reserved){
+      const expected=initialGroups.get(key),actual=r.reserves[key];
+      if(!expected||!actual||expected.length!==actual.length||!expected.every(id=>actual.includes(id)))return false;
+    }
+    const enhanced=r.patrol.enhanced??{};
+    if(Object.keys(enhanced).length!==drafts.length||drafts.some(x=>enhanced[x.enhancement]!==true))return false;
+    if(records?.some(p=>Boolean(p.removed)!==reserved.has(attachments[p.id]??(models.has(p.id)?unitId(models.get(p.id)):null))))return false;
+  }
+  if(!d)return true;
+  if(d.defender!==v.defender)return false;
+  const left=new Set([...initialGroups.keys()].filter(key=>!reserved.has(key)));
+  let next=d.defender;
+  for(const key of d.placed){
+    if(!left.delete(key)||groupTeam(key)!==next)return false;
+    const other=next==='orks'?'marines':'orks';
+    if([...left].some(k=>groupTeam(k)===other))next=other;
+  }
+  return d.next===next&&s.deploymentComplete===(left.size===0)&&
+    (!d.pending||left.has(d.pending)&&groupTeam(d.pending)===next);
+}
 
 export function validateRulesState(value,pieceRecords=null) {
   if (value==null) return true;
   if (fields({hp},['hp'])(value)) return true;
-  if(!battle(value) || value.round>value.rounds)return false;
+  if(!battle(value) || value.round>value.rounds||!officialStateOK(value,pieceRecords))return false;
   if(value.hazard?.commandDice&&!canCommandReroll(value,value.hazard.unit,groupTeam(value.hazard.unit)))return false;
   const modelGroup=id=>value.attachments?.[id]||unitId(models.get(id));
   const stamp=value.patrol?.spent?.counteroffensive,target=value.patrol?.tactics?.counteroffensive;

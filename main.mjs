@@ -6,6 +6,9 @@ import {createTrainingThreeDeployment,moveTrainingThreeDeployment,trainingThreeD
 import {createTrainingThreeBattle,actTrainingThreeBattle,trainingThreeBattlePieces,trainingThreeBattleView} from './rules/training-three-battle.mjs';
 import {trainingFourBattle,trainingFourDeployment,trainingFourObjectivesView} from './rules/training-four-battle.mjs';
 import {trainingFourDeploymentArea} from './data/training-four-layout.mjs';
+import {officialPreparing,pendingPatrolPiece,visiblePatrolPiece,advanceOfficialSetup} from './rules/official-deployment.mjs';
+import {newPatrolSetup} from './rules/patrol-setup.mjs';
+import {patrolTerrainLevels} from './rules/patrol-terrain-placement.mjs';
 import {mountRules} from './rules/panel.mjs';
 import {baseDistance,place,restore,snapshot,translateFormation} from './state.mjs';
 import {buildScene} from './scene.mjs';
@@ -41,6 +44,11 @@ for(const [team,p] of Object.entries(duelists)){
 }
 const trainingField={width:30,depth:22,surface:'reverse',pieces:structuredClone(template.pieces)};
 function shownTable(){
+  if(!game.training&&officialPreparing(game.rules)){
+    const die=game.rules.officialSetup.layoutDie;
+    const layout=game.layout??(die?{map:'ABC'[Math.floor((die-1)/2)]}:null);
+    return {...game,layout,pieces:game.pieces.map(p=>visiblePatrolPiece(game.rules,p)?p:{...p,removed:true})};
+  }
   if(!game.training)return game;
   if(game.training.scenario>=2){
     if(trainingField.training!==game.training){
@@ -83,7 +91,14 @@ function checkpoint(){past.push(snapshot(game));if(past.length>100)past.shift();
 function piece(id){return game.pieces.find(p=>p.id===id)}
 function persist(){try{localStorage.setItem(storageKey,JSON.stringify(snapshot(game)));$('save-status').textContent='자동 저장됨'}catch{$('save-status').textContent='파일 저장 필요'}}
 function notify(){for(const fn of subscribers)fn()}
-function redraw(){scene?.sync();roster();selection();history();$('undo').disabled=!past.length;$('redo').disabled=!future.length;
+function canRestoreFrom(stack){
+  const target=stack.at(-1);
+  if(!target)return false;
+  const from=game.rules?.formations?.stage,to=target.rules?.formations?.stage;
+  return !(from==='handoff'&&to==='marines'||from==='orks'&&to==='handoff'||from==='revealed'&&to==='orks');
+}
+function redraw(){scene?.sync();roster();selection();history();$('undo').disabled=!canRestoreFrom(past);$('redo').disabled=!canRestoreFrom(future);
+  document.body.classList.toggle('official-preparing',officialPreparing(game.rules)&&!game.training);
   renderTraining();
   for(const side of ['left','right'])$('flip-'+side).setAttribute('aria-pressed',String(game.surface===side||game.surface==='reverse'));
   $('apply-map').disabled=game.rules?.status==='playing';$('map-status').textContent=game.layout?'배치 '+game.layout.map+' · 청색 '+factionNames[game.layout.blue]:'제품 사진 배치';notify()}
@@ -139,7 +154,7 @@ function roster(){
   }
   if(!list.children.length)list.textContent='일치하는 기물이 없습니다.';
 }
-function undo(redo=false){const from=redo?future:past,to=redo?past:future;if(!from.length)return;to.push(snapshot(game));game=restore(template,from.pop());changed()}
+function undo(redo=false){const from=redo?future:past,to=redo?past:future;if(!canRestoreFrom(from))return;to.push(snapshot(game));game=restore(template,from.pop());changed()}
 function setMode(value){mode=value;scene?.setMode(mode);
   for(const id of ['pick','ruler','path'])$(id).setAttribute('aria-pressed',String(id===mode));
   $('route-bar').hidden=mode!=='path';
@@ -184,6 +199,7 @@ function applyMovement(result){
 }
 function editPose(p,delta,message){
   if(game.training)return;
+  if(officialPreparing(game.rules)&&!pendingPatrolPiece(game.rules,p))return;
   if(movingByRules(p)){
     try{applyMovement(proposeTableMotion(p,{[p.id]:[delta]}))}catch(e){toast(e.message);selection()}
   }else mutate(()=>{Object.assign(p,delta);place(p,p.x,p.z,game)},message);
@@ -194,7 +210,7 @@ function rotate(){
 }
 function pendingAttack(){return game.rules?.declaration?.attackRoll||game.rules?.declaration?.precisionRoll}
 function remove(id,removed){const p=piece(id);
-  if(game.training)return;
+  if(game.training||officialPreparing(game.rules))return;
   if(pendingAttack()){toast('진행 중인 공격의 피해 배정을 먼저 마치세요.');return}
   if(game.rules?.shootingReaction||game.rules?.reactionPlan){toast('현재 사격 반응을 먼저 마치세요.');return}
   if(game.rules?.reinforcePlan || p&&game.rules?.reserves?.[groupId(game.rules,p)]?.includes(id)){
@@ -399,6 +415,7 @@ function renderFieldBattle(state){
   el('last').textContent=state.rolls.length?describeSecondRoll(state.rolls.at(-1)):'';
 }
 function configureLayout(map,blue){
+  if(officialPreparing(game.rules))return false;
   if(game.rules?.status==='playing'){toast('대전 시작 전 배치 단계에서 지도를 적용하세요.');return false}
   const next=structuredClone(game);
   try{applyLayout(next,map,blue)}catch(error){toast(error.message);return false}
@@ -450,6 +467,39 @@ document.addEventListener('keydown',e=>{if(e.target.closest('input,select,textar
   else if(e.key.toLowerCase()==='r')rotate()});
 const api={
   getTable:()=>game,
+  officialCommand(action){
+    let next;
+    if(['official-left','official-right','official-height'].includes(action.act)){
+      const p=piece(active);
+      if(!officialPreparing(game.rules)||!pendingPatrolPiece(game.rules,p))return;
+      if(action.act==='official-height'){
+        const h=Number(action.height);
+        if(patrolTerrainLevels(p,game.pieces.filter(q=>q.faction==='terrain')).includes(h))editPose(p,{elevation:h},p.name+' 배치 높이 조정');
+      }else editPose(p,{yaw:(p.yaw+(action.act==='official-left'?-1:1)*Math.PI/12)%(2*Math.PI)},p.name+' 배치 방향 조정');
+      return;
+    }
+    if(action.act==='official-new'){
+      if(game.training||game.rules&&game.rules.status!=='setup'||officialPreparing(game.rules))return;
+      next=fresh();next.rules={...newBattle(),officialSetup:newPatrolSetup()};
+    }else next=advanceOfficialSetup(game,action);
+    const setup=next.rules.officialSetup;
+    const messages={
+      'official-new':'정식 컴뱃 패트롤 준비',
+      'official-roll-layout':'배치도 주사위 '+setup.layoutDie,
+      'official-roll-role':'공수 대결 · 마린 대 오크 '+(setup.roleRolls.at(-1)||[]).join(' 대 '),
+      'official-attack':'공수 확정','official-defend':'공수 확정','official-place':'분대 배치 확정',
+      'official-roll-first':'선공 대결 · 마린 대 오크 '+(setup.firstRolls.at(-1)||[]).join(' 대 '),
+      'official-start':factionNames[next.rules.first]+' 선공 · 정식 패트롤 5라운드 시작',
+    };
+    active=null;
+    mutate(()=>{game=next},messages[action.act]??'');
+    if(action.act==='official-select'){
+      const lead=next.pieces.find(p=>pendingPatrolPiece(next.rules,p));
+      if(lead)select(lead.id);
+    }else scene?.select(null);
+    if(action.act==='official-new'){reference(false);setMode('pick');scene?.home(true);$('camera').textContent='전시 시점';switchTab('battle')}
+    if(action.act==='official-roll-layout')$('map').value='ABC'[Math.floor((setup.layoutDie-1)/2)];
+  },
   reactionCommand(command,choice){
     const result=command==='start'?beginShootingReaction(game,game.rules.shootingReaction,choice):
       command==='finish'?finishShootingReaction(game):declineShootingReaction(game);
@@ -528,7 +578,8 @@ async function start(){
     appearance:(on,photo)=>{$('appearance').setAttribute('aria-pressed',String(on));$('appearance').textContent=on?(photo?'사진 기물':'회전 사진'):'3D 조형'},
     progress:(i,n)=>$('stage-load').textContent='미니어처 준비 중 · '+i+' / '+n,
     moving:movingGroup,
-    trainingDrag:p=>{const plan=game.training?.plan;
+    canDrag:p=>{if(!game.training)return !officialPreparing(game.rules)||pendingPatrolPiece(game.rules,p);
+      const plan=game.training.plan;
       if(game.training?.phase==='deployment')return p.faction!=='terrain';
       return game.training?.scenario>=2&&plan?.ids.includes(p.id)&&(plan.mode!=='charge'||!!plan.target)},
     route(p,points,drag=false){
@@ -542,6 +593,7 @@ async function start(){
       }
       if(game.training?.scenario>=2)return applyTrainingActions(points.slice(1).map(({x,z})=>({type:'path',id:p.id,x,z})));
       if(game.training)return false;
+      if(officialPreparing(game.rules)&&!pendingPatrolPiece(game.rules,p))return false;
       const group=movingGroup(p).map(m=>({piece:{...m},x:m.x,z:m.z}));let distance=0;
       const paths=Object.fromEntries(group.map(m=>[m.piece.id,[]]));
       for(let i=1;i<points.length;i++){

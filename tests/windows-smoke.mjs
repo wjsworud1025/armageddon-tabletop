@@ -9,6 +9,7 @@ import {fileURLToPath} from 'node:url';
 import assert from 'node:assert/strict';
 import {createTable} from '../data/catalog.mjs';
 import {baseDistance} from '../state.mjs';
+import {checkPatrolSetup} from '../rules/browser-patrol-setup.mjs';
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 // --public-exe <file> exercises a clean distribution using the same native host.
 const publicFlag=process.argv.indexOf('--public-exe');
@@ -172,6 +173,14 @@ try{
   assert.match(await js('document.querySelector("#training-four-objectives strong").textContent'),/오크 15/);
   await screenshot('04-handbook-objectives.png');
   await click('#training-four-exit');assert.deepEqual(await state(),beforeSecond);
+  await checkPatrolSetup({save:beforeSecond,click,state,js,
+    async upload(save){
+      await js('(()=>{const input=document.querySelector("#file"),dt=new DataTransfer();dt.items.add(new File(['+JSON.stringify(JSON.stringify(save))+'],"patrol.json",{type:"application/json"}));input.files=dt.files;input.dispatchEvent(new Event("change",{bubbles:true}))})()');
+      await until(()=>js('document.querySelector("#file").value===""'));
+    },
+    async reload(){await send('Page.reload');await until(()=>js('!!window.tabletopView'));await click('[data-tab=battle]')},
+    onDeployment:()=>screenshot('04-official-deployment.png'),
+  });
   await js('document.querySelector("#deployment").open=true');
   const beforePreview=await state(),diagrams=new Set();
   for(const map of ['B','C','A']){

@@ -71,14 +71,14 @@ export function objectiveAreas(game){
     home:side==='blue'?game.layout.blue:side==='red'?(game.layout.blue==='marines'?'orks':'marines'):null,
     members:game.pieces.filter(p=>p.faction!=='terrain'&&!p.removed&&overlapsArea(p,polygon)).map(p=>p.id)}));
 }
-function fitsZone(p,zone){
+function fitsZone(p,zone,margin=0){
   if(!inside(p.x,p.z,zone))return false;
   // Exact support of the rotated ellipse against each convex half plane.
   const c=Math.cos(p.yaw),s=Math.sin(p.yaw);
   return zone.every(([a,b],i)=>{
     const [x,z]=zone[(i+1)%zone.length],dx=x-a,dz=z-b;
     const support=Math.hypot((dz*c+dx*s)*p.baseWidth/2,(dz*s-dx*c)*p.baseDepth/2);
-    return Math.abs(dz*(p.x-a)-dx*(p.z-b))>=support+.02;
+    return Math.abs(dz*(p.x-a)-dx*(p.z-b))>=support+margin-1e-8;
   });
 }
 export function validDeployment(game,p){
@@ -126,7 +126,7 @@ function arrange(team,zone,yaw,terrain,rules){
     for(let row=0,z=bottom+.2;z<top;row++,z+=.34){
       for(let x=left+.2+(row%2)*.17;x<right;x+=.34){
         const pose={...p,x,z,yaw},q=footprint(pose);
-        if(fitsZone(pose,zone)&&terrain.every(o=>clear(q,o)))choices.push(q);
+        if(fitsZone(pose,zone,.02)&&terrain.every(o=>clear(q,o)))choices.push(q);
       }
     }
     spots.set(size,choices);

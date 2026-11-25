@@ -21,6 +21,10 @@
 
 일부 채록본의 값이 다르다. 재현 기준은 2026년 10월 앱 2.7.1로 표기된 판본이다. 랜드 스피더 멀티 멜타 S10, 그레친 기본 OC 1, 커스텀 슈타 놉 분대 보이의 슈타에는 속사 보너스가 없는 것으로 입력했다. 마린 인터세서의 데이터시트 OC 3에 충격이 없으면 진영 규칙의 +1을 적용한다. 6월 발행된 [아마겟돈 마린](https://www.warhammer-community.com/en-gb/articles/nnyskcbr/new40k-rules-space-marines-datasheets-from-armageddon/) 및 [아마겟돈 오크](https://www.warhammer-community.com/en-gb/articles/rtgp72pg/new40k-rules-ork-datasheets-from-armageddon/) 카드는 일반 게임 프로필로서 패트롤 프로필과 차이가 있다.
 
+**뱅가드의 블레이드 마스터(뱅가드 · 돌격 방어)** 강화는 7월 상자의 독일어 참조표 *Klingenmeister*를 따른다. 이번 턴에 돌격한 적이 근접전 단계에서 강화된 뱅가드를 공격하면 그 공격의 상처 굴림에 −1을 적용한다. 같은 적 분대가 공격을 나눠 다른 표적에 배정하면 그쪽은 보통대로 굴린다. 적이 다른 분대에 돌격을 마친 뒤 뱅가드가 영웅적 개입으로 합류한 경우에도 뱅가드에 배정한 공격은 보호를 받는다. [7월 동봉 참조표 직접 촬영, 왼쪽 아래](https://www.brueckenkopf-online.com/wp-content/uploads/2026/07/Brueckenkopf-Online_Unboxing-Warhammer-40.000-%E2%80%93-Starterset-11.-Edition-43-e1785095029772.jpeg)
+
+10월 앱 2.7.1 영문 전사본은 적 분대가 뱅가드와 교전한 채 돌격을 마치는 순간을 발동 조건으로 삼고, 발동한 적 분대의 모든 근접 공격에 턴 종료까지 −1을 적용한다고 적는다. 두 판본은 돌격 종료 후 뱅가드가 합류하거나 적이 근접 공격을 여러 표적으로 나눌 때 판정이 달라진다. [앱 패트롤 전사본의 Blade Masters](https://wahapedia.ru/wh40k11ed_cp/factions/assault-force/#Blade-Masters)
+
 ## 플레이 범위
 
 턴 종료에는 양쪽 진영의 응집도를 다시 검사한다. 사상자 등으로 응집도가 깨진 분대의 플레이어가 생존 모델을 하나씩 제거한다. 응집도 회복 후 최종 위치로 임무 점수를 계산한다. [11판 기본 규칙 03.03 및 턴 종료 단계](https://assets.warhammer-community.com/eng_01-06_warhammer40k_new40k_core_rules-was6fbu1ix-hfewhmxyiy.pdf)

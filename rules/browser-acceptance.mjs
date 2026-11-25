@@ -19,6 +19,7 @@ import {checkTraining} from './browser-training.mjs';
 import {checkTrainingTwo} from './browser-training-two.mjs';
 import {checkTrainingThree} from './browser-training-three.mjs';
 import {checkTrainingFour} from './browser-training-four.mjs';
+import {checkPatrolSetup} from './browser-patrol-setup.mjs';
 
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const server=createServer(async(req,res)=>{
@@ -83,6 +84,8 @@ try {
   const trainingTools={save,upload,click,state,js,send,reload:async()=>{
     await send('Page.reload');await until(()=>js('!!window.tabletopView'));await click('[data-tab=battle]');
   }};
+  await checkPatrolSetup(trainingTools);
+  console.log('Passed the official mission sequence, private formations, deployment and separate roll-offs');
   await checkTraining(trainingTools);
   console.log('Passed the handbook duel, both winners, save import, reload and table restoration');
   await checkTrainingTwo(trainingTools);

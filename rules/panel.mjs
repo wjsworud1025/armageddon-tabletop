@@ -1,4 +1,4 @@
-import {getProfile} from './profiles.mjs';
+import {getProfile,unitId} from './profiles.mjs';
 import {brokenFormations,removeForCoherency} from './end-turn.mjs';
 import {chargeActions,chargeControls} from './charge-controls.mjs';
 import {createFightControls} from './fight-controls.mjs';
@@ -18,6 +18,10 @@ import {newBattle,startBattle,advance,opposite,steps,teams,roll,currentHP,unitMe
 import {draftRestriction,appendDeclaration,lockDeclaration,attackPackets,resolvePacket,chooseSuppression} from './declarations.mjs';
 import {doctrines,enhancements,tactics,selectOrder,useTactic,inDoctrine,hasWaaagh,effectWeapon} from './patrol.mjs';
 import {patrolMissions,recordLosses,objectiveSnapshot,missionAward} from './missions.mjs';
+import {officialPreparing,remainingPatrolUnits,patrolPlacementError} from './official-deployment.mjs';
+import {patrolSetupView} from './patrol-setup.mjs';
+import {patrolFormationPanel} from './patrol-formations-ui.mjs';
+import {patrolTerrainLevels} from './patrol-terrain-placement.mjs';
 
 const sourcePatrol='https://www.warhammer-community.com/en-gb/articles/2akzkx92/combat-patrol-is-now-live-in-your-app/';
 const sourceCore='https://assets.warhammer-community.com/eng_01-06_warhammer40k_new40k_core_rules-was6fbu1ix-hfewhmxyiy.pdf';
@@ -351,6 +355,10 @@ export function mountRules(container,api) {
   function refresh() {
     if (writing) return;
     const state=read();
+    if(officialPreparing(state)){
+      root.innerHTML=renderOfficialSetup(state)+(feedback?'<p aria-live="polite" class="br-latest">'+esc(feedback)+'</p>':'');
+      return;
+    }
     const selected=api.getSelection();
     if ((selected?.id||'')!==selectedId) {
       selectedId=selected?.id||'';
@@ -365,7 +373,8 @@ export function mountRules(container,api) {
     const selector=select('fighter','현재 모델',opt('','미니어처 선택',actor?.id||'')+all.map(p=>opt(p.id,pieceLabel(p)+(reservedIds.has(p.id)?' (예비대)':p.removed?' (제거됨)':''),actor?.id||'')).join(''));
     let top='';
     if (state.status==='setup') {
-      top=chunk('로컬 2인 대전','<p>컴뱃 패트롤은 5라운드입니다. 전장 배치도를 고르고 수비 측부터 분대를 번갈아 배치하세요.</p>'+
+      top=chunk('정식 컴뱃 패트롤','<p>44 × 30인치 전장에서 배치도와 공수를 굴리고, 양측 편성을 공개한 뒤 5라운드를 진행합니다.</p>'+btn('official-new','정식 패트롤 준비 시작'))+
+        chunk('맞춤 대전','<p>선공과 라운드 수를 직접 정합니다.</p>'+
         row(select('first','선공',opt('marines',teams.marines,choices.first)+opt('orks',teams.orks,choices.first)+opt('roll','주사위 대결',choices.first))+
           number('rounds','라운드 수',1,20,choices.rounds))+textField('mission','자유 임무 이름 (공란은 패트롤)',state.mission)+btn('start','대전 시작'));
       const d=state.deployment;
@@ -494,10 +503,60 @@ export function mountRules(container,api) {
     do {a=roll();b=roll();} while(a===b);
     return {first:a>b?'marines':'orks',text:' · 선공 굴림 '+a+' 대 '+b};
   }
+  function renderOfficialSetup(state){
+    const s=state.officialSetup,v=patrolSetupView(s);
+    const rollList=pairs=>pairs.map(([m,o])=>'마린 '+m+' · 오크 '+o+(m===o?' (동률)':'')).join('<br>');
+    const record=[
+      s.layoutDie!=null?'배치도 '+v.map+' · D6 '+s.layoutDie:'',
+      s.roleRolls.length?'공수 대결<br>'+rollList(s.roleRolls):'',
+      v.defender?'수비 '+teams[v.defender]+' · 공격 '+teams[v.attacker]:'',
+      s.firstRolls.length?'선공 대결<br>'+rollList(s.firstRolls):'',
+    ].filter(Boolean).join('<br>');
+    let body='';
+    switch(v.stage){
+      case 'layout':body=btn('official-roll-layout','배치도 결정 · D6');break;
+      case 'role-roll':body='<p>청색 방패가 수비 구역입니다. 양측이 각자 D6을 굴립니다.</p>'+btn('official-roll-role',s.roleRolls.length?'공수 동률 · 다시 굴리기':'공수 주사위 대결');break;
+      case 'role-choice':body='<p>'+teams[v.roleWinner]+' 플레이어가 맡을 역할을 고르세요.</p>'+row(btn('official-attack','공격 선택')+btn('official-defend','수비 선택'));break;
+      case 'formations':body=patrolFormationPanel(state,contents());break;
+      case 'deployment':{
+        const d=state.deployment,all=contents(),rest=remainingPatrolUnits(api.getTable());
+        const choices=rest.filter(key=>all.some(p=>groupId(state,p)===key&&p.faction===d.next));
+        const buttons=choices.map(key=>{
+          const member=all.find(p=>unitId(p)===key)||all.find(p=>groupId(state,p)===key);
+          return '<button type="button" data-act="official-select" data-unit="'+esc(key)+'" aria-pressed="'+(key===d.pending)+'">'+esc(unitLabel(member))+'</button>';
+        });
+        body=detail('revealed','공개한 양측 편성',patrolFormationPanel(state,all))+
+          '<p>'+teams[d.next]+' 배치 · 남은 분대 '+rest.length+'개</p>'+row(buttons.join(''));
+        if(d.pending){
+          const error=patrolPlacementError(api.getTable());
+          const p=api.getSelection();
+          if(p&&!p.removed&&p.faction!=='terrain'&&groupId(state,p)===d.pending){
+            const floors=patrolTerrainLevels(p,api.getPieces().filter(q=>q.faction==='terrain'));
+            body+='<p>'+esc(p.name)+' · 높이 '+(p.elevation||0).toFixed(2)+'″</p>'+row(
+              btn('official-left','왼쪽 15°')+btn('official-right','오른쪽 15°')+floors.map(h=>
+                '<button type="button" data-act="official-height" data-height="'+h+'"'+(Math.abs((p.elevation||0)-h)<.001?' disabled':'')+'>'+esc(h?h.toFixed(2)+'″ 층으로':'지면으로')+'</button>').join(''));
+          }
+          body+='<p>'+esc(error||'모델을 끌어 배치하세요. 난간과 돌출부에 실제 조형이 걸리지 않는지 확인하세요.')+'</p>'+btn('official-place','이 분대 배치 확정',!!error);
+        }
+        break;
+      }
+      case 'first-roll':body='<p>양측의 배치가 끝났습니다. 높은 눈이 나온 진영이 첫 턴을 진행합니다.</p>'+btn('official-roll-first',s.firstRolls.length?'선공 동률 · 다시 굴리기':'선공 주사위 대결');break;
+      case 'ready':body=btn('official-start',teams[v.first]+' 선공 · 5라운드 시작');break;
+    }
+    return chunk('정식 컴뱃 패트롤 준비',(record?'<p class="br-sub">'+record+'</p>':'')+body);
+  }
   function click(event) {
     const action=event.target.closest('button')?.dataset.act;
     if (!action) return;
     const state=read();
+    if(action==='official-new'||officialPreparing(state)){
+      if(action==='official-new'||action.startsWith('official-')||action.startsWith('form-')){
+        feedback='';
+        try{api.officialCommand({...event.target.closest('button').dataset})}
+        catch(error){feedback=error.message;refresh()}
+      }
+      return;
+    }
     const actor=getPiece(choices.fighter);
     if(state.declaration?.attackRoll&&!action.startsWith('packet-'))return;
     if(state.declaration?.precisionRoll&&action!=='resolve-'+state.declaration.precisionRoll.index)return;

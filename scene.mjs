@@ -232,7 +232,7 @@ export async function buildScene(canvas,api) {
     const id=pan||orbit?null:pick(e),g=ground(e);
     gesture={type:pan?'pan':orbit?'orbit':mode==='ruler'?'measure':mode==='sight'?'sight':mode==='path'?'path':id?'move':'orbit',id,g,sx:e.clientX,sy:e.clientY,angle:yaw,pitch,target:target.clone(),offsetX,offsetY,drag:false,pointer:e.pointerId};
     if(id&&mode==='pick'){api.select(id);const p=lookup(id);
-      if(api.game().training&&!api.trainingDrag(p)){gesture.type='orbit'}else{
+      if(!api.canDrag(p)){gesture.type='orbit'}else{
         gesture.start={x:p.x,z:p.z,elevation:p.elevation};gesture.records=api.moving(p).map(piece=>({piece,x:piece.x,z:piece.z}));
       }}
     canvas.setPointerCapture(e.pointerId);e.preventDefault();

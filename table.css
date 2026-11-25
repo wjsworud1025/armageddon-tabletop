@@ -23,3 +23,5 @@ body.training-active :is(#deployment,.faction-books,#rules,[data-tab="roster"],#
 .roster-photo{width:32px;height:36px;object-fit:contain;margin-right:3px}.unit>summary{padding:3px 0}.army[open] .unit:not([open])>summary:after{content:'+'}.models button{display:grid;justify-items:center;gap:2px;min-width:36px;font:10px Consolas,monospace}.models img{width:28px;height:32px;object-fit:contain}
 .faction-books{margin:0 0 15px;border-bottom:1px solid var(--line);padding:0 0 12px;font-size:12px;color:var(--dim)}.faction-books summary{font-weight:700;font-size:14px;cursor:pointer;color:var(--ink)}.faction-books h3{color:var(--ink);font-size:13px;margin:12px 0 5px}.faction-books p{margin-bottom:5px}.faction-books a{color:var(--gold)}
 #studio-tools{margin-bottom:7px}
+.official-preparing :is(#deployment,#training,#training-two,#training-three,#training-four,#reference-toggle,#remove,.board-faces){display:none}
+.official-preparing [data-act="official-select"][aria-pressed="true"]{border-color:var(--gold);color:var(--gold)}

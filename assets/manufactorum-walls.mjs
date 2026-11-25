@@ -112,6 +112,59 @@ function brokenWall(s,name,w,h){
   }
 }
 
+// Return wall of the pipe-and-shrine corner. Coordinates follow its own bay
+// spacing so a ray can pass through the lancet and the fractured end panel.
+export function shrineReturn(s,w,h){
+  const {plate,panel,bar,arch,vent,bolt}=wallTools(s,w,h);
+  plate(iron,[[0,0],[1,0],[1,.18],[.97,.20],[.96,.165],[.875,.184],
+    [.882,.224],[.91,.255],[.946,.293],[.965,.275],[.978,.245],[1,.255],
+    [1,.43],[.78,.43],[.78,.608],[0,.608]],.15);
+  for(const [x,top] of [[.018,.988],[.27,.982],[.32,.966],[.515,.936],[.755,.61]]){
+    panel(iron,x,0,.025,top,0,.17);
+    for(const face of [-1,1]){
+      panel(edge,x+.004,.012,.012,top-.018,face*.087,.037);
+      for(const y of [.046,.42,.6,.79,.965])if(y<top)bolt(x+.009,y,face);
+    }
+  }
+  // The taller corner is a braced frame. The adjacent lancet has three
+  // horizontal glazing bars and a clear sill above the landing.
+  for(const [low,high] of [[.615,.79],[.795,.979]]){
+    bar(iron,[.042,low],[.272,high],0,.052);
+    bar(iron,[.042,high],[.272,low],0,.052);
+  }
+  panel(edge,.018,.978,.317,.022,0,.16);
+  panel(edge,.018,.785,.308,.020,0,.16);
+  panel(edge,0,.597,.784,.024,0,.19);
+  panel(iron,.308,.644,.237,.022,0,.13);
+  panel(iron,.465,.654,.073,.285,0,.155);
+  plate(iron,[[.315,.946],[.33,.978],[.43,.979],[.518,.958],[.548,.921],
+    [.465,.917],[.454,.94],[.426,.956],[.409,.96],[.377,.947],[.34,.917]],.148);
+  for(const y of [.735,.799,.872])panel(edge,.333,y,.148,.010,0,.060);
+
+  // The outer bay is a separately broken casting on a waist-high sill.
+  panel(edge,.78,.421,.22,.019,0,.14);
+  bar(iron,[.79,.434],[.96,.563],0,.046);
+  bar(iron,[.79,.584],[.972,.435],0,.043);
+  plate(iron,[[.956,.428],[.995,.428],[.995,.526],[.944,.596],[.916,.612],
+    [.884,.592],[.921,.569],[.956,.527]],.135);
+  for(const face of [-1,1]){
+    const trim=face>0?brass:oxide;
+    arch(.048,.021,.212,.382,face,edge);
+    arch(.35,.021,.378,.559,face,trim);
+    for(const x of [.062,.17,.804,.91])vent(x,.014,.077,.092,face);
+    if(face>0){
+      arch(.407,.073,.26,.393,face,brass);
+      arch(.469,.145,.13,.20,face,trim);
+      for(const x of [.414,.45,.625,.659])panel(oxide,x,.084,.012,.199,face*.147,.043);
+      const boss=[.538*w,.433*h,.148];
+      s.cylinder(brass,boss,.132,.132,.047,12,[Math.PI/2,0,0]);
+      s.oval(edge,[boss[0],boss[1],.182],[.087,.103,.036]);
+    }else{
+      for(const x of [.404,.566])vent(x,.089,.108,.139,face);
+    }
+  }
+}
+
 export function manufactorumWall(s,name,width,height){
   if(['door','pipe','chapel','reliquary'].includes(name))tallWall(s,name,width,height);
   else brokenWall(s,name,width,height);

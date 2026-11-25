@@ -5,6 +5,9 @@ import {validateTrainingTwo} from './rules/training-two.mjs';
 import {validateTrainingThreeDeployment} from './rules/training-three-deployment.mjs';
 import {validateTrainingThreeBattle} from './rules/training-three-battle.mjs';
 import {trainingFourBattle,trainingFourDeployment} from './rules/training-four-battle.mjs';
+import {patrolSetupView} from './rules/patrol-setup.mjs';
+import {layoutGeometry} from './layouts.mjs';
+import {validPlacedPatrolUnits} from './rules/official-deployment.mjs';
 
 const clamp = (n, low, high) => Math.max(low, Math.min(high, n));
 const finite = Number.isFinite;
@@ -72,11 +75,26 @@ export function restore(template, save) {
       throw new Error('배치 중인 예비대 모델이 저장된 전장에 없습니다.');
     piece.elevation = clamp(record.elevation??0,0,20);
     place(piece,record.x,record.z,game);
+    if(save.rules?.officialSetup&&save.rules.status==='setup'&&(Math.hypot(record.x-piece.x,record.z-piece.z)>1e-6||piece.elevation!==(record.elevation??0)))
+      throw Error('정식 패트롤 기물이 전장 밖에 있습니다.');
   }
   game.rules = save.rules && typeof save.rules === 'object' ? structuredClone(save.rules) : null;
   if(save.training)game.training=structuredClone(save.training);
   game.logs = Array.isArray(save.logs) ? save.logs.filter(s=>typeof s==='string').slice(-100) : [];
   game.surface = ['left','right','reverse'].includes(save.surface) ? save.surface : 'front';
   game.layout = ['A','B','C'].includes(save.layout?.map)&&['marines','orks'].includes(save.layout?.blue)?{map:save.layout.map,blue:save.layout.blue}:null;
+  if(game.rules?.officialSetup){
+    const v=patrolSetupView(game.rules.officialSetup);
+    if(v.defender?game.layout?.blue!==v.defender||game.layout.map!==v.map:game.layout!==null)
+      throw Error('준비 기록과 전장 배치도가 다릅니다.');
+    if(v.map&&game.rules.status==='setup'){
+      for(const at of layoutGeometry(v.map).terrain){
+        const p=game.pieces.find(m=>m.id===at.id);
+        if(p.removed||p.elevation!==0||Math.hypot(p.x-at.x,p.z-at.z)>1e-6||Math.abs(Math.sin((p.yaw-at.yaw)/2))>1e-6)
+          throw Error('정식 패트롤 배치도의 지형 위치를 확인하세요.');
+      }
+    }
+    if(!validPlacedPatrolUnits(game))throw Error('이미 배치한 분대의 구역과 위치를 확인하세요.');
+  }
   return game;
 }

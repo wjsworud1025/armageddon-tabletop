@@ -1,5 +1,6 @@
 import {paint as p, seeded} from './sculpt.mjs';
 import {relief} from './wall-relief.mjs';
+import {shrineReturn} from './manufactorum-walls.mjs';
 
 const frame=0x464647, edge=0x69635b, panel=0x664332, inset=0x302e2c;
 
@@ -33,27 +34,36 @@ function ruin(s, large, variant) {
   const w=large?4.35:2.2, d=large?2.94:1.02;
   const corner=[-w/2,0,-d/2];
   if(large) {
-    const hasPipe=variant===0||variant===3;
-    relief(s,'door',w,3.95,'inside',undefined,corner,hasPipe?'chapel':'door');
-    relief(s,'pipe',d,3.95,undefined,[0,-Math.PI/2,0],corner,hasPipe?'pipe':'reliquary');
-    const balcony=s.child([-w*.22,0,-d*.12]);
+    const shrineCorner=variant===0;
+    const shell=shrineCorner ? s.child([0,0,0],undefined,[1,5.40/3.95,1]) : s;
+    const hasPipe=shrineCorner||variant===3;
+    if(shrineCorner){
+      relief(shell,'pipe',w,3.95,'inside',undefined,corner,'pipe');
+      shrineReturn(shell.child(corner,[0,-Math.PI/2,0]),d,3.95);
+    }else{
+      relief(shell,'door',w,3.95,'inside',undefined,corner,hasPipe?'chapel':'door');
+      relief(shell,'pipe',d,3.95,undefined,[0,-Math.PI/2,0],corner,hasPipe?'pipe':'reliquary');
+    }
+    const landingOffset=shrineCorner ? .12 : 0;
+    const balcony=shell.child([-w*.22,landingOffset,-d*.12]);
     deck(balcony,w*.56,d*.76,2.30);
     for(const z of [-d*.32,d*.30]) {
       balcony.link(frame,[-w*.255,2.01,z],[-w*.03,2.26,z],.049,.053,5);
       balcony.box(p.rust,[-w*.095,2.265,z],[w*.32,.078,.084]);
     }
-    const short=s.child(corner,[0,-Math.PI/2,0]);
     // A cast elbow, flanged collars and weathered cabling project from the
     // outer wall, leaving the rear passage and first-floor windows open.
-    const path=[[.31,1.78,.14],[.31,1.96,.23],[.32,3.21,.23],[.43,3.38,.23],[.71,3.40,.20],[.86,3.45,.15]];
-    const oxides=[0x853c33,0x925242,0x6f3931,0xa15c47];
     if(hasPipe){
-      for(let i=1;i<path.length;i++) short.link(oxides[(i-1)%oxides.length],path[i-1],path[i],.098,.098,10);
-      for(let n=0;n<4;n++) short.cylinder(0x725844,[.316,2.13+n*.28,.23],.12,.12,.055);
+      const pipeWall=shell.child(corner,shrineCorner?undefined:[0,-Math.PI/2,0]);
+      const onFace=([x,y,z])=>shrineCorner?[x*1.66,y,-z]:[x,y,z];
+      const path=[[.31,1.78,.14],[.31,1.96,.23],[.32,3.21,.23],[.43,3.38,.23],[.71,3.40,.20],[.86,3.45,.15]].map(onFace);
+      const oxides=[0x853c33,0x925242,0x6f3931,0xa15c47];
+      for(let i=1;i<path.length;i++) pipeWall.link(oxides[(i-1)%oxides.length],path[i-1],path[i],.098,.098,10);
+      for(let n=0;n<4;n++) pipeWall.cylinder(0x725844,onFace([.316,2.13+n*.28,.23]),.12,.12,.055);
     }
     for(let n=0;n<8;n++) {
       const z=-d/2+(n+.5)*d/8;
-      s.box(0x53453b,[-w/2+.15,2.27,z],[.31,.075,.068]);
+      shell.box(0x53453b,[-w/2+.15,2.27+landingOffset,z],[.31,.075,.068]);
     }
   } else {
     // The four kit fragments include two flat ends and two masonry corners;
