@@ -1,5 +1,6 @@
 import {createTable} from './data/catalog.mjs';
 import {drawDeploymentDiagram} from './data/deployment-diagram.mjs';
+import {createTrainingOne,rollTrainingOne,trainingOneView} from './rules/training-one.mjs';
 import {mountRules} from './rules/panel.mjs';
 import {baseDistance,place,restore,snapshot,translateFormation} from './state.mjs';
 import {buildScene} from './scene.mjs';
@@ -23,6 +24,21 @@ const template=createTable(), subscribers=new Set();
 const factionNames={marines:'스페이스 마린',orks:'오크',terrain:'지형'};
 function fresh(){return {...structuredClone(template),rules:null,logs:['스타터 세트 전장을 펼쳤습니다.'],surface:'front'}}
 let game=fresh(),active=null,scene,mode='pick',toastTimer;
+// The tutorial has a separate display table. A player's deployment, casualties
+// and in-progress Combat Patrol turn survive entering, saving and leaving it.
+const duelTable=structuredClone(template);
+const duelists={orks:duelTable.pieces.find(p=>p.kind==='warboss'),marines:duelTable.pieces.find(p=>p.kind==='captain')};
+for(const p of duelTable.pieces)p.removed=true;
+for(const [team,p] of Object.entries(duelists)){
+  const sign=team==='marines'?-1:1;
+  Object.assign(p,{x:sign*p.baseWidth/2,z:0,yaw:-sign*Math.PI/2,elevation:0});
+}
+function shownTable(){
+  if(!game.training)return game;
+  duelTable.training=game.training;
+  for(const [team,p] of Object.entries(duelists))p.removed=game.training.wounds[team]===0;
+  return duelTable;
+}
 const past=[],future=[];
 let original=null;
 function paintReference(){
@@ -47,12 +63,17 @@ function piece(id){return game.pieces.find(p=>p.id===id)}
 function persist(){try{localStorage.setItem(storageKey,JSON.stringify(snapshot(game)));$('save-status').textContent='자동 저장됨'}catch{$('save-status').textContent='파일 저장 필요'}}
 function notify(){for(const fn of subscribers)fn()}
 function redraw(){scene?.sync();roster();selection();history();$('undo').disabled=!past.length;$('redo').disabled=!future.length;
+  renderTraining();
   for(const side of ['left','right'])$('flip-'+side).setAttribute('aria-pressed',String(game.surface===side||game.surface==='reverse'));
   $('apply-map').disabled=game.rules?.status==='playing';$('map-status').textContent=game.layout?'배치 '+game.layout.map+' · 청색 '+factionNames[game.layout.blue]:'제품 사진 배치';notify()}
 function changed(){persist();redraw()}
 function mutate(fn,message){checkpoint();fn();log(message);changed()}
 function select(id){active=piece(id)?.id??null;scene?.select(active);roster();selection();notify()}
-function history(){const list=$('log');list.replaceChildren();for(const entry of [...game.logs].reverse()){const li=document.createElement('li');li.textContent=entry;list.append(li)}}
+function history(){
+  const list=$('log');list.replaceChildren();
+  const entries=game.training?game.training.rolls.map(describeTrainingRoll):game.logs;
+  for(const entry of [...entries].reverse()){const li=document.createElement('li');li.textContent=entry;list.append(li)}
+}
 function selection(){
   const p=piece(active);$('selection').hidden=!p;$('sight-tools').hidden=!p||p.removed||p.faction==='terrain';
   $('studio-tools').hidden=!original||!p||!studioGroupFor(p);if(!p)return;
@@ -136,12 +157,14 @@ function applyMovement(result){
   if(manual.length)toast(manual.join(' '));
 }
 function editPose(p,delta,message){
+  if(game.training)return;
   if(movingByRules(p)){
     try{applyMovement(proposeTableMotion(p,{[p.id]:[delta]}))}catch(e){toast(e.message);selection()}
   }else mutate(()=>{Object.assign(p,delta);place(p,p.x,p.z,game)},message);
 }
 function rotate(){const p=piece(active);if(p)editPose(p,{yaw:(p.yaw+Math.PI/12)%(2*Math.PI)},p.name+' 15° 회전')}
 function remove(id,removed){const p=piece(id);
+  if(game.training)return;
   if(game.rules?.shootingReaction||game.rules?.reactionPlan){toast('현재 사격 반응을 먼저 마치세요.');return}
   if(game.rules?.reinforcePlan || p&&game.rules?.reserves?.[groupId(game.rules,p)]?.includes(id)){
     toast('예비대는 대전 탭에서 배치하거나 복귀시키세요.');return;
@@ -151,6 +174,50 @@ function remove(id,removed){const p=piece(id);
   if(!removed && game.rules?.hp?.[id]===0)game.rules.hp[id]=getProfile(p)?.wounds??1;
 },p.name+(removed?' 제거':' 복귀'))}
 function switchTab(name){document.querySelectorAll('[data-tab]').forEach(b=>b.setAttribute('aria-selected',String(b.dataset.tab===name)));for(const id of ['roster','battle','history'])$(id).hidden=id!==name}
+const trainingNames={orks:'워보스',marines:'캡틴'};
+const trainingSteps={hit:'명중',wound:'상처',save:'방어'};
+function describeTrainingRoll(record){
+  return trainingNames[record.actor]+' '+trainingSteps[record.step]+'　'+record.dice.join(' · ')+
+    '　성공 '+record.successes+'개'+(record.damage?' · 피해 '+record.damage:'');
+}
+function renderTraining(){
+  const state=game.training,enabled=!!state;
+  const previous=document.body.classList.contains('training-active');
+  document.body.classList.toggle('training-active',enabled);
+  $('training-play').hidden=!enabled;$('training-start').hidden=enabled;
+  $('training-intro').hidden=enabled;
+  if(previous!==enabled){
+    active=null;scene?.select(null);setMode('pick');reference(false);switchTab('battle');
+    scene?.home();$('camera').textContent='탑뷰';
+    if(enabled)$('hint').textContent='두 베이스가 맞닿은 상태에서 싸웁니다. 드래그로 시점 회전 · 휠로 확대';
+  }
+  if(!state)return;
+  const view=trainingOneView(state);
+  $('training-wounds').textContent='캡틴 '+state.wounds.marines+' / 6 W　·　워보스 '+state.wounds.orks+' / 6 W';
+  $('training-status').textContent=state.winner?trainingNames[state.winner]+' 승리':
+    trainingNames[view.actor]+' · '+trainingSteps[view.step]+' 굴림 · 주사위 '+view.count+'개 · '+view.threshold+'+';
+  $('training-roll').hidden=!!state.winner;
+  if(!state.winner)$('training-roll').textContent=trainingSteps[view.step]+' 주사위 굴리기';
+  const last=state.rolls.at(-1);
+  const result=$('training-dice');
+  result.replaceChildren();
+  if(!last){result.textContent='워보스가 먼저 공격합니다.';return}
+  const label=document.createElement('p');
+  label.textContent=trainingNames[last.actor]+'의 '+trainingSteps[last.step]+' · 성공 '+last.successes+' / '+last.dice.length+
+    (last.damage?' · 피해 '+last.damage:'');
+  result.append(label);
+  for(const face of last.dice){
+    const die=document.createElement('span'),success=face>=last.threshold;
+    die.className=success?'die success':'die';die.textContent=face;
+    die.setAttribute('aria-label',face+(success?' 성공':' 실패'));result.append(die);
+  }
+}
+$('training-start').onclick=()=>{if(!game.training)mutate(()=>{game.training=createTrainingOne()})};
+$('training-roll').onclick=()=>{
+  if(!game.training||game.training.winner)return;
+  mutate(()=>{game.training=rollTrainingOne(game.training)});
+};
+$('training-exit').onclick=()=>{if(game.training)mutate(()=>{delete game.training})};
 function configureLayout(map,blue){
   if(game.rules?.status==='playing'){toast('대전 시작 전 배치 단계에서 지도를 적용하세요.');return false}
   const next=structuredClone(game);
@@ -276,12 +343,13 @@ async function start(){
   if(original)await loadPortraitMap();
   for(const id of ['reference-toggle','appearance'])$(id).hidden=!original;
   redraw();mountRules($('rules'),api);
-  scene=await buildScene($('view'),{game:()=>game,template,localArt:!!original,select,checkpoint,zones:()=>$('zones').checked,
+  scene=await buildScene($('view'),{game:shownTable,template,localArt:!!original,select,checkpoint,zones:()=>$('zones').checked,
     sightInfo:text=>{$('hint').textContent=text},
     appearance:(on,photo)=>{$('appearance').setAttribute('aria-pressed',String(on));$('appearance').textContent=on?(photo?'사진 기물':'회전 사진'):'3D 조형'},
     progress:(i,n)=>$('stage-load').textContent='미니어처 준비 중 · '+i+' / '+n,
     moving:movingGroup,
     route(p,points,drag=false){
+      if(game.training)return false;
       const group=movingGroup(p).map(m=>({piece:{...m},x:m.x,z:m.z}));let distance=0;
       const paths=Object.fromEntries(group.map(m=>[m.piece.id,[]]));
       for(let i=1;i<points.length;i++){
@@ -298,7 +366,7 @@ async function start(){
     measure:n=>{if(n===1)$('hint').textContent='두 번째 기물 또는 지점을 선택하세요.';else $('hint').textContent='새 측정의 시작점을 클릭하세요.'}});
   scene.select(active);$('stage-load').hidden=true;persist();
   // Read-only diagnostics for the packaged Windows acceptance check.
-  window.tabletopView={stats:()=>scene.stats(),screen:id=>scene.screen(id),state:()=>snapshot(game)};
+  window.tabletopView={stats:()=>scene.stats(),screen:id=>scene.screen(id),pose:id=>scene.pose(id),state:()=>snapshot(game)};
 }
 function movingGroup(p){return !$('squad').checked||p.faction==='terrain'?[p]:unitMembers(game.rules??newBattle(),game.pieces,p).filter(m=>!m.removed)}
 start().catch(err=>{$('stage-load').textContent='전장을 열지 못했습니다. '+err.message;console.error(err)});

@@ -28,7 +28,15 @@
         <div id="army-list"></div>
         <details class="board-faces"><summary>양면 게임 보드</summary><div class="row"><button id="flip-left" aria-pressed="false">왼쪽 판 뒤집기</button><button id="flip-right" aria-pressed="false">오른쪽 판 뒤집기</button></div></details>
       </section>
-      <section id="battle" class="pane" hidden><details id="deployment"><summary>컴뱃 패트롤 전장 배치</summary>
+      <section id="battle" class="pane" hidden><section id="training" aria-labelledby="training-title">
+        <h2 id="training-title">훈련 1 · 공격 절차</h2>
+        <p id="training-intro">캡틴과 워보스가 중앙에서 베이스를 맞대고 싸웁니다. 상대를 먼저 쓰러뜨리면 승리합니다.</p>
+        <button id="training-start">핸드북 첫 훈련 시작</button>
+        <div id="training-play" hidden>
+          <p id="training-wounds"></p><p id="training-status" role="status"></p><div id="training-dice"></div>
+          <div class="row"><button id="training-roll">주사위 굴리기</button><button id="training-exit">원래 전장으로</button></div>
+        </div>
+      </section><details id="deployment"><summary>컴뱃 패트롤 전장 배치</summary>
         <div class="row"><label>지도 <select id="map"><option>A</option><option>B</option><option>C</option></select></label><label>청색 진영 <select id="blue"><option value="marines">스페이스 마린</option><option value="orks">오크</option></select></label></div>
         <div class="row"><button id="apply-map">전장에 배치</button><button id="roll-map">D6로 지도 선택</button></div>
         <p id="map-status">제품 사진 배치</p><label><input type="checkbox" id="zones" checked> 배치 구역과 거점 표시</label><button id="show-map">배치도 보기</button>

@@ -143,6 +143,7 @@ export async function buildScene(canvas,api) {
   }
   function home(top=false){sightPair=null;eyeOffset=0;photo=!top;photoZoom=1;offsetX=offsetY=0;target.set(0,.4,0);yaw=top?0:-.24;pitch=top?Math.PI/2-.0001:.67;
     const aspect=canvas.clientWidth/Math.max(1,canvas.clientHeight);
+    if(api.game().training){photo=false;target.set(0,1.15,0);pitch=top?Math.PI/2-.0001:.34;half=Math.max(2.6,2.8/aspect);projection();return}
     half=Math.max(top?game.depth*.61:game.depth*.46,(game.width*Math.cos(yaw)+game.depth*Math.abs(Math.sin(yaw)))*.56/aspect);projection()}
   function resize(){renderer.setSize(canvas.clientWidth,canvas.clientHeight,false);projection()}
   new ResizeObserver(resize).observe(canvas);
@@ -183,7 +184,10 @@ export async function buildScene(canvas,api) {
     const pan=e.shiftKey||e.button===1,orbit=e.button===2;
     const id=pan||orbit?null:pick(e),g=ground(e);
     gesture={type:pan?'pan':orbit?'orbit':mode==='ruler'?'measure':mode==='sight'?'sight':mode==='path'?'path':id?'move':'orbit',id,g,sx:e.clientX,sy:e.clientY,angle:yaw,pitch,target:target.clone(),offsetX,offsetY,drag:false,pointer:e.pointerId};
-    if(id&&mode==='pick'){api.select(id);const p=lookup(id);gesture.start={x:p.x,z:p.z,elevation:p.elevation};gesture.records=api.moving(p).map(piece=>({piece,x:piece.x,z:piece.z}))}
+    if(id&&mode==='pick'){api.select(id);const p=lookup(id);
+      if(api.game().training){gesture.type='orbit'}else{
+        gesture.start={x:p.x,z:p.z,elevation:p.elevation};gesture.records=api.moving(p).map(piece=>({piece,x:piece.x,z:piece.z}));
+      }}
     canvas.setPointerCapture(e.pointerId);e.preventDefault();
   }
   function move(e){
@@ -235,7 +239,12 @@ export async function buildScene(canvas,api) {
     backPoint(){waypoints.pop();dirty()},walk(){const p=lookup(selected);if(p&&!p.removed&&waypoints.length&&api.route(p,[{x:p.x,z:p.z},...waypoints])){waypoints=[];dirty()}},
     togglePaint(){if(!photo&&pitch>=65*Math.PI/180){usePaint=true;home()}else{usePaint=!usePaint;projection()}},
     setMode(next){mode=next;if(sightPair){sightPair=null;projection()}ends=[];waypoints=[];dirty()},toggleGrid(){gridVisible=!gridVisible;grid.visible=gridVisible;dirty();return gridVisible},
-    stats(){return {pieces:objects.size,drawCalls:renderer.info.render.calls,triangles:renderer.info.render.triangles,
+    pose(id){
+      const obj=objects.get(id),visible=obj?.visible||painted.get(id)?.visible||studio.objects.some(o=>o.visible&&o.userData.pieceId===id);
+      return visible?{x:obj.position.x,z:obj.position.z,elevation:obj.position.y,yaw:obj.rotation.y}:null;
+    },
+    stats(){return {pieces:objects.size,visiblePieces:[...objects.values(),...painted.values(),...studio.objects].filter(o=>o.visible).length,
+      drawCalls:renderer.info.render.calls,triangles:renderer.info.render.triangles,
       reconstructed:[...objects.values()].filter(o=>o.userData.reconstruction).length,
       studioVisible:studio.objects.filter(o=>o.visible).length}},
     screen(id){const p=lookup(id);if(!p)return null;const v=new T.Vector3(p.x,(p.elevation||0)+.45,p.z).project(camera);return {x:(v.x*.5+.5)*canvas.clientWidth,y:(.5-v.y*.5)*canvas.clientHeight}}};

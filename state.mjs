@@ -1,5 +1,6 @@
 import {validateRulesState} from './rules/validate.mjs';
 import {measureFootprints} from './ruler.mjs';
+import {validateTrainingOne} from './rules/training-one.mjs';
 
 const clamp = (n, low, high) => Math.max(low, Math.min(high, n));
 const finite = Number.isFinite;
@@ -38,13 +39,15 @@ export function translateFormation(records, dx, dz, board) {
 export function snapshot(game) {
   return {version:1, pieces:game.pieces.map(({id,x,z,yaw,removed,elevation}) =>
     ({id,x,z,yaw,removed:!!removed,elevation:elevation||0})), rules:structuredClone(game.rules),
-    logs:[...game.logs], layout:game.layout?{...game.layout}:null,surface:game.surface||'front'};
+    logs:[...game.logs], layout:game.layout?{...game.layout}:null,surface:game.surface||'front',
+    ...(game.training?{training:structuredClone(game.training)}:{})};
 }
 
 export function restore(template, save) {
   if (save?.version !== 1 || !Array.isArray(save.pieces) || save.pieces.length !== template.pieces.length)
     throw new Error('이 스타터 세트의 저장 파일이 아닙니다.');
   if(!validateRulesState(save.rules))throw new Error('저장 파일의 대전 규칙 데이터가 올바르지 않습니다.');
+  if(save.training!=null&&!validateTrainingOne(save.training))throw new Error('첫 훈련 임무의 저장 기록이 올바르지 않습니다.');
   const records = new Map(save.pieces.map(p => [p.id,p]));
   const game = structuredClone(template);
   for (const piece of game.pieces) {
@@ -59,6 +62,7 @@ export function restore(template, save) {
     place(piece,record.x,record.z,game);
   }
   game.rules = save.rules && typeof save.rules === 'object' ? structuredClone(save.rules) : null;
+  if(save.training)game.training=structuredClone(save.training);
   game.logs = Array.isArray(save.logs) ? save.logs.filter(s=>typeof s==='string').slice(-100) : [];
   game.surface = ['left','right','reverse'].includes(save.surface) ? save.surface : 'front';
   game.layout = ['A','B','C'].includes(save.layout?.map)&&['marines','orks'].includes(save.layout?.blue)?{map:save.layout.map,blue:save.layout.blue}:null;

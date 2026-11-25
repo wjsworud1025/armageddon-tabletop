@@ -131,7 +131,12 @@ try{
   const groundGap=await rulerValue('베이스–지점');
   assert.ok(Math.abs(groundGap-baseDistance(speeder,ground))<.1,'Ground click is measured from the rotated base rim');
   await click('#pick');
-  await click('[data-tab=battle]');await js('document.querySelector("#deployment").open=true');
+  await click('[data-tab=battle]');
+  await click('#training-start');await until(()=>js('tabletopView.stats().visiblePieces===2'));
+  await screenshot('04-handbook-duel.png');await click('#training-roll');
+  assert.equal((await state()).training.rolls.length,1);
+  await click('#training-exit');assert.equal((await state()).training,undefined);
+  await js('document.querySelector("#deployment").open=true');
   const beforePreview=await state(),diagrams=new Set();
   for(const map of ['B','C','A']){
     await js('document.querySelector("#map").value='+JSON.stringify(map));
