@@ -20,6 +20,7 @@ import {checkTrainingTwo} from './browser-training-two.mjs';
 import {checkTrainingThree} from './browser-training-three.mjs';
 import {checkTrainingFour} from './browser-training-four.mjs';
 import {checkPatrolSetup} from './browser-patrol-setup.mjs';
+import {checkRuinSight} from '../tests/browser-ruin-sight.mjs';
 
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const server=createServer(async(req,res)=>{
@@ -84,6 +85,8 @@ try {
   const trainingTools={save,upload,click,state,js,send,reload:async()=>{
     await send('Page.reload');await until(()=>js('!!window.tabletopView'));await click('[data-tab=battle]');
   }};
+  await checkRuinSight(trainingTools);
+  console.log('Passed both surface picks through the ruin window and into its crossbar');
   await checkPatrolSetup(trainingTools);
   console.log('Passed the official mission sequence, private formations, deployment and separate roll-offs');
   await checkTraining(trainingTools);

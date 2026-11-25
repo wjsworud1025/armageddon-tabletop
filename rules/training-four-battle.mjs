@@ -17,5 +17,5 @@ const engine=handbookBattleEngine({
 });
 
 export const trainingFourBattle={
-  ...engine,create:deployment=>engine.create({...field,pieces:trainingFourDeployment.pieces(deployment)}),
+  ...engine,create:deployment=>engine.create({...field,handbookRevision:deployment.version,pieces:trainingFourDeployment.pieces(deployment)}),
 };

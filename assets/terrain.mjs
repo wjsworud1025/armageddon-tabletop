@@ -2,6 +2,7 @@ import {paint as p, seeded} from './sculpt.mjs';
 import {relief} from './wall-relief.mjs';
 import {shrineReturn} from './manufactorum-walls.mjs';
 import {generatorShrine} from './generator-shrine.mjs';
+import {reliquaryRuin} from './reliquary-ruin.mjs';
 
 const frame=0x464647, edge=0x69635b, panel=0x664332, inset=0x302e2c;
 
@@ -182,11 +183,11 @@ function capacitor(s) {
   lightning(station,[-.18,2.10,0],[.19,2.08,0],9);
 }
 
-const factories={largeRuin:(s,v)=>ruin(s,true,v),smallRuin:(s,v)=>ruin(s,false,v),shockArray:shock,capacitorStack:capacitor,barricade,generatorShrine,pylon};
+const factories={largeRuin:(s,v)=>v===1?reliquaryRuin(s):ruin(s,true,v),smallRuin:(s,v)=>ruin(s,false,v),shockArray:shock,capacitorStack:capacitor,barricade,generatorShrine,pylon};
 
-export function scenery(s,item) {
+function registeredScenery(s,item,draw) {
   const model=s.child();
-  factories[item.kind](model,item.variant??0);
+  draw(model,item.variant??0);
   // Center the authored silhouette and register its footprint to the physical
   // table axes. Height remains in tabletop inches.
   model.group.updateMatrixWorld(true);
@@ -202,5 +203,15 @@ export function scenery(s,item) {
   const sx=(item.baseWidth||size.x)/size.x, sz=(item.baseDepth||size.z)/size.z;
   model.group.scale.set(sx,1,sz);
   model.group.position.set(-center.x*sx,-bounds.min.y,-center.z*sz);
+}
+
+export function scenery(s,item) {
+  registeredScenery(s,item,factories[item.kind]);
+}
+
+// The save upgrader rechecks support on the original second ruin before
+// moving a model on its landing. Both archived art modes use their original shell.
+export function legacySecondRuin(s,item) {
+  registeredScenery(s,{...item,baseWidth:5.2,baseDepth:4.1},model=>ruin(model,true,1));
 }
 

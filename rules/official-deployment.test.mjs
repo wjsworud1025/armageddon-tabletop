@@ -199,24 +199,30 @@ test('a pending group can be saved while being adjusted but cannot be committed 
 });
 
 test('two legal elevations on the same landing cannot conceal overlapping bases on commit or restore',()=>{
-  let game=step(reveal('A','orks'),'official-select',{unit:'warboss'});
-  const ruin=piece(game,'largeRuin-1'),position={x:ruin.x-.62,z:ruin.z-.48};
-  Object.assign(piece(game,'warboss-1'),position,{elevation:3.37});
+  let game=step(step(reveal('A','marines'),'official-select',{unit:'captain'}),'official-place');
+  game=step(game,'official-select',{unit:'warboss'});
+  const ruin=piece(game,'largeRuin-2');
+  // Local (−1.12, +0.56) is inside the broken landing with clearance for
+  // either 50 mm base. Map A rotates this particular ruin by 180 degrees.
+  const position={x:ruin.x+1.12,z:ruin.z-.56};
+  const first=piece(game,'warboss-1');
+  Object.assign(first,position,{elevation:2.30});
+  assert.equal(patrolTerrainPlacement(first,[ruin]).error,'','the landing independently supports the first base');
   game=step(game,'official-place');
-  game=step(step(game,'official-select',{unit:'captain'}),'official-place');
+  game=step(step(game,'official-select',{unit:'landSpeeder'}),'official-place');
   game=step(game,'official-select',{unit:'weirdboy'});
   const other=piece(game,'weirdboy-1');
-  Object.assign(other,position,{elevation:3.38});
+  Object.assign(other,position,{elevation:2.31});
   assert.equal(patrolTerrainPlacement(other,[ruin]).error,'','upper floor independently supports the second base');
   assert.match(patrolPlacementError(game),/다른 모델의 베이스/);
   assert.throws(()=>step(game,'official-place'),/다른 모델의 베이스/);
 
   other.elevation=0;
   const separated=checkpoint(step(game,'official-place'));
-  assert.equal(piece(separated,'warboss-1').elevation,3.37);
+  assert.equal(piece(separated,'warboss-1').elevation,2.30);
   assert.equal(piece(separated,'weirdboy-1').elevation,0);
   const forged=snapshot(separated);
-  piece(forged,'weirdboy-1').elevation=3.38;
+  piece(forged,'weirdboy-1').elevation=2.31;
   assert.throws(()=>restore(createTable(),forged));
 });
 

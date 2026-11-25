@@ -11,7 +11,7 @@ const engine=handbookBattleEngine({
 });
 
 export function createTrainingThreeBattle(deployment){
-  return engine.create({...field,pieces:trainingThreeDeploymentPieces(deployment)});
+  return engine.create({...field,handbookRevision:deployment.version,pieces:trainingThreeDeploymentPieces(deployment)});
 }
 
 export const {

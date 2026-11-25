@@ -1,7 +1,7 @@
 import {createTable} from './catalog.mjs';
 import {
   trainingTwoMapPoint as toMap,trainingTwoWorldPoint as toWorld,
-  trainingTwoSurfaceUV as surfaceUV,trainingTwoWallSegments as cornerVertices,
+  trainingTwoSurfaceUV as surfaceUV,trainingTwoWallSegments as cornerVertices,handbookBaseDepth,
 } from './training-two-layout.mjs';
 
 // Both handbook diagrams use the same physical panel and coordinate frames.
@@ -29,7 +29,7 @@ export const trainingThreePlan={
   ],
   // points trace the diagram; center/yaw place an unscaled, rigid catalog cast.
   walls:[
-    {id:'largeRuin-2',zone:'orks',points:[[22.10,9.55],[16.40,9.55],[16.40,6.80]],center:[18.55,7.19],yaw:Math.PI/2},
+    {id:'largeRuin-2',zone:'orks',points:[[22.10,9.55],[16.40,9.55],[16.40,6.80]],center:[18.670,7.785],yaw:0},
     {id:'smallRuin-2',zone:'orks',points:[[23.20,3.20],[27.15,3.20],[27.15,4.50]],center:[26.10,4.29],yaw:-Math.PI/2},
     {id:'smallRuin-3',zone:'marines',points:[[2.50,13.15],[6.70,13.15],[6.70,14.40]],center:[5.85,14.29],yaw:-Math.PI/2},
     {id:'smallRuin-1',zone:'gretchin',points:[[15.35,20.25],[15.35,16.25],[16.50,16.25]],center:[16.05,18.25],yaw:Math.PI/2},
@@ -89,7 +89,7 @@ export function validateTrainingThreeLayout(table){
   for(const p of table.pieces){
     const original=stock.get(p.id);
     if(p.removed||p.elevation!==0||p.kind!==original.kind||p.faction!==original.faction||
-      p.baseWidth!==original.baseWidth||p.baseDepth!==original.baseDepth||![p.x,p.z,p.yaw].every(Number.isFinite)){
+      p.baseWidth!==original.baseWidth||p.baseDepth!==handbookBaseDepth(table,original)||![p.x,p.z,p.yaw].every(Number.isFinite)){
       errors.push('piece '+p.id);continue;
     }
     if(wallZones.has(p.id)){

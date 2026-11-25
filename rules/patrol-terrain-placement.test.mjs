@@ -23,8 +23,9 @@ test('ground and open courtyard remain deployable; air and enclosed walls do not
 });
 
 test('the raised shrine landing and other balconies use their actual cast elevations',()=>{
-  for(const [id,height] of [['largeRuin-1',3.37],['largeRuin-2',2.35],['largeRuin-3',2.35],['largeRuin-4',2.35]]){
-    const terrain=piece(id),model=small(-1.40,-.50,height);
+  for(const [id,height,x,z] of [['largeRuin-1',3.37,-1.4,-.5],['largeRuin-2',2.30,-1.3,.65],
+    ['largeRuin-3',2.35,-1.4,-.5],['largeRuin-4',2.35,-1.4,-.5]]){
+    const terrain=piece(id),model=small(x,z,height);
     const options=levels(model,[terrain]);
     assert.equal(options[0],0);
     assert.ok(options.some(h=>Math.abs(h-height)<.02),id+' '+options);

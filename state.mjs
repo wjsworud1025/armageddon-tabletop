@@ -7,7 +7,7 @@ import {validateTrainingThreeBattle} from './rules/training-three-battle.mjs';
 import {trainingFourBattle,trainingFourDeployment} from './rules/training-four-battle.mjs';
 import {patrolSetupView} from './rules/patrol-setup.mjs';
 import {layoutGeometry} from './layouts.mjs';
-import {validPlacedPatrolUnits} from './rules/official-deployment.mjs';
+import {validPlacedPatrolUnits,recoverPreviousRuinDeployment} from './rules/official-deployment.mjs';
 
 const clamp = (n, low, high) => Math.max(low, Math.min(high, n));
 const finite = Number.isFinite;
@@ -50,6 +50,7 @@ export function snapshot(game) {
   return {version:1, pieces:game.pieces.map(({id,x,z,yaw,removed,elevation}) =>
     ({id,x,z,yaw,removed:!!removed,elevation:elevation||0})), rules:structuredClone(game.rules),
     logs:[...game.logs], layout:game.layout?{...game.layout}:null,surface:game.surface||'front',
+    ...(game.rules?.officialSetup&&game.rules.status==='setup'?{terrainRevision:2}:{}),
     ...(game.training?{training:structuredClone(game.training)}:{})};
 }
 
@@ -104,7 +105,9 @@ export function restore(template, save) {
           throw Error('정식 패트롤 배치도의 지형 위치를 확인하세요.');
       }
     }
-    if(!validPlacedPatrolUnits(game))throw Error('이미 배치한 분대의 구역과 위치를 확인하세요.');
+    if(save.terrainRevision!==undefined&&save.terrainRevision!==2)throw Error('알 수 없는 패트롤 지형 판본입니다.');
+    if(!validPlacedPatrolUnits(game)&&(save.terrainRevision!==undefined||!recoverPreviousRuinDeployment(game)))
+      throw Error('이미 배치한 분대의 구역과 위치를 확인하세요.');
   }
   return game;
 }

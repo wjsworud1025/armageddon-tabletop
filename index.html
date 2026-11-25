@@ -12,6 +12,7 @@
     <section id="stage" aria-label="3D 미니어처 전장">
       <div class="stage-head"><div class="plate"><i></i> STARTER SET <b>/</b> 2026</div><button id="appearance" aria-pressed="true" title="공식 도색 사진 기물과 회전 가능한 3D 조형 전환">사진 기물</button><button id="reference-toggle" aria-pressed="false">제품 사진</button><button id="camera" title="전시 시점과 수직 시점 전환">탑뷰</button><button id="home" title="초기 카메라 시점">전체 보기</button></div>
       <canvas id="view" aria-label="전장. 미니어처를 끌어 이동하고 우클릭으로 시점을 회전합니다." tabindex="0"></canvas>
+      <div id="surface-tools" hidden><button id="surface-start">두 표면점으로 시선 확인</button><button id="surface-cancel" hidden>기본 사수 시점</button><p id="surface-status" role="status"></p></div>
       <div id="reference" hidden><canvas id="photo" aria-label="Games Workshop 공식 제품 사진"></canvas><a href="https://assets.warhammer-community.com/articles/0-2026/june/wc29-06/sundaypreview-jul05-40k_01-starterset-2kklbdlero.jpg" target="_blank" rel="noopener">공식 배치 사진 · © Games Workshop ↗</a></div>
       <div id="notice" role="status" hidden></div>
       <div id="stage-load" role="status">미니어처 준비 중…</div>

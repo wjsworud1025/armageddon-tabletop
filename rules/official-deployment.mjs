@@ -3,7 +3,7 @@ import {coherency,sweptGap} from '../movement.mjs';
 import {applyLayout,layoutGeometry,layoutScenery,validDeployment} from '../layouts.mjs';
 import {applyPatrolSetup,patrolSetupView} from './patrol-setup.mjs';
 import {newPatrolFormations,actPatrolFormation} from './patrol-formations.mjs';
-import {patrolTerrainPlacement} from './patrol-terrain-placement.mjs';
+import {patrolTerrainPlacement,patrolTerrainLevels} from './patrol-terrain-placement.mjs';
 
 export const officialPreparing=rules=>!!rules?.officialSetup&&rules.status==='setup';
 const fighters=game=>game.pieces.filter(p=>p.faction!=='terrain'&&!p.removed);
@@ -46,6 +46,50 @@ export function validPlacedPatrolUnits(game){
   for(const key of r.deployment.placed){
     if(unitPlacementError(game,all.filter(p=>groupId(r,p)===key),bodies))return false;
   }
+  return true;
+}
+
+// This is an import-only path. First validate the complete placement against
+// the exact old casting, including its footprint, walls and platform.
+export function recoverPreviousRuinDeployment(game){
+  const r=game.rules,d=r.deployment;
+  if(!officialPreparing(r)||!d?.placed.length)return false;
+  const ruin=game.pieces.find(p=>p.id==='largeRuin-2');
+  const previous={...ruin,baseWidth:5.2,baseDepth:4.10,previousSecondRuin:true};
+  if(!validPlacedPatrolUnits({...game,pieces:game.pieces.map(p=>p===ruin?previous:p)}))return false;
+  const bodies=[];
+  for(const [index,key] of d.placed.entries()){
+    const members=fighters(game).filter(p=>groupId(r,p)===key);
+    if(!unitPlacementError(game,members,[...bodies])){bodies.push(...members);continue;}
+    const elevated=members.filter(p=>p.elevation>0&&!patrolTerrainPlacement(p,[previous]).error);
+    let fitted=false;
+    // Retain centres wherever possible. If the broken edge moved, test the
+    // corresponding position across the ruin's local z axis instead.
+    for(const mirror of [false,true]){
+      const proposed=new Map();
+      for(const p of elevated){
+        const c=Math.cos(ruin.yaw),s=Math.sin(ruin.yaw),localZ=s*(p.x-ruin.x)+c*(p.z-ruin.z);
+        const offset=mirror?-2*localZ:0;
+        const q={...p,x:p.x+s*offset,z:p.z+c*offset};
+        const h=patrolTerrainLevels(q,[ruin]).filter(h=>h>0&&Math.abs(h-p.elevation)<.15)
+          .sort((a,b)=>Math.abs(a-p.elevation)-Math.abs(b-p.elevation))[0];
+        if(h!==undefined)proposed.set(p,{...q,elevation:h});
+      }
+      if(!proposed.size||unitPlacementError(game,members.map(p=>proposed.get(p)??p),[...bodies]))continue;
+      for(const [p,q] of proposed)Object.assign(p,{x:q.x,z:q.z,elevation:q.elevation});
+      fitted=true;break;
+    }
+    if(!fitted){
+      // No legal corresponding surface for this entire unit. Resume at its
+      // original placement turn, preserving the map and sealed formations.
+      r.deployment={...d,placed:d.placed.slice(0,index),next:members[0].faction,pending:key};
+      r.officialSetup={...r.officialSetup,deploymentComplete:false,firstRolls:[]};
+      game.logs.push('폐허 2의 조형이 바뀌어 '+members[0].name+' 분대부터 배치를 다시 확인합니다.');
+      return true;
+    }
+    bodies.push(...members);
+  }
+  game.logs.push('기존에 배치한 분대를 폐허 2의 새 상판에 맞췄습니다.');
   return true;
 }
 function placeUnit(game){

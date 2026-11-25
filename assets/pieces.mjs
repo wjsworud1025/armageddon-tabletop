@@ -1,7 +1,7 @@
 import {castPiece, plinth} from './sculpt.mjs';
 import {marine, speeder} from './marines.mjs';
 import {greenskin, wartrakk} from './orks.mjs';
-import {scenery} from './terrain.mjs';
+import {scenery,legacySecondRuin} from './terrain.mjs';
 
 const marines=new Set(['captain','librarian','intercessor','vanguard']);
 const orks=new Set(['warboss','weirdboy','boy','gretchin']);
@@ -9,6 +9,10 @@ const terrain=new Set(['largeRuin','smallRuin','shockArray','capacitorStack','ba
 
 /** Model faces +Z, Y up, origin at ground in inches. */
 export function createPiece(THREE,item) {
+  if(item.previousSecondRuin&&item.kind==='largeRuin'&&item.variant===1){
+    const previous={...item,kind:'previous-second-ruin',baseWidth:5.2,baseDepth:4.10};
+    return castPiece(THREE,previous,s=>legacySecondRuin(s,previous));
+  }
   return castPiece(THREE,item,s=>{
     if(terrain.has(item.kind)) {
       scenery(s,item);

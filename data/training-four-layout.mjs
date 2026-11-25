@@ -1,4 +1,5 @@
 import {createTable} from './catalog.mjs';
+import {handbookBaseDepth} from './training-two-layout.mjs';
 import {
   trainingThreeMapPoint as toMap,trainingThreeWorldPoint as toWorld,
   trainingThreeSurfaceUV as surfaceUV,trainingThreePlan,trainingThreeWallSegments as wallVertices,
@@ -100,7 +101,7 @@ export function validateTrainingFourLayout(table){
   for(const p of table.pieces){
     const original=stock.get(p.id);
     if(p.kind!==original.kind||p.faction!==original.faction||p.baseWidth!==original.baseWidth||
-      p.baseDepth!==original.baseDepth||p.elevation!==0||p.removed||![p.x,p.z,p.yaw].every(Number.isFinite)){
+      p.baseDepth!==handbookBaseDepth(table,original)||p.elevation!==0||p.removed||![p.x,p.z,p.yaw].every(Number.isFinite)){
       issues.push('piece '+p.id);continue;
     }
     const c=Math.cos(p.yaw),s=Math.sin(p.yaw),w=p.baseWidth/2,d=p.baseDepth/2;

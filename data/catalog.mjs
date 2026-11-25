@@ -77,7 +77,7 @@ export function createTable() {
         : (layouts[kind].length === 1 ? label : label + ' ' + ordinal);
       return {
         id: kind + '-' + ordinal, kind, name, faction, variant,
-        baseWidth, baseDepth: depth ?? baseWidth, ...photoToBoard(u,v), yaw: angle * Math.PI / 180
+        baseWidth, baseDepth: kind==='largeRuin'&&variant===1?4.22:(depth??baseWidth), ...photoToBoard(u,v), yaw: angle * Math.PI / 180
       };
     })
   );

@@ -2,6 +2,8 @@ import * as T from 'three';
 import {photoCamera} from './photo-camera.mjs';
 import {createPiece} from './assets/pieces.mjs';
 import {sightHiddenPieces} from './assets/sight-units.mjs';
+import {sightObstructions} from './assets/sight-line.mjs';
+import {createSightPicker} from './assets/sight-picker.mjs';
 import {paintedFigures} from './painted.mjs';
 import {layoutGeometry} from './layouts.mjs';
 import {trainingThreePlan,trainingThreeWorldPoint} from './data/training-three-layout.mjs';
@@ -30,6 +32,7 @@ export async function buildScene(canvas,api) {
   const rim=new T.DirectionalLight(0xc2dcff,1.1);rim.position.set(16,20,-22);scene.add(rim);
   const orbitCamera=new T.OrthographicCamera(-25,25,20,-20,.05,450);
   const eyeCamera=new T.PerspectiveCamera(54,1,.025,450);let sightPair=null,eyeOffset=0;
+  const surfacePicker=createSightPicker();let surface=null;
   const promo=photoCamera(T,game.width,game.depth); let photo=true,camera=promo.camera;
   let photoZoom=1, offsetX=0, offsetY=0;
   const target=new T.Vector3(), ray=new T.Raycaster(), pointer=new T.Vector2();
@@ -89,6 +92,7 @@ export async function buildScene(canvas,api) {
     objects.set(p.id,obj);scene.add(obj);
     if(i%5===0){api.progress(i,game.pieces.length);await new Promise(requestAnimationFrame)}
   }
+  const currentRuin=objects.get('largeRuin-2');let previousRuin;
   const halo=new T.Mesh(new T.RingGeometry(.96,1.08,72),new T.MeshBasicMaterial({color:0xffd773,side:T.DoubleSide,depthTest:false,transparent:true,opacity:.9}));
   const ringRoot=new T.Group();halo.rotation.x=-Math.PI/2;halo.renderOrder=10;ringRoot.add(halo);scene.add(ringRoot);
   const tape=new T.Line(new T.BufferGeometry(),new T.LineBasicMaterial({color:0xffe189,depthTest:false}));tape.renderOrder=11;scene.add(tape);
@@ -132,10 +136,46 @@ export async function buildScene(canvas,api) {
   canvas.parentElement.append(label);
   let ends=[],waypoints=[];
   function lookup(id){return api.game().pieces.find(p=>p.id===id)}
+  function clearSurface(){surface=null;surfacePicker.clear()}
+  function surfaceUI(){
+    const active=!!sightPair&&sightPair.every(id=>{const p=lookup(id);return p&&!p.removed&&p.faction!=='terrain'});
+    let message='';
+    if(active&&surface?.picking){
+      const p=lookup(sightPair[surface.points.length]);
+      message=p.name+' · '+(surface.points.length?'시선이 닿을 점':'시선을 시작할 점')+'을 클릭하세요. 드래그로 회전 · 휠로 확대';
+    }else if(active&&surface){
+      const names=surface.blocked.map(id=>lookup(id).name);
+      message='선택한 두 점 · 폭 1 mm · '+(names.length?'교차한 조형: '+names.join(', '):'교차한 조형 표면 없음')+' · 지형 구역 효과는 별도 판정';
+    }
+    api.surfaceTools(active,surface?(surface.picking?'pick':'result'):'',message);
+  }
+  function showEndpoint(){
+    const i=surface.points.length,p=lookup(sightPair[i]),other=lookup(sightPair[1-i]);
+    surfacePicker.show(objects.get(p.id),Math.atan2(other.x-p.x,other.z-p.z));
+    surfaceUI();api.sightInfo('표면의 위치를 지정하세요.');dirty();
+  }
+  function startSurface(){
+    if(!sightPair||sightPair.some(id=>lookup(id)?.removed||lookup(id)?.faction==='terrain'))return;
+    surface={points:[],picking:true};showEndpoint();
+  }
+  function cancelSurface(){if(surface){clearSurface();projection()}}
+  function chooseSurface(e){
+    const rect=canvas.getBoundingClientRect();
+    const ndc=new T.Vector2(2*(e.clientX-rect.left)/rect.width-1,1-2*(e.clientY-rect.top)/rect.height);
+    const point=surfacePicker.sample(ndc,rect.width,rect.height);
+    if(!point)return;
+    if(surface.points[0]?.distanceToSquared(point)<1e-12){api.sightInfo('두 표면점이 겹칩니다. 다른 점을 고르세요.');return;}
+    surface.points.push(point);
+    if(surface.points.length===1){showEndpoint();return;}
+    surfacePicker.clear();surface.picking=false;
+    const table=api.game(),hidden=sightHiddenPieces(table,sightPair);
+    const others=table.pieces.filter(p=>!p.removed&&!hidden.has(p.id)&&p.id!==sightPair[1]).map(p=>objects.get(p.id));
+    surface.blocked=sightObstructions(surface.points[0],point,others);projection();
+  }
   function sync(){
     const table=api.game(),drill=!!table.training;
     if(sightPair&&sightPair.some(id=>!table.pieces.some(p=>p.id===id&&!p.removed))){
-      sightPair=null;eyeOffset=0;projection();return;
+      clearSurface();sightPair=null;eyeOffset=0;projection();return;
     }
     const hidden=sightHiddenPieces(table,sightPair);
     drillBoard.visible=drill;grid.geometry=drill?drillGrid:lineGeom;
@@ -152,13 +192,20 @@ export async function buildScene(canvas,api) {
     }
     updateZones();
     for(const p of table.pieces){
+      if(p.id==='largeRuin-2'){
+        const required=p.previousSecondRuin?(previousRuin??=createPiece(T,p)):currentRuin;
+        if(required!==objects.get(p.id)){
+          scene.remove(objects.get(p.id));required.userData.pieceId=p.id;
+          scene.add(required);objects.set(p.id,required);
+        }
+      }
       const obj=objects.get(p.id),portrait=painted.get(p.id);
       const matchingPose=Math.abs(Math.sin((p.yaw-initialYaw.get(p.id))/2))<.001;
-      if(portrait)portrait.visible=!p.removed&&photo&&usePaint&&matchingPose&&!sightPair;
+      if(portrait)portrait.visible=!p.removed&&photo&&usePaint&&matchingPose&&!sightPair&&!p.previousSecondRuin;
       const viewYaw=photo?Math.atan2(promo.camera.position.x-p.x,promo.camera.position.z-p.z):yaw;
       const pos=photo?promo.camera.position:orbitCamera.position;
       const dist=Math.hypot(pos.x-p.x,pos.y-(p.elevation||0),pos.z-p.z);
-      const stereo=studio.update(p,viewYaw,photo ? .32 : pitch,dist,usePaint&&!sightPair&&!portrait?.visible&&!obj.userData.reconstruction);
+      const stereo=studio.update(p,viewYaw,photo ? .32 : pitch,dist,usePaint&&!sightPair&&!portrait?.visible&&!obj.userData.reconstruction&&!p.previousSecondRuin);
       obj.visible=!p.removed&&!portrait?.visible&&!stereo&&!hidden.has(p.id);obj.position.set(p.x,p.elevation||0,p.z);obj.rotation.y=p.yaw;
       if(portrait){portrait.position.copy(obj.position);portrait.renderOrder=200-promo.camera.position.distanceTo(obj.position)}
     }
@@ -169,6 +216,8 @@ export async function buildScene(canvas,api) {
   }
   function projection(){
     const w=canvas.clientWidth,h=canvas.clientHeight;if(w<=0||h<=0)return;
+    if(!sightPair&&surface)clearSurface();
+    surfaceUI();
     sync();api.appearance(usePaint&&!sightPair&&(photo||pitch<65*Math.PI/180),photo);
     if(sightPair){
       const [a,b]=sightPair.map(lookup);
@@ -176,10 +225,15 @@ export async function buildScene(canvas,api) {
         camera=eyeCamera;camera.aspect=w/h;
         const high=p=>{const box=new T.Box3().setFromObject(objects.get(p.id));return box.max.y-box.min.y};
         const eye=Math.max(.1,high(a)*.72+eyeOffset);
-        camera.position.set(a.x,(a.elevation||0)+eye,a.z);
-        camera.lookAt(b.x,(b.elevation||0)+high(b)*.55,b.z);camera.updateProjectionMatrix();camera.updateMatrixWorld();
+        if(surface&&!surface.picking){
+          camera.position.copy(surface.points[0]);camera.lookAt(surface.points[1]);
+        }else{
+          camera.position.set(a.x,(a.elevation||0)+eye,a.z);
+          camera.lookAt(b.x,(b.elevation||0)+high(b)*.55,b.z);
+        }
+        camera.updateProjectionMatrix();camera.updateMatrixWorld();
         const unitHint=a.faction!=='terrain'&&b.faction!=='terrain'?' · 양쪽 분대의 다른 모델 숨김':'';
-        api.sightInfo(a.name+' → '+b.name+unitHint+' · 시점 높이 '+eye.toFixed(2)+'″ · 휠로 높이 조절 · 전체 보기로 복귀');dirty();return;
+        api.sightInfo(a.name+' → '+b.name+unitHint+(surface?' · 전체 보기로 복귀':' · 시점 높이 '+eye.toFixed(2)+'″ · 휠로 높이 조절 · 전체 보기로 복귀'));dirty();return;
       }
       sightPair=null;sync();
     }
@@ -234,6 +288,11 @@ export async function buildScene(canvas,api) {
   }
   function start(e){
     if(gesture||![0,1,2].includes(e.button))return;
+    if(surface?.picking){
+      gesture={type:'surface',sx:e.clientX,sy:e.clientY,lastX:e.clientX,lastY:e.clientY,drag:false,pointer:e.pointerId};
+      canvas.setPointerCapture(e.pointerId);e.preventDefault();return;
+    }
+    if(surface)return;
     if(sightPair&&mode!=='sight')return;
     const pan=e.shiftKey||e.button===1,orbit=e.button===2;
     const id=pan||orbit?null:pick(e),g=ground(e);
@@ -249,6 +308,7 @@ export async function buildScene(canvas,api) {
     const dx=e.clientX-d.sx,dy=e.clientY-d.sy;
     if(!d.drag&&Math.hypot(dx,dy)<3)return;
     d.drag=true;
+    if(d.type==='surface'){surfacePicker.orbit(e.clientX-d.lastX,e.clientY-d.lastY);d.lastX=e.clientX;d.lastY=e.clientY;dirty();return;}
     if(d.type==='orbit'){if(photo){const r=canvas.getBoundingClientRect();const centre=ground({clientX:r.left+r.width/2,clientY:r.top+r.height/2});if(centre)target.copy(centre);half/=photoZoom}photo=false;yaw=d.angle-dx*.007;pitch=clamp(d.pitch+dy*.007,.14,Math.PI/2-.0001);projection()}
     if(d.type==='pan'){
       if(photo){offsetX=d.offsetX+dx;offsetY=d.offsetY+dy;projection();return}
@@ -262,6 +322,7 @@ export async function buildScene(canvas,api) {
   function finish(e,cancel=false){
     const d=gesture;if(!d||d.pointer!==e.pointerId)return;
     gesture=null;if(canvas.hasPointerCapture(e.pointerId))canvas.releasePointerCapture(e.pointerId);
+    if(d.type==='surface'){if(surface?.picking&&!cancel&&!d.drag&&e.button===0)chooseSurface(e);return;}
     if(d.type==='move'&&d.drag){const p=lookup(d.id),end={x:p.x,z:p.z};
       for(const i of d.records){i.piece.x=i.x;i.piece.z=i.z}
       if(!cancel)api.route(p,[d.start,end],true);
@@ -277,7 +338,7 @@ export async function buildScene(canvas,api) {
   canvas.addEventListener('pointerdown',start);canvas.addEventListener('pointermove',move);
   canvas.addEventListener('pointerup',e=>finish(e));canvas.addEventListener('pointercancel',e=>finish(e,true));
   canvas.addEventListener('contextmenu',e=>e.preventDefault());
-  canvas.addEventListener('wheel',e=>{e.preventDefault();if(sightPair){eyeOffset=clamp(eyeOffset-Math.sign(e.deltaY)*.15,-3,5);projection();return}const scale=Math.exp(clamp(e.deltaY,-300,300)*.0014);
+  canvas.addEventListener('wheel',e=>{e.preventDefault();if(surface){if(surface.picking)surfacePicker.scale(e.deltaY);dirty();return}if(sightPair){eyeOffset=clamp(eyeOffset-Math.sign(e.deltaY)*.15,-3,5);projection();return}const scale=Math.exp(clamp(e.deltaY,-300,300)*.0014);
     if(photo){const prev=photoZoom;photoZoom=clamp(prev/scale,.55,12);const ratio=photoZoom/prev,r=canvas.getBoundingClientRect();
       offsetX=ratio*offsetX+(1-ratio)*(e.clientX-r.left-r.width/2);offsetY=ratio*offsetY+(1-ratio)*(e.clientY-r.top-r.height/2)}
     else half=clamp(half*scale,1.2,55);projection()},{passive:false});
@@ -295,12 +356,24 @@ export async function buildScene(canvas,api) {
       half=Math.max(1.2,radius*Math.max(1,h/w)/.78);
     }
     projection()}
-  canvas.addEventListener('dblclick',e=>focus(pick(e)));
-  function render(){if(invalid){invalid=false;paintMeasure();renderer.render(scene,camera)}requestAnimationFrame(render)}
+  canvas.addEventListener('dblclick',e=>{if(!surface)focus(pick(e))});
+  function render(){
+    if(invalid){
+      invalid=false;
+      if(surface?.picking){
+        label.hidden=true;
+        surfacePicker.draw(renderer,canvas.clientWidth,canvas.clientHeight);
+      }else{
+        paintMeasure();
+        renderer.render(scene,camera);
+      }
+    }
+    requestAnimationFrame(render);
+  }
   resize();home();sync();render();
   return {sync,loadReverse,select(id){if(selected!==id)waypoints=[];selected=id;sync()},home,focus,top(){home(pitch<1.55);return pitch>1.55},
-    inSight(){return !!sightPair},
-    lookFrom(from,to){if(from!==to&&lookup(from)&&lookup(to)){sightPair=[from,to];eyeOffset=0;projection()}},
+    inSight(){return !!sightPair},startSurface,cancelSurface,
+    lookFrom(from,to){if(from!==to&&lookup(from)&&lookup(to)){clearSurface();sightPair=[from,to];eyeOffset=0;projection()}},
     backPoint(){waypoints.pop();dirty()},walk(){const p=lookup(selected);if(p&&!p.removed&&waypoints.length&&api.route(p,[{x:p.x,z:p.z},...waypoints])){waypoints=[];dirty()}},
     togglePaint(){if(!photo&&pitch>=65*Math.PI/180){usePaint=true;home()}else{usePaint=!usePaint;projection()}},
     setMode(next){mode=next;if(sightPair){sightPair=null;projection()}ends=[];waypoints=[];dirty()},toggleGrid(){gridVisible=!gridVisible;grid.visible=gridVisible;dirty();return gridVisible},

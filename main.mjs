@@ -58,7 +58,7 @@ function shownTable(){
       const poses=new Map(project(game.training).map(p=>[p.id,p]));
       for(const p of trainingField.pieces){
         const pose=poses.get(p.id);
-        if(pose)Object.assign(p,pose);else p.removed=true;
+        if(pose){delete p.previousSecondRuin;Object.assign(p,pose)}else p.removed=true;
       }
       trainingField.training=game.training;
     }
@@ -102,7 +102,7 @@ function redraw(){scene?.sync();roster();selection();history();$('undo').disable
   renderTraining();
   for(const side of ['left','right'])$('flip-'+side).setAttribute('aria-pressed',String(game.surface===side||game.surface==='reverse'));
   $('apply-map').disabled=game.rules?.status==='playing';$('map-status').textContent=game.layout?'배치 '+game.layout.map+' · 청색 '+factionNames[game.layout.blue]:'제품 사진 배치';notify()}
-function changed(){persist();redraw()}
+function changed(){scene?.cancelSurface();persist();redraw()}
 function mutate(fn,message){checkpoint();fn();log(message);changed()}
 function select(id){active=piece(id)?.id??null;scene?.select(active);roster();selection();
   if(game.training?.scenario===2)renderFieldBattle(game.training);
@@ -467,6 +467,8 @@ document.addEventListener('keydown',e=>{if(e.target.closest('input,select,textar
   else if(e.key.toLowerCase()==='r')rotate()});
 function inspectSight(from,to){reference(false);setMode('pick');scene?.lookFrom(from,to)}
 function exitSight(){if(mode==='sight'||scene?.inSight())setMode('pick')}
+$('surface-start').onclick=()=>scene?.startSurface();
+$('surface-cancel').onclick=()=>scene?.cancelSurface();
 const api={
   inspectSight,exitSight,
   getTable:()=>game,
@@ -578,6 +580,14 @@ async function start(){
   redraw();mountRules($('rules'),api);
   scene=await buildScene($('view'),{game:shownTable,template,localArt:!!original,select,checkpoint,zones:()=>game.training?.scenario>=3?$('training-'+fieldMissions[game.training.scenario].id+'-zones').checked:$('zones').checked,
     sightInfo:text=>{$('hint').textContent=text},
+    surfaceTools(active,stage,message){
+      $('surface-tools').hidden=!active;
+      $('stage').classList.toggle('surface-result',stage==='result');
+      $('surface-start').hidden=stage==='pick';
+      $('surface-start').textContent=stage==='result'?'다른 두 점 검사':'두 표면점으로 시선 확인';
+      $('surface-cancel').hidden=!stage;
+      $('surface-status').textContent=message;
+    },
     appearance:(on,photo)=>{$('appearance').setAttribute('aria-pressed',String(on));$('appearance').textContent=on?(photo?'사진 기물':'회전 사진'):'3D 조형'},
     progress:(i,n)=>$('stage-load').textContent='미니어처 준비 중 · '+i+' / '+n,
     moving:movingGroup,

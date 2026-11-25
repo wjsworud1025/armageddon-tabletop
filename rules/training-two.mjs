@@ -1,11 +1,15 @@
 import {createTrainingTwoTable, trainingTwoWallSegments, validateTrainingTwoLayout} from '../data/training-two-layout.mjs';
-import {handbookFacing,handbookTurn} from './handbook-deployment.mjs';
+import {handbookEditions,handbookFacing,handbookTurn} from './handbook-deployment.mjs';
 import {assessMove,sweptGap,crossesOnTurn} from '../movement.mjs';
 import {measureFootprints} from '../ruler.mjs';
 import {getProfile, unitId} from './profiles.mjs';
 import {opposite, woundThreshold} from './battle.mjs';
 
-export function handbookBattleEngine({scenario,field,names,validateLayout,wallSegments,shooting=null,command=null}){
+export function handbookBattleEngine(options){
+  return handbookEditions(options.scenario,options.field,field=>buildBattle({...options,field}));
+}
+function buildBattle({scenario,field,names,validateLayout,wallSegments,shooting=null,command=null}){
+  const version=field.handbookRevision??2;
   const models=field.pieces.filter(p=>p.faction!=='terrain');
   const keys=Object.keys(names);
   const factions=Object.fromEntries(models.map(p=>[unitId(p),p.faction]));
@@ -34,7 +38,7 @@ export function handbookBattleEngine({scenario,field,names,validateLayout,wallSe
   }
 
   function initial(poses) {
-    return {version:1,scenario,...(shooting?{first:'orks',shooting:null}:{}),...(command?{mission:command.create()}:{}),
+    return {version,scenario,...(shooting?{first:'orks',shooting:null}:{}),...(command?{mission:command.create()}:{}),
       round:1,active:'orks',phase:command?'command':'movement',initial:poses,poses:{...poses},
       hp:Object.fromEntries(models.map(p=>[p.id,getProfile(p).wounds])),moved:{},charged:{},
       fight:null,plan:null,attack:null,winner:null,rolls:[],history:[]};
@@ -43,7 +47,8 @@ export function handbookBattleEngine({scenario,field,names,validateLayout,wallSe
     req(!validateLayout(table).length,'훈련 '+scenario+'의 스타터 배치와 편성을 확인하세요.');
     for(const original of field.pieces.filter(p=>p.faction==='terrain')) {
       const wall=table.pieces.find(p=>p.id===original.id);
-      req(same(pose(wall),pose(original)) && same(wall.displayScale,original.displayScale),'훈련 지형은 배치도의 벽 위치에 놓으세요.');
+      req(same(pose(wall),pose(original)) && same(wall.displayScale,original.displayScale) &&
+        !!wall.previousSecondRuin===!!original.previousSecondRuin,'훈련 지형은 배치도의 벽 위치에 놓으세요.');
     }
     const poses=Object.fromEntries(table.pieces.filter(p=>p.faction!=='terrain').map(p=>[p.id,pose(p)]));
     if(!shooting)req(keys.every(u=>coherent(members(table.pieces,u))),'배치한 분대는 2″ 간격으로 이어져야 합니다.');
@@ -406,7 +411,7 @@ export function handbookBattleEngine({scenario,field,names,validateLayout,wallSe
   }
   function validate(state) {
     try {
-      if(state?.version!==1||state.scenario!==scenario||!Array.isArray(state.history))return false;
+      if(state?.version!==version||state.scenario!==scenario||!Array.isArray(state.history))return false;
       const table={...field,pieces:field.pieces.map(p=>p.faction==='terrain'?p:{...p,...state.initial[p.id]})};
       const replay=create(table);
       if(!same(replay.initial,state.initial))return false;

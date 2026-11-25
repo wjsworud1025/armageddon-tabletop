@@ -24,7 +24,7 @@ export const trainingTwoPlan={
   // outer end, elbow, other end. The first leg is the long wall. Studio cast
   // numbers are unknown. Two corner variants stand in for the small Ls.
   walls:[
-    {id:'largeRuin-2',points:[[21.7,3.2],[27.2,3.2],[27.2,6.0]],center:[25.05,5.64],yaw:-Math.PI/2},
+    {id:'largeRuin-2',points:[[21.7,3.2],[27.2,3.2],[27.2,6.0]],center:[24.930,4.965],yaw:Math.PI},
     {id:'smallRuin-2',points:[[5.0,16.9],[1.2,16.9],[1.2,15.7]],center:[1.95,15.74],yaw:Math.PI/2},
     {id:'smallRuin-3',points:[[18.8,17.8],[18.8,21.6],[17.5,21.6]],center:[17.70,20.59],yaw:Math.PI},
   ],
@@ -63,9 +63,22 @@ export function createTrainingTwoTable(){
 export function trainingTwoWallSegments(wall){
   const hw=wall.baseWidth/2,hd=wall.baseDepth/2;
   const co=Math.cos(wall.yaw),si=Math.sin(wall.yaw);
-  return [[hw,-hd],[-hw,-hd],[-hw,hd]].map(([x,z])=>({
+  const line=wall.id==='largeRuin-2'&&!wall.previousSecondRuin?
+    [[2.59,1.765],[-2.27,1.765],[-2.27,-2.11]]:[[hw,-hd],[-hw,-hd],[-hw,hd]];
+  return line.map(([x,z])=>({
     x:wall.x+co*x+si*z,z:wall.z-si*x+co*z,
   }));
+}
+
+export function previousHandbookField(scenario,field){
+  const second=scenario===2;
+  const center=second?{x:25.05,z:5.64}:{x:18.55,z:7.19};
+  return {...field,handbookRevision:1,pieces:field.pieces.map(p=>p.id!=='largeRuin-2'?p:
+    {...p,...trainingTwoWorldPoint(center),yaw:second?-Math.PI/2:Math.PI/2,baseDepth:4.1,previousSecondRuin:true})};
+}
+
+export function handbookBaseDepth(table,piece){
+  return table.handbookRevision===1&&piece.id==='largeRuin-2'?4.1:piece.baseDepth;
 }
 
 function gapToSegment(p,a,b){
@@ -90,7 +103,7 @@ export function validateTrainingTwoLayout(table){
   for(const p of table.pieces){
     const model=catalog.get(p.id);
     if(p.removed||p.elevation!==0||p.faction!==model.faction||p.kind!==model.kind||
-      p.baseWidth!==model.baseWidth||p.baseDepth!==model.baseDepth||![p.x,p.z,p.yaw].every(Number.isFinite)){
+      p.baseWidth!==model.baseWidth||p.baseDepth!==handbookBaseDepth(table,model)||![p.x,p.z,p.yaw].every(Number.isFinite)){
       faults.push('piece '+p.id);continue;
     }
     if(p.faction==='terrain'){

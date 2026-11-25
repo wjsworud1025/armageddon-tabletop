@@ -1,3 +1,5 @@
+import {previousHandbookField} from '../data/training-two-layout.mjs';
+
 export const handbookTurn=Math.PI/12;
 
 // Keep the printed facing as the reference so that 24 clicks return exactly
@@ -9,12 +11,28 @@ export function handbookFacing(origin,yaw){
   return origin+(((n%24+36)%24)-12)*handbookTurn;
 }
 
+// Histories replay against their original board, including wall collision
+// tests. Only the second ruin changed between the two printed-layout fits.
+export function handbookEditions(scenario,field,build){
+  const current=build(field),previous=build(previousHandbookField(scenario,field));
+  const methods={create:table=>(table?.handbookRevision===1?previous:current).create(table)};
+  for(const method of Object.keys(current)){
+    if(method!=='create')methods[method]=(state,...args)=>(state?.version===1?previous:current)[method](state,...args);
+  }
+  return methods;
+}
+
 export function handbookDeployment(scenario,table,validateLayout){
+  return handbookEditions(scenario,table,field=>buildDeployment(scenario,field,validateLayout));
+}
+
+function buildDeployment(scenario,table,validateLayout){
+  const version=table.handbookRevision??2;
   const models=new Map(table.pieces.filter(p=>p.faction!=='terrain').map(p=>[p.id,p]));
   const invalidState='훈련 '+scenario+'의 배치 기록을 확인하세요.';
 
   function create(){
-    return {version:1,scenario,phase:'deployment',positions:{}};
+    return {version,scenario,phase:'deployment',positions:{}};
   }
 
   function record(value){
@@ -24,7 +42,7 @@ export function handbookDeployment(scenario,table,validateLayout){
   }
 
   function validFormat(state){
-    if(!record(state)||state.version!==1||state.scenario!==scenario||state.phase!=='deployment'||!record(state.positions))return false;
+    if(!record(state)||state.version!==version||state.scenario!==scenario||state.phase!=='deployment'||!record(state.positions))return false;
     return Object.entries(state.positions).every(([id,p])=>{
       if(!models.has(id)||!record(p)||!Object.hasOwn(p,'x')||!Object.hasOwn(p,'z')||
          !Number.isFinite(p.x)||!Number.isFinite(p.z))return false;
