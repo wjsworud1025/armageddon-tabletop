@@ -142,7 +142,7 @@ export async function checkAreaCover({save,upload,state,js,click,reload,screensh
     assert.equal(await lockDisabled(),true);
     await click(sightButton(rifle,grot));
     assert.equal(await lockDisabled(),true,'Renewing sight alone cannot renew the old manual cover decision');
-    await click(act('lock'));
+    await js('document.querySelector(\'[data-act="lock"]\').click()');
     assert.equal((await state()).rules.declaration.locked,false);
     await click(act(manual?'cover-yes-0':'cover-no-0'));
     assert.equal(await lockDisabled(),false);
