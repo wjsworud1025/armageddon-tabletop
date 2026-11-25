@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createTable} from '../data/catalog.mjs';
 import {newBattle,startBattle,advance} from './battle.mjs';
-import {appendDeclaration,lockDeclaration,attackPackets,resolvePacket} from './declarations.mjs';
+import {appendDeclaration,lockDeclaration,attackPackets,resolvePacket,chooseSuppression} from './declarations.mjs';
 import {validateRulesState} from './validate.mjs';
 
 const pieces=createTable().pieces.filter(p=>p.faction!=='terrain');
@@ -25,6 +25,8 @@ test('draft, locked targets and current resolving target persist without rolling
   assert.equal(appendDeclaration(locked,pieces,[rifle('intercessor-4')]),null);
   assert.deepEqual(attackPackets(locked,pieces).map(p=>p.indices),[[0,1],[2],[3]]);
   const first=resolvePacket(locked,pieces,0,null,miss);
+  assert.equal(first.shootingEvent,null);
+  assert.equal(first.state.declaration.didShoot,true);
   assert.equal(first.result.count,4);
   assert.equal(first.state.declaration.focus,'gretchin');
   assert.equal(resolvePacket(first.state,pieces,2,null,miss),null);
@@ -32,12 +34,37 @@ test('draft, locked targets and current resolving target persist without rolling
   const second=resolvePacket(first.state,pieces,3,null,miss);
   assert.equal(second.state.declaration.focus,null);
   const last=resolvePacket(second.state,pieces,2,null,miss);
+  assert.deepEqual(last.shootingEvent,{shooter:'intercessor',targets:['gretchin','boy-0'],didShoot:true});
   assert.equal(last.finished,true);
   assert.equal(last.state.units.intercessor.finishedAttack,2);
   assert.equal(last.state.units.gretchin.shotAt,true);
   assert.equal(last.state.units['boy-0'].shotAt,true);
   assert.equal(last.state.declaration,null);
   assert.equal(appendDeclaration(last.state,pieces,[rifle('intercessor-4')]),null);
+});
+test('a volley with no surviving shooters does not offer the declared targets a reaction',()=>{
+  const plan=lockDeclaration(appendDeclaration(battle(),pieces,[rifle('intercessor-1')]),pieces);
+  const result=resolvePacket({...plan,hp:{'intercessor-1':0}},pieces,0,null,miss);
+  assert.equal(result.finished,true);
+  assert.equal(result.shootingEvent,null);
+});
+test('Wartrakk suppression applies to its sole hit target or prompts for a single surviving hit unit',()=>{
+  const unit='wartrakk-1',hit=()=>.99;
+  const rocket=row(unit,0,'intercessor','intercessor-1'),shoota=row(unit,1,'vanguard','vanguard-1');
+  const start=rows=>lockDeclaration(appendDeclaration(battle(2,'orks'),pieces,rows),pieces);
+  const one=resolvePacket(start([shoota]),pieces,0,null,hit);
+  assert.equal(one.state.patrol.suppressed,'vanguard');
+  const first=resolvePacket(start([rocket,shoota]),pieces,0,null,hit);
+  assert.equal(first.state.patrol.suppressed,null);
+  const last=resolvePacket(first.state,pieces,1,null,hit).state;
+  assert.deepEqual(last.units.wartrakk.suppressionTargets,['intercessor','vanguard']);
+  assert.ok(validateRulesState(last));
+  assert.equal(advance(last),last);
+  assert.equal(chooseSuppression(last,'captain'),null);
+  const selected=chooseSuppression(last,'intercessor');
+  assert.equal(selected.patrol.suppressed,'intercessor');
+  assert.deepEqual(selected.units.wartrakk.suppressionTargets,[]);
+  assert.equal(chooseSuppression(selected,'vanguard'),null);
 });
 test('an individual cannot double declare, combine sidearm with rifle, or mix grenade profiles',()=>{
   const draft=appendDeclaration(battle(),pieces,[rifle('intercessor-2')]);

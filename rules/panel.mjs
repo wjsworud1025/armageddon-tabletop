@@ -4,11 +4,12 @@ import {chargeActions,chargeControls} from './charge-controls.mjs';
 import {createFightControls} from './fight-controls.mjs';
 import {reinforcementOptions,expiringReserves,reserveCapacity} from './reinforcements.mjs';
 import {attachForDeployment} from './reinforcement-session.mjs';
+import {openShootingReaction,shootingReactionOptions} from './shooting-reaction.mjs';
 import {coherency,travelCost,moveLimit} from '../movement.mjs';
 import {newBattle,startBattle,advance,opposite,steps,teams,roll,currentHP,unitMembers,
   groupId,changeUnit,needsShock,shockTest,adjustHP,controlObjective,engaged,modelProfile,
   hazardCandidates,resolveHazard} from './battle.mjs';
-import {draftRestriction,appendDeclaration,lockDeclaration,attackPackets,resolvePacket} from './declarations.mjs';
+import {draftRestriction,appendDeclaration,lockDeclaration,attackPackets,resolvePacket,chooseSuppression} from './declarations.mjs';
 import {doctrines,enhancements,tactics,selectOrder,useTactic,inDoctrine,hasWaaagh,effectWeapon} from './patrol.mjs';
 import {patrolMissions,recordLosses,objectiveSnapshot,missionAward} from './missions.mjs';
 
@@ -181,6 +182,15 @@ export function mountRules(container,api) {
       }).join('')+(!plan.rows.some(r=>r.done)?detail('target-exception','표적 적격성 변경',
         '<p>상대 반응 이동 등으로 기존 표적을 선택할 수 없게 되면 양측 확인 후 선언을 수정하세요.</p>'+btn('reopen','적격성 변경 · 선언 다시 열기')):''));
   }
+  function selectedTactic(state,key,actor){
+    const unit=groupId(state,actor);
+    if(key==='surge')return null;
+    if(key==='med'){
+      const plan=state.declaration;
+      if(!plan?.locked||plan.rows.some(r=>r.done)||!plan.rows.some(r=>r.target===unit))return null;
+    }
+    return useTactic(state,key,unit,actor.faction,state.units[unit]?.shocked);
+  }
   function renderActor(state,actor) {
     const p=modelProfile(state,actor),members=unitMembers(state,contents(),actor);
     const unit=findKey(state,actor);
@@ -225,7 +235,7 @@ export function mountRules(container,api) {
       state.patrol.suppressed===groupId(state,actor)?'제압됨':''].filter(Boolean);
     let attack='';
     if (state.status==='playing' && ((state.step===2 && mine) || state.step===4)) attack=renderAttack(state,actor);
-    const available=Object.entries(tactics).filter(([key,t])=>useTactic(state,key,groupId(state,actor),actor.faction,unit.shocked));
+    const available=Object.entries(tactics).filter(([key])=>selectedTactic(state,key,actor));
     const tacticsMenu=available.length ? detail('tactics','분대 전술 · 각 1 CP',available.map(([key,t])=>'<p>'+esc(t.rule)+'</p>'+btn('tactic-'+key,t.name)).join('')):'';
     if (state.status==='playing' && state.step===0 && mine && actor.kind==='warboss' && state.patrol.enhanced.warcry &&
       !state.patrol.warcryUsed && members.some(p=>p.kind==='boy' && !currentHP(state,p)) && alive.some(p=>p.kind==='boy')) {
@@ -235,9 +245,7 @@ export function mountRules(container,api) {
       action+=select('bossStyle','워보스 분대 근접 효과',opt('lethal','치명적 명중',choices.bossStyle||'lethal')+opt('sustained','추가 명중 1',choices.bossStyle));
     }
     if(state.step===3&&currentHP(state,actor)>0)action+=chargeActions(api.getTable(),actor);
-    if (state.status==='playing' && !mine && state.step===2 && actor.kind==='vanguard' && unit.shotAt && !unit.reaction)
-      action+=btn('react','신속 대응 · D6+1″ 이동');
-    if (state.status==='playing' && mine && state.step===2 && actor.kind==='wartrakk' && unit.finishedAttack===2 && unit.hitTargets?.length && !unit.suppressedEnemy) {
+    if (state.status==='playing' && mine && state.step===2 && actor.kind==='wartrakk' && unit.finishedAttack===2 && !unit.suppressionTargets && unit.hitTargets?.length && !unit.suppressedEnemy) {
       const hit=unit.hitTargets.map(id=>living(state).find(p=>groupId(state,p)===id)).filter(Boolean);
       if (hit.length) action+=select('suppressTarget','명중한 적 분대',hit.map(p=>opt(groupId(state,p),unitLabel(p),choices.suppressTarget)).join(''))+btn('suppress','사격 완료 · 적 분대 제압');
     }
@@ -245,6 +253,33 @@ export function mountRules(container,api) {
       (needsShock(state,members)?' · 지휘 시 검사 필요':'')+(flags.length?' · '+esc(flags.join(' · ')):'')+'</p>'+
       attachment+action+tacticsMenu+
       detail('model','모델 상태 수동 조정',row(btn('hurt','상처 −1',currentHP(state,actor)<=0)+btn('heal','상처 +1',currentHP(state,actor)>=p.wounds)+btn('status',unit.shocked?'충격 해제':'전장 충격 표시'))))+attack;
+  }
+  function renderReaction(state,all){
+    const plan=state.reactionPlan;
+    const name=key=>{
+      const p=all.find(p=>p.kind===key)||all.find(p=>groupId(state,p)===key);
+      return p?unitLabel(p):key;
+    };
+    if(plan){
+      const limit=Math.max(0,plan.die+1-(plan.takeToSkies?2:0));
+      return chunk(esc(name(plan.unit))+' · '+(plan.mode==='surge'?'서지 이동':'신속 대응'),
+        '<p>D6 결과 '+plan.die+' · 모델당 최대 '+limit+'″</p>'+
+        (plan.target?'<p>접근할 적 분대 · '+esc(name(plan.target))+'</p>':'')+
+        '<p>전장에서 분대원을 끌거나 경로 이동으로 경유점을 지정하세요.</p>'+
+        row(btn('reaction-finish','반응 이동 완료')+btn('reaction-cancel','원위치 · 이동 포기')));
+    }
+    const opts=shootingReactionOptions(api.getTable(),state.shootingReaction);
+    const selected=opts.find(o=>o.unit===choices['reaction-unit'])??opts[0];
+    let controls='';
+    if(selected){
+      controls=select('reaction-unit','반응할 분대',opts.map(o=>opt(o.unit,name(o.unit),selected.unit)).join(''));
+      if(selected.mode==='surge')controls+=select('reaction-target','가장 가까운 적 분대',
+        selected.targets.map(id=>opt(id,name(id),choices['reaction-target'])).join(''));
+      if(selected.canFly)controls+='<label><input type="checkbox" data-field="reaction-fly"'+(choices['reaction-fly']?' checked':'')+'>비행 이동 (최대 거리 −2″)</label>';
+      controls+=btn('reaction-start',selected.mode==='surge'?'한복판으로! · 1 CP · D6+1″':'신속 대응 · D6+1″');
+    }
+    return chunk('사격 직후 · '+esc(teams[opposite(state.active)])+' 반응',
+      '<p>'+esc(name(state.shootingReaction.shooter))+' 분대의 사격이 끝났습니다.</p>'+controls+btn('reaction-decline','반응 없이 계속'));
   }
   function renderObjectives(state) {
     const terrain=api.getPieces().filter(p=>p.faction==='terrain' && !p.removed);
@@ -299,7 +334,7 @@ export function mountRules(container,api) {
     } else {
       top=chunk(esc(state.mission || (state.rounds===5 ? patrolMissions[state.active] : '로컬 대전'))+' · '+state.round+'/'+state.rounds+' 라운드',
         '<b class="br-phase">'+teams[state.active]+' · '+steps[state.step]+'</b><p>'+prompts[state.step]+'</p>'+
-        btn('next',state.step<5?'다음 · '+steps[state.step+1]:(state.active!==state.first && state.round===state.rounds?'대전 마치기':'다음 플레이어'),!!(state.hazard||state.declaration||state.movePlan||state.reinforcePlan||state.chargePlan||dispersed.length||fightView&&!fightView.done)));
+        btn('next',state.step<5?'다음 · '+steps[state.step+1]:(state.active!==state.first && state.round===state.rounds?'대전 마치기':'다음 플레이어'),!!(state.hazard||state.declaration||state.movePlan||state.reinforcePlan||state.chargePlan||state.shootingReaction||state.reactionPlan||state.units.wartrakk?.suppressionTargets?.length||dispersed.length||fightView&&!fightView.done)));
     }
     if(state.reinforcePlan){
       const deep=state.reinforcePlan.mode==='deep-strike';
@@ -353,6 +388,17 @@ export function mountRules(container,api) {
             btn('hazard-end','분대 전멸 · 판정 종료')));
       }
     }
+    const suppressible=state.units.wartrakk?.suppressionTargets;
+    if(suppressible?.length){
+      const options=suppressible.map(k=>opt(k,unitLabel(all.find(p=>groupId(state,p)===k)),choices.suppressTarget)).join('');
+      root.innerHTML=top+chunk('워트랙 · 제압 사격',select('suppressTarget','명중한 적 분대',options)+btn('suppress-shot','분대 제압'));
+      return;
+    }
+    if(state.shootingReaction||state.reactionPlan){
+      if(!state.hazard)top+=renderReaction(state,all);
+      root.innerHTML=top+(feedback?'<p aria-live="polite" class="br-latest">'+esc(feedback)+'</p>':'');
+      return;
+    }
     let army='';
     if (state.status==='setup') {
       army=detail('upgrades','패트롤 업그레이드 선택',Object.entries(enhancements).map(([id,[team,label]])=>
@@ -384,6 +430,27 @@ export function mountRules(container,api) {
     const actor=getPiece(choices.fighter);
     const val=id=>field(id)?.value??choices[id];
     const integer=(id,min,max)=>Math.max(min,Math.min(max,Math.trunc(Number(val(id)))||0));
+    if(state.units.wartrakk?.suppressionTargets?.length){
+      if(action==='suppress-shot'){
+        const target=val('suppressTarget'),next=chooseSuppression(state,target);
+        if(next)return commit(next,'워트랙 제압 사격 · '+unitLabel(contents().find(p=>groupId(state,p)===target)));
+      }
+      return;
+    }
+    if((state.shootingReaction||state.reactionPlan)&&!action.startsWith('hazard-')){
+      if(state.hazard||!action.startsWith('reaction-'))return;
+      const command=action.slice('reaction-'.length);
+      try{
+        feedback='';
+        const choice={unit:field('reaction-unit')?.value,target:field('reaction-target')?.value??null,takeToSkies:!!field('reaction-fly')?.checked};
+        api.reactionCommand(command,choice);
+        if(command==='start'){
+          const member=contents().find(p=>groupId(state,p)===choice.unit&&currentHP(state,p)>0);
+          if(member)api.selectPiece(member.id);
+        }
+      }catch(error){feedback=error.message;refresh()}
+      return;
+    }
     if(state.reinforcePlan||((action==='ingress'||action==='ingress-deep')&&state.status==='playing')){
       try{
         feedback='';
@@ -493,17 +560,27 @@ export function mountRules(container,api) {
       const resolved=resolvePacket(state,contents(),index,val('allocate-'+index)||null);
       if(!resolved)return;
       const {result,packet,actor,target}=resolved;
+      if(resolved.shootingEvent){
+        const game={...api.getTable(),rules:resolved.state};
+        resolved.state.shootingReaction=openShootingReaction(game,resolved.shootingEvent);
+        delete choices['reaction-unit'];delete choices['reaction-target'];delete choices['reaction-fly'];
+      }
       const trace=result?' · '+result.hits+'/'+result.count+' 명중 · 상처 '+result.wounds+' · 피해 '+
         result.damage.reduce((sum,h)=>sum+h.lost,0)+' · 명중 ['+diceText(result.hitDice)+'] · 상처 ['+diceText(result.woundDice)+
         '] · 방어 ['+diceText(result.saves)+']':' · 해결할 공격 없음';
       return commit(resolved.state,unitLabel(actor)+' → '+unitLabel(target)+' · '+[...packet.names].join(' / ')+trace+
-        (resolved.finished?' · 분대 공격 완료':'')+(resolved.state.hazard?' · 위험 D6 × '+resolved.state.hazard.count:''),resolved.removed);
+        (resolved.finished?' · 분대 공격 완료':'')+(resolved.finished&&actor.kind==='wartrakk'&&resolved.state.units.wartrakk.suppressedEnemy?
+          ' · '+unitLabel(contents().find(p=>groupId(state,p)===resolved.state.patrol.suppressed))+' 제압':'')+
+        (resolved.state.hazard?' · 위험 D6 × '+resolved.state.hazard.count:''),resolved.removed);
     }
     if (action==='hazard-roll' || action==='hazard-end' || action.startsWith('hazard-wound-')) {
       if (!state.hazard || (action==='hazard-roll')===!!state.hazard.dice) return;
       const id=action.startsWith('hazard-wound-')?action.slice('hazard-wound-'.length):null;
       const result=resolveHazard(state,contents(),id);
       if (!result) return;
+      if(!result.state.hazard&&result.state.shootingReaction&&
+        !shootingReactionOptions({...api.getTable(),rules:result.state},result.state.shootingReaction).length)
+        result.state.shootingReaction=null;
       const member=contents().find(p=>groupId(state,p)===state.hazard.unit);
       const label=member?unitLabel(member):state.hazard.unit;
       const hits=result.dice.filter(n=>n<=2).length;
@@ -567,10 +644,6 @@ export function mountRules(container,api) {
       return commit(next,unitLabel(actor)+(action==='ingress'?' · 전장에 배치':' · 전략 예비대로 이동'),changes);
     }
     if (!currentHP(state,actor)) {feedback='제거된 모델입니다.';return refresh();}
-    if (action==='react') {
-      const order='신속 대응 이동 '+(roll()+1)+'″';
-      return commit(changeUnit(state,actor,{order,reaction:true}),actor.name+' · '+order);
-    }
     if (action==='suppress') {
       const target=val('suppressTarget');
       if (!unit.hitTargets?.includes(target) || unit.suppressedEnemy) return;
@@ -587,7 +660,7 @@ export function mountRules(container,api) {
       return commit({...state,hp,patrol:{...state.patrol,warcryUsed:true}},actor.name+' · 전투 함성 '+number+' · '+revived.length+'명 복귀. 편대 안으로 배치하세요.',changes);
     }
     if (action.startsWith('tactic-')) {
-      const key=action.slice(7),next=useTactic(state,key,groupId(state,actor),actor.faction,unit.shocked);
+      const key=action.slice(7),next=selectedTactic(state,key,actor);
       if (next) return commit(next,unitLabel(actor)+' · '+tactics[key].name+' (1 CP) · '+tactics[key].rule);
       return;
     }
@@ -623,6 +696,11 @@ export function mountRules(container,api) {
   function change(event) {
     const el=event.target,key=el.dataset.field;
     if (!key) return;
+    if(key.startsWith('reaction-')){
+      choices[key]=el.type==='checkbox'?el.checked:el.value;
+      if(key==='reaction-unit'){delete choices['reaction-target'];delete choices['reaction-fly']}
+      refresh();return;
+    }
     if(key.startsWith('fight-')){fights.change(key,el.value,el.checked);return}
     const state=read();
     if (key==='mission') {

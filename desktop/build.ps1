@@ -15,7 +15,7 @@ try {
     $sources += @('fight-session.mjs','fight-sequence.mjs')
     foreach ($source in $sources) {
         foreach ($file in (Get-ChildItem -Recurse -File -LiteralPath (Join-Path $tableRoot $source))) {
-            if ($file.Name -match '\.test\.mjs$|\.pyc?$|^browser-acceptance\.mjs$') {continue}
+            if ($file.Name -match '\.test\.mjs$|\.pyc?$|^browser-.*\.mjs$') {continue}
             $entry = $file.FullName.Substring($tableRoot.Length+1).Replace('\','/')
             if ($entry -eq 'index.html' -and $localPhotos) {
                 $html = [IO.File]::ReadAllText($file.FullName).Replace('<head>', '<head><meta name="local-studio-photos" content="installed">')

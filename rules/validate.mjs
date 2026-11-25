@@ -22,7 +22,8 @@ for (const kind of Object.keys(profiles)) for(let i=0;i<(count[kind]||1);i++) {
 }
 const model = value => models.has(value);
 const group = value => groups.has(value);
-const faction=id=>['captain','librarian','intercessor','vanguard','landSpeeder'].includes(models.get(id).kind)?'marines':'orks';
+const groupTeam=key=>['captain','librarian','intercessor','vanguard','landSpeeder'].includes(key)?'marines':'orks';
+const faction=id=>groupTeam(models.get(id).kind);
 const identifier = value => string(value) && /^[a-zA-Z][a-zA-Z0-9-]{0,59}$/.test(value) && !['constructor','prototype'].includes(value);
 const hp = map(model,(n,id)=>int(0,getProfile(models.get(id)).wounds)(n));
 const totals = fields({marines:int(0),orks:int(0)},['marines','orks']);
@@ -38,11 +39,11 @@ const rowFields={
   cover:boolean,lethal:boolean,sustained:boolean,ignore:boolean,guard:boolean,done:boolean
 };
 const validRow=fields({...rowFields,vehiclePenalty:int(0,2)},Object.keys(rowFields));
-const declaration=fields({unit:group,locked:boolean,focus:nullable(group),rows:list(validRow,276)},['unit','locked','focus','rows']);
+const declaration=fields({unit:group,locked:boolean,didShoot:boolean,focus:nullable(group),rows:list(validRow,276)},['unit','locked','focus','rows']);
 const unit = fields({
   shocked:boolean,shockChecked:boolean,reinforcing:boolean,movementTracked:boolean,movement:oneOf(['normal','advance','fallback','remain']),
   order:string,charge:int(0,12),chargeTracked:boolean,charged:boolean,rerolled:boolean,attacks,finishedAttack:attackStep,
-  counterCharge:boolean,reaction:boolean,fightsFirst:boolean,shotAt:boolean,suppressedEnemy:boolean,hitTargets:list(group,12)
+  counterCharge:boolean,reaction:boolean,reactionTracked:boolean,fightsFirst:boolean,shotAt:boolean,suppressedEnemy:boolean,hitTargets:list(group,12),suppressionTargets:list(group,12)
 });
 const doctrine=oneOf(Object.keys(doctrines)),tactic=oneOf(Object.keys(tactics));
 const patrol=fields({
@@ -59,6 +60,9 @@ const chargePlan=fields(chargeFields,Object.keys(chargeFields));
 const fightFields={unit:group,type:oneOf(['pile-in','consolidate']),mode:oneOf(['pile-in','ongoing','engaging','objective']),
   targets:list(identifier,16),origins:map(model,pose),paths:map(model,list(pose,512))};
 const fightPlan=fields(fightFields,Object.keys(fightFields));
+const reactionWindow=fields({round:int(1,20),active:team,shooter:group,targets:list(group,12)},['round','active','shooter','targets']);
+const reactionFields={unit:group,mode:oneOf(['rapid','surge']),shooter:group,target:nullable(group),die:int(1,6),takeToSkies:boolean,
+  origins:map(model,pose),paths:map(model,list(pose,512))};
 const movePlan=fields({unit:group,type:oneOf(['advance','normal','fallback']),advanceRoll:int(0,6),
   origins:map(model,pose),paths:map(model,list(pose,512)),takeToSkies:boolean,fallbackMode:oneOf(['ordered','desperate']),
   desperateEscapeResolved:boolean,rerollClosed:boolean},['unit','type','advanceRoll','origins','paths','takeToSkies','fallbackMode','desperateEscapeResolved']);
@@ -67,6 +71,7 @@ const battle=fields({
   round:int(1,20),rounds:int(1,20),step:int(0,5),cp:totals,vp:totals,hp,
   units:map(group,unit),attachments:map(model,group),objectives:map(identifier,objective),hazard:nullable(hazard),declaration:nullable(declaration),movePlan:nullable(movePlan),chargePlan:nullable(chargePlan),chargeWindow:boolean,
   fightSequence:validFightSequence,fightPlan:nullable(fightPlan),
+  shootingReaction:nullable(reactionWindow),reactionPlan:nullable(fields(reactionFields,Object.keys(reactionFields))),
   reinforcePlan:nullable(fields({unit:group,mode:oneOf(['edge','deep-strike']),origins:map(model,pose)},['unit','mode','origins'])),
   reserves:map(group,list(model,46)),patrol,notes:string,mission:string,last:string,
   deployment:fields({defender:team,next:team,placed:list(group,12)},['defender','next','placed']),
@@ -77,6 +82,22 @@ export function validateRulesState(value) {
   if (value==null) return true;
   if (fields({hp},['hp'])(value)) return true;
   if(!battle(value) || value.round>value.rounds)return false;
+  const wartrakk=value.units?.wartrakk;
+  if(wartrakk?.suppressionTargets?.length&&
+    (value.status!=='playing'||value.active!=='orks'||value.step!==2||wartrakk.finishedAttack!==2||value.declaration||value.reactionPlan||
+    !wartrakk.suppressionTargets.every(k=>groupTeam(k)==='marines'&&wartrakk.hitTargets?.includes(k))))return false;
+  if(value.shootingReaction||value.reactionPlan){
+    const w=value.shootingReaction,p=value.reactionPlan,shooter=(w??p).shooter;
+    if(value.status!=='playing'||value.step!==2||value.declaration||value.movePlan||value.reinforcePlan||value.chargePlan||
+       value.fightPlan||value.fightSequence||groupTeam(shooter)!==value.active||value.units?.[shooter]?.finishedAttack!==2)return false;
+    if(w)return !p&&w.round===value.round&&w.active===value.active&&w.targets.length>0&&
+      new Set(w.targets).size===w.targets.length&&w.targets.every(k=>groupTeam(k)!==value.active)&&
+      (!value.hazard||(value.hazard.unit===shooter&&!value.hazard.reason));
+    const ids=Object.keys(p.origins);
+    return !value.hazard&&groupTeam(p.unit)!==value.active&&value.units[p.unit]?.reaction===true&&value.units[p.unit]?.reactionTracked===true&&
+      (p.mode==='rapid'?p.unit==='vanguard'&&p.target===null:groupTeam(p.unit)==='orks'&&!p.takeToSkies&&p.target!==null&&groupTeam(p.target)===value.active)&&
+      ids.length>0&&ids.every(id=>(value.attachments?.[id]||unitId(models.get(id)))===p.unit)&&Object.keys(p.paths).every(id=>ids.includes(id));
+  }
   if(value.reinforcePlan){
     const p=value.reinforcePlan,ids=Object.keys(p.origins),waiting=value.reserves?.[p.unit];
     return value.status==='playing'&&value.step===1&&value.round>=2&&!value.movePlan&&!value.chargePlan&&!value.fightPlan&&!value.fightSequence&&!value.declaration&&!value.hazard&&

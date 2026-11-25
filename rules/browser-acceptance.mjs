@@ -13,6 +13,7 @@ import {createTable} from '../data/catalog.mjs';
 import {layoutGeometry,objectiveAreas} from '../layouts.mjs';
 import {getProfile} from './profiles.mjs';
 import {newBattle,startBattle} from './battle.mjs';
+import {checkShootingReactions} from './browser-shooting-reactions.mjs';
 
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const server=createServer(async(req,res)=>{
@@ -110,7 +111,7 @@ try {
   await click(button('lock'));await click(button('resolve-0'));await js('Math.random=window.acceptanceRandom');
   s=await state();assert.equal(s.rules.hp[victim.id],0);
   assert.ok(s.pieces.find(p=>p.id===victim.id).removed);
-  assert.equal(await disabled('attack'),true);
+  assert.notEqual(await disabled('attack'),false);
   await click('#undo');s=await state();
   assert.equal(s.pieces.find(p=>p.id===victim.id).removed,false);
   assert.ok((s.rules.hp[victim.id]??getProfile(victim).wounds)>0);
@@ -123,6 +124,7 @@ try {
     await upload(corrupt);
     assert.deepEqual(await state(),previous);
   }
+  if((await state()).rules.shootingReaction)await click(button('reaction-decline'));
   await choose('fighter',rifles[0].id);
   const otherGrot=template.pieces.find(p=>p.kind==='gretchin' && p.id!==victim.id);
   await choose('target',otherGrot.id);
@@ -142,6 +144,7 @@ try {
   s=await state();
   assert.equal(s.rules.units.intercessor.attacks[rifles[0].id].length,1);
   assert.equal(s.rules.units.intercessor.attacks[rifles[1].id].length,2);
+  if(s.rules.shootingReaction)await click(button('reaction-decline'));
   await choose('fighter',rifles[1].id);
   assert.equal(await disabled('attack'),true);
   // In this five-round scoring fixture all combatants stay out of engagement.
@@ -421,11 +424,13 @@ try {
   await click(button('next'));assert.equal((await state()).rules.step,2);
   await drag(arrivals[0],blockedMarkers[0]);s=await state();
   assert.deepEqual(arrivals.map(id=>coords(s,id)),arrived,'Ingress prevents another move until the next Charge phase');
+  const reactionChecks=await checkShootingReactions({movementFixture,upload,choose,click,button,state,js,drag,
+    reload:async()=>{await send('Page.reload');await until(()=>js('!!window.tabletopView'));await click('[data-tab=battle]');}});
   assert.deepEqual(errors,[]);
   console.log(JSON.stringify({passed:true,areas:4,rounds:5,winner:'marines',vp:finalVP,casualtyUndoRedo:true,
     corruptImportsRejected:2,volley:true,splitFire:true,lockedDeclarationReload:true,persisted:true,hazardousVolleyUndoRedo:true,
     localArt,movementDrag:true,movementRange:true,movementUndoReload:true,desperateEscape:true,endTurnCoherency:true,
     chargeDrag:true,chargeFailure:true,chargeUndoReload:true,chargeReactions:3,fightDrag:true,fightUndoReload:true,
     fightTurns:2,fightLocked:true,fightConsolidation:true,fightEndTurn:true,corruptFightRejected:true,
-    ingressAttached:true,ingressDistance:true,ingressCancelUndoReload:true,ingressCommitted:true,ingressMovementLocked:true}));
+    ingressAttached:true,ingressDistance:true,ingressCancelUndoReload:true,ingressCommitted:true,ingressMovementLocked:true,...reactionChecks}));
 } finally {ws?.close();browser.kill();server.closeAllConnections();server.close();}

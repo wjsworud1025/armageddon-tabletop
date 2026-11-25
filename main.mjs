@@ -9,6 +9,8 @@ import {beginMove,proposeMove,finishMove,rewindMove,rerollMove,abandonInvalidMov
 import {beginCharge,selectChargeTargets,proposeCharge,finishCharge,rewindCharge,cancelCharge} from './charge-session.mjs';
 import {beginFightMove,proposeFightMove,finishFightMove,cancelFightMove} from './fight-session.mjs';
 import {beginReinforcement,placeReinforcement,finishReinforcement} from './rules/reinforcement-session.mjs';
+import {beginShootingReaction,proposeShootingReaction,finishShootingReaction,declineShootingReaction} from './rules/shooting-reaction.mjs';
+import {tacticActive} from './rules/patrol.mjs';
 import {applyLayout,objectiveAreas,validDeployment,objectiveFootprints} from './layouts.mjs';
 import {studioGroupFor,openStudioViewer} from './assets/turntable.mjs';
 import {loadPortraitMap,portraitUrl} from './painted.mjs';
@@ -57,7 +59,7 @@ function selection(){
   $('piece-spec').textContent=factionNames[p.faction]+' · '+(p.faction==='terrain'?'지면 점유 폭':'베이스')+' '+Math.round(p.baseWidth*25.4)+' × '+Math.round(p.baseDepth*25.4)+' mm';
   const inReserve=Object.values(game.rules?.reserves??{}).some(ids=>ids.includes(p.id));
   $('elevation').value=p.elevation||0;
-  $('remove').disabled=inReserve||!!game.rules?.reinforcePlan;
+  $('remove').disabled=inReserve||!!(game.rules?.reinforcePlan||game.rules?.shootingReaction||game.rules?.reactionPlan);
   $('remove').textContent=inReserve?(p.removed?'예비대 대기 중':'예비대 배치 중'):p.removed?'전장 복귀':'전장에서 제거';
   $('focus').disabled=!!p.removed;
 }
@@ -99,7 +101,11 @@ function movingByRules(p){
   if(r?.status!=='playing')return false;
   if(r.step===4)return true;
   const unit=r.units?.[groupId(r,p)];
-  if(r.step===2&&unit?.reinforcing&&unit.movementTracked)return true;
+  if(r.step===2){
+    if(r.shootingReaction||r.reactionPlan||unit?.reactionTracked)return true;
+    // Previous saves held the rolled order but no path or starting positions.
+    return !(unit?.reaction||tacticActive(r,'surge',groupId(r,p)));
+  }
   if(r.step===3)return !!r.chargePlan||!(unit?.charge&&!unit.chargeTracked&&!unit.charged);
   if(r.step!==1)return false;
   if(r.reinforcePlan)return true;
@@ -109,7 +115,10 @@ function movingByRules(p){
   return true;
 }
 function proposeTableMotion(p,paths){
-  if(game.rules.step===2)throw Error('이번 턴에 증원한 분대는 돌격 페이즈 전까지 다시 이동할 수 없습니다.');
+  if(game.rules.step===2){
+    if(game.rules.reactionPlan)return proposeShootingReaction(game,p,paths);
+    throw Error('사격 페이즈에는 반응 이동을 선택한 분대만 옮길 수 있습니다.');
+  }
   if(game.rules.reinforcePlan)return placeReinforcement(game,p,paths);
   if(game.rules.step===4)return proposeFightMove(game,p,paths,fightObjectives());
   return game.rules.step===3?proposeCharge(game,p,paths):proposeMove(game,p,paths);
@@ -132,6 +141,7 @@ function editPose(p,delta,message){
 }
 function rotate(){const p=piece(active);if(p)editPose(p,{yaw:(p.yaw+Math.PI/12)%(2*Math.PI)},p.name+' 15° 회전')}
 function remove(id,removed){const p=piece(id);
+  if(game.rules?.shootingReaction||game.rules?.reactionPlan){toast('현재 사격 반응을 먼저 마치세요.');return}
   if(game.rules?.reinforcePlan || p&&game.rules?.reserves?.[groupId(game.rules,p)]?.includes(id)){
     toast('예비대는 대전 탭에서 배치하거나 복귀시키세요.');return;
   }
@@ -179,6 +189,11 @@ document.addEventListener('keydown',e=>{if(e.target.closest('input,select,textar
   else if(e.key.toLowerCase()==='r')rotate()});
 const api={
   getTable:()=>game,
+  reactionCommand(command,choice){
+    const result=command==='start'?beginShootingReaction(game,game.rules.shootingReaction,choice):
+      command==='finish'?finishShootingReaction(game):declineShootingReaction(game);
+    applyMovement(result);
+  },
   reinforceCommand(command,unit,mode){
     const result=command==='begin'?beginReinforcement(game,unit,mode):finishReinforcement(game,command==='cancel');
     applyMovement(result);

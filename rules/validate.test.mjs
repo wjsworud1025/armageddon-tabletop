@@ -7,6 +7,20 @@ test('empty tables, legacy wound ledgers and v1 battles survive import',()=>{
   for (const valid of [null,undefined,{hp:{'captain-1':6}},newBattle(),startBattle(newBattle(),'orks',20)])
     assert.equal(validateRulesState(valid),true);
 });
+test('a saved reaction belongs to the enemy of the unit whose shooting just finished',()=>{
+  const battle={...startBattle(newBattle(),'orks',5),step:2,units:{'boy-0':{finishedAttack:2}}};
+  const window={round:1,active:'orks',shooter:'boy-0',targets:['vanguard']};
+  assert.ok(validateRulesState({...battle,shootingReaction:window}));
+  for(const bad of [{round:2},{active:'marines'},{shooter:'vanguard'},{targets:['boy-1']},{targets:['vanguard','vanguard']}]){
+    assert.equal(validateRulesState({...battle,shootingReaction:{...window,...bad}}),false);
+  }
+  const origins={'vanguard-1':{x:1,z:0,yaw:0,elevation:0}};
+  const draft={...battle,units:{...battle.units,vanguard:{reaction:true,reactionTracked:true}},
+    reactionPlan:{mode:'rapid',unit:'vanguard',shooter:'boy-0',die:3,target:null,takeToSkies:false,origins,paths:{}}};
+  assert.ok(validateRulesState(draft));
+  assert.equal(validateRulesState({...draft,shootingReaction:window}),false);
+  assert.equal(validateRulesState({...draft,reactionPlan:{...draft.reactionPlan,paths:{'warboss-1':[]}}}),false);
+});
 test('rejects corrupt nested battle data before it can reach controls',()=>{
   const badChanges=[
     {round:'<b>1</b>'},{step:6},{vp:{marines:'2',orks:2}},{hp:{'captain-1':7}},

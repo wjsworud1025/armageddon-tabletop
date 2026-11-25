@@ -11,6 +11,7 @@ const meleeLimit=(w,entry)=>w.attacks+entry.extra;
 export function draftRestriction(state,pieces,actor,index,target) {
   const plan=state.declaration;
   const key=groupId(state,actor);
+  if(state.shootingReaction||state.reactionPlan||state.units?.wartrakk?.suppressionTargets?.length)return '직전 사격의 제압과 반응 이동을 먼저 마치세요';
   if (plan?.locked) return '선언한 공격을 먼저 판정하세요';
   if (plan && plan.unit!==key) return '현재 분대의 공격 선언을 마치세요';
   if (state.hazard) return '앞선 위험 판정을 마치세요';
@@ -109,7 +110,8 @@ export function resolvePacket(state,pieces,index,preferred=null,random=Math.rand
   const updated={...order,attacks,hitTargets};
   let next={...state,hp:{...state.hp,...result?.hp},units:{...state.units,[plan.unit]:updated}};
   const finished=rows.every(r=>r.done);
-  next.declaration=finished?null:{...plan,rows,focus:rows.some(r=>!r.done&&r.target===first.target)?first.target:null};
+  const didShoot=state.step===2&&(count>0||(plan.didShoot??plan.rows.some(r=>r.done)));
+  next.declaration=finished?null:{...plan,rows,...(state.step===2?{didShoot}:{}),focus:rows.some(r=>!r.done&&r.target===first.target)?first.target:null};
   if(finished){
     const dangerous=new Set();
     for(const r of rows){
@@ -119,7 +121,20 @@ export function resolvePacket(state,pieces,index,preferred=null,random=Math.rand
     }
     if(dangerous.size)next=queueHazard(next,actor,dangerous.size);
     next.units[plan.unit]={...updated,finishedAttack:state.step};
+    if(state.step===2&&plan.unit==='wartrakk'){
+      const liveTargets=hitTargets.filter(key=>pieces.some(p=>getProfile(p)&&groupId(next,p)===key&&currentHP(next,p)>0));
+      next.units.wartrakk.suppressionTargets=liveTargets;
+      if(liveTargets.length===1)next=chooseSuppression(next,liveTargets[0]);
+    }
   }
   const removed=Object.fromEntries(Object.entries(result?.hp||{}).filter(([,hp])=>hp===0).map(([id])=>[id,true]));
-  return {state:next,result,removed,packet,finished,actor,target:item(pieces,first.preferred)};
+  const shootingEvent=finished&&didShoot?{shooter:plan.unit,targets:[...new Set(rows.map(r=>r.target))],didShoot}:null;
+  return {state:next,result,removed,packet,finished,shootingEvent,actor,target:item(pieces,first.preferred)};
+}
+
+export function chooseSuppression(state,target){
+  const unit=state.units?.wartrakk;
+  if(!unit?.suppressionTargets?.includes(target))return null;
+  return {...state,units:{...state.units,wartrakk:{...unit,suppressionTargets:[],suppressedEnemy:true}},
+    patrol:{...state.patrol,suppressed:target}};
 }
