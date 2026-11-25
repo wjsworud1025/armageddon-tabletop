@@ -7,6 +7,7 @@ import {attachForDeployment} from './reinforcement-session.mjs';
 import {openShootingReaction,shootingReactionOptions} from './shooting-reaction.mjs';
 import {useInsaneBravery,useEpicChallenge} from './core-stratagems.mjs';
 import {acceptMovementRoll} from './command-reroll.mjs';
+import {attackRollNames,inspectAttackRoll,stepAttackRoll} from './attack-rolls.mjs';
 import {rollHazardPool,finishHazardPool} from './hazard-reroll.mjs';
 import {rerollMove} from '../move-session.mjs';
 import {rerollCharge} from '../charge-session.mjs';
@@ -179,6 +180,31 @@ export function mountRules(container,api) {
       return chunk(header,list+'<p>같은 분대에서 다른 모델·무기를 더 지정할 수 있습니다. 확정하면 미지정 사격 무기는 이번에 발사하지 않습니다.</p>'+
         row(btn('lock','분대 전체 선언 확정')+btn('cancel-plan','선언 취소')));
     }
+    if(plan.attackRoll){
+      const event=inspectAttackRoll(state,all);
+      if(!event)return chunk(header,'진행 중인 공격 기록을 확인하세요.');
+      const who=esc(teams[event.team])+' · '+esc(unitLabel(all.find(p=>groupId(state,p)===event.unit)));
+      const names=ids=>ids.map(id=>pieceLabel(getPiece(id))).join(', ');
+      let body='';
+      if(event.raw){
+        const options=event.raw.map((die,i)=>opt(String(i),(i+1)+'번 D'+event.sizes[i]+' · '+die+
+          (event.models?' · '+pieceLabel(getPiece(event.models[i])):''),'0')).join('');
+        body='<p>'+esc(attackRollNames[event.kind])+' 굴림 ['+diceText(event.raw)+']</p>'+
+          (event.model?'<p>피해를 받을 모델 '+esc(names([event.model]))+' · 남은 상처 '+event.remaining+
+            (event.bonus?' · 피해 보정 +'+event.bonus:'')+'</p>':'')+
+          select('attack-die','재굴림할 주사위',options)+row(btn('packet-keep','원래 결과 사용')+btn('packet-reroll','지휘 재굴림 · 1 CP'));
+      }else{
+        const precision=event.kind==='precision';
+        const title=precision?'공격 모델에서 보이는 캐릭터':event.kind==='order'?'먼저 방어할 모델 그룹':'피해를 받을 모델';
+        const attackers=[...new Set(event.packet.indices.map(i=>plan.rows[i].actor))].filter(id=>currentHP(state,getPiece(id)));
+        body=(precision?'<p>정밀 · 시야를 확인할 공격 모델 '+esc(names(attackers))+'</p>':'')+
+          (event.wounds?'<p>명중 '+event.hits+' · 상처 '+event.wounds+'</p>':'')+
+          (event.kind==='model'?'<p>'+(event.save===null?'치명적 상처':'방어 굴림 '+event.save)+'</p>':'')+
+          select('attack-model',title,event.choices.map((id,i)=>opt(id??'',id?pieceLabel(getPiece(id)):'정밀 배정 생략',event.choices[0]??'')).join(''))+
+          btn('packet-select','배정 확정');
+      }
+      return chunk(header,'<p>'+who+'</p>'+body+(state.last?'<p class="br-latest">'+esc(state.last)+'</p>':''));
+    }
     const groups=attackPackets(state,all);
     const rolled=plan.precisionRoll;
     return chunk(header,'<p>동일 판정은 함께 굴립니다. 한 표적을 골랐다면 그 표적의 남은 공격부터 해결하세요.</p>'+
@@ -195,7 +221,8 @@ export function mountRules(container,api) {
               defenders.filter(character).map(t=>opt(t.id,pieceLabel(t)+' · 시야 확인','')).join(''));
         }
         return precision+(defenders.length?select('allocate-'+p.index,'방어 측 일반 배정 우선순위',defenders.map(t=>opt(t.id,pieceLabel(t),pref)).join('')):'')+
-          btn('resolve-'+p.index,rolled?'배정 확정 · 방어 및 피해 판정':label+(defenders.length?' 판정':' · 전멸한 표적 공격 종료'));
+          (!rolled&&defenders.length?btn('staged-'+p.index,label+' · 단계별 판정'):'')+
+          btn('resolve-'+p.index,rolled?'배정 확정 · 방어 및 피해 판정':label+(defenders.length?' · 양측 지휘 재굴림 생략':' · 전멸한 표적 공격 종료'));
       }).join('')+(!rolled&&!plan.rows.some(r=>r.done)?detail('target-exception','표적 적격성 변경',
         '<p>상대 반응 이동 등으로 기존 표적을 선택할 수 없게 되면 양측 확인 후 선언을 수정하세요.</p>'+btn('reopen','적격성 변경 · 선언 다시 열기')):''));
   }
@@ -451,7 +478,7 @@ export function mountRules(container,api) {
       if (state.step===0 && state.active==='orks') orders=btn('order-waaagh','와아! 선포',p.waaaghUsed);
       if (flags || orders) army=chunk('패트롤 명령',orders+(flags?'<p>'+esc(flags)+'</p>':''));
     }
-    if(state.declaration?.precisionRoll){
+    if(state.declaration?.precisionRoll||state.declaration?.attackRoll){
       root.innerHTML=renderDeclaration(state,all);
       return;
     }
@@ -472,6 +499,7 @@ export function mountRules(container,api) {
     if (!action) return;
     const state=read();
     const actor=getPiece(choices.fighter);
+    if(state.declaration?.attackRoll&&!action.startsWith('packet-'))return;
     if(state.declaration?.precisionRoll&&action!=='resolve-'+state.declaration.precisionRoll.index)return;
     if(state.fightSequence?.counterAfter&&!(state.hazard?action.startsWith('hazard-'):action.startsWith('fight-counter-')))return;
     if(state.hazard?.commandDice&&!['hazard-command','hazard-keep'].includes(action))return;
@@ -612,11 +640,21 @@ export function mountRules(container,api) {
       if(!next){feedback='교전 중인 각 모델의 근접 공격을 모두 배정하세요.';return refresh();}
       return commit(next,'분대 공격 선언 확정 · 무기·표적 배정 '+rows.length+'건');
     }
-    if(action.startsWith('resolve-')){
-      const index=Number(action.slice(8));
+    if(action.startsWith('resolve-')||action.startsWith('staged-')||action.startsWith('packet-')){
+      const index=state.declaration?.attackRoll?.index??Number(action.split('-')[1]);
       const precisionTarget=state.declaration?.precisionRoll?(field('precision-target')?.value||null):undefined;
-      const resolved=resolvePacket(state,contents(),index,val('allocate-'+index)||null,Math.random,precisionTarget);
+      const preferred=val('allocate-'+index)||null;
+      const choice=action==='packet-select'?{type:'select',choice:field('attack-model').value||null}:
+        action==='packet-reroll'?{type:'reroll',index:Number(field('attack-die').value)}:
+        action==='packet-keep'?{type:'keep'}:{type:'begin',preferred};
+      const resolved=action.startsWith('resolve-')?resolvePacket(state,contents(),index,preferred,Math.random,precisionTarget):
+        stepAttackRoll(state,contents(),index,choice);
       if(!resolved)return;
+      if(resolved.event){
+        const e=resolved.event,label=attackRollNames[e.kind];
+        const message=label?teams[e.team]+' · '+label+' ['+diceText(e.raw)+']':teams[e.team]+' · 공격 배정 선택';
+        return commit(resolved.state,[resolved.note,message].filter(Boolean).join(' · '));
+      }
       const {result,packet,actor,target}=resolved;
       if(resolved.precisionRoll)return commit(resolved.state,unitLabel(actor)+' · 정밀 공격 배정 대기 · 상처 '+resolved.precisionRoll.wounds);
       if(resolved.shootingEvent){
@@ -627,7 +665,7 @@ export function mountRules(container,api) {
       const trace=result?' · '+result.hits+'/'+result.count+' 명중 · 상처 '+result.wounds+' · 피해 '+
         result.damage.reduce((sum,h)=>sum+h.lost,0)+' · 명중 ['+diceText(result.hitDice)+'] · 상처 ['+diceText(result.woundDice)+
         '] · 방어 ['+diceText(result.saves)+']':' · 해결할 공격 없음';
-      return commit(resolved.state,unitLabel(actor)+' → '+unitLabel(target)+' · '+[...packet.names].join(' / ')+trace+
+      return commit(resolved.state,(resolved.note?resolved.note+' · ':'')+unitLabel(actor)+' → '+unitLabel(target)+' · '+[...packet.names].join(' / ')+trace+
         (resolved.finished?' · 분대 공격 완료':'')+(resolved.finished&&actor.kind==='wartrakk'&&resolved.state.units.wartrakk.suppressedEnemy?
           ' · '+unitLabel(contents().find(p=>groupId(state,p)===resolved.state.patrol.suppressed))+' 제압':'')+
         (resolved.state.hazard?' · 위험 D6 × '+resolved.state.hazard.count:''),resolved.removed);

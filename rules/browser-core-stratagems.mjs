@@ -1,3 +1,4 @@
+import {checkAttackRerolls} from './browser-attack-rolls.mjs';
 import assert from 'node:assert/strict';
 import {newBattle,startBattle} from './battle.mjs';
 import {checkMovementRerolls} from './browser-command-reroll.mjs';
@@ -83,6 +84,7 @@ export async function checkCoreStratagems({save,upload,choose,click,button,state
   assert.deepEqual(await js('Array.from(document.querySelector("[data-field=fight-unit]").options,o=>o.value)'),['librarian']);
   await click(button('fight-normal'));
   assert.equal((await state()).rules.fightSequence.active.unit,'librarian');
+  await checkAttackRerolls({save,upload,choose,click,button,state,js,reload});
   await checkMovementRerolls({save,upload,choose,click,button,state,js,reload});
   await upload(save);await click('[data-tab=battle]');
 }

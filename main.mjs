@@ -98,7 +98,7 @@ function selection(){
   $('piece-spec').textContent=factionNames[p.faction]+' · '+(p.faction==='terrain'?'지면 점유 폭':'베이스')+' '+Math.round(p.baseWidth*25.4)+' × '+Math.round(p.baseDepth*25.4)+' mm';
   const inReserve=Object.values(game.rules?.reserves??{}).some(ids=>ids.includes(p.id));
   $('elevation').value=p.elevation||0;
-  $('remove').disabled=inReserve||!!(game.rules?.reinforcePlan||game.rules?.shootingReaction||game.rules?.reactionPlan);
+  $('remove').disabled=inReserve||!!(game.rules?.reinforcePlan||game.rules?.shootingReaction||game.rules?.reactionPlan||pendingAttack());
   $('remove').textContent=inReserve?(p.removed?'예비대 대기 중':'예비대 배치 중'):p.removed?'전장 복귀':'전장에서 제거';
   $('focus').disabled=!!p.removed;
 }
@@ -180,8 +180,10 @@ function editPose(p,delta,message){
   }else mutate(()=>{Object.assign(p,delta);place(p,p.x,p.z,game)},message);
 }
 function rotate(){const p=piece(active);if(p)editPose(p,{yaw:(p.yaw+Math.PI/12)%(2*Math.PI)},p.name+' 15° 회전')}
+function pendingAttack(){return game.rules?.declaration?.attackRoll||game.rules?.declaration?.precisionRoll}
 function remove(id,removed){const p=piece(id);
   if(game.training)return;
+  if(pendingAttack()){toast('진행 중인 공격의 피해 배정을 먼저 마치세요.');return}
   if(game.rules?.shootingReaction||game.rules?.reactionPlan){toast('현재 사격 반응을 먼저 마치세요.');return}
   if(game.rules?.reinforcePlan || p&&game.rules?.reserves?.[groupId(game.rules,p)]?.includes(id)){
     toast('예비대는 대전 탭에서 배치하거나 복귀시키세요.');return;

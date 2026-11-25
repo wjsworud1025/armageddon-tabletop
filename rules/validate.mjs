@@ -1,3 +1,4 @@
+import {inspectAttackRoll} from './attack-rolls.mjs';
 import {profiles,getProfile,unitId} from './profiles.mjs';
 import {validFightSequence} from '../fight-sequence.mjs';
 import {doctrines,enhancements,tactics,effectWeapon} from './patrol.mjs';
@@ -44,7 +45,11 @@ const validRow=fields({...rowFields,vehiclePenalty:int(0,2)},Object.keys(rowFiel
 const diceArray=list(int(1,6),40000);
 const precisionRoll=fields({index:int(0,275),count:int(1,20000),hits:int(1,40000),wounds:int(1,40000),
   hitDice:diceArray,woundDice:diceArray,devastating:int(0,40000)},['index','count','hits','wounds','hitDice','woundDice','devastating']);
-const declaration=fields({unit:group,locked:boolean,didShoot:boolean,didFight:boolean,focus:nullable(group),rows:list(validRow,276),precisionRoll},['unit','locked','focus','rows']);
+const attackRecord=fields({kind:oneOf(['attacks','hit','wound','save','damage','model','order','precision']),
+  raw:diceArray,closed:oneOf([true]),choice:nullable(model),
+  change:fields({index:int(0,39999),value:int(1,6)},['index','value'])},['kind']);
+const attackRoll=fields({index:int(0,275),preferred:model,records:list(attackRecord,500)},['index','preferred','records']);
+const declaration=fields({unit:group,locked:boolean,didShoot:boolean,didFight:boolean,focus:nullable(group),rows:list(validRow,276),precisionRoll,attackRoll},['unit','locked','focus','rows']);
 const characterId=oneOf(['captain-1','librarian-1','warboss-1','weirdboy-1']);
 const unit = fields({
   shocked:boolean,shockChecked:boolean,epicChallengeModel:characterId,reinforcing:boolean,movementTracked:boolean,movement:oneOf(['normal','advance','fallback','remain']),
@@ -86,7 +91,7 @@ const battle=fields({
   destroyedUnits:map(group,boolean),lossEvents:list(fields({id:group,faction:team,turn:int(1,40)},['id','faction','turn']),20000)
 },['version','status','first','active','round','rounds','step']);
 
-export function validateRulesState(value) {
+export function validateRulesState(value,pieceRecords=null) {
   if (value==null) return true;
   if (fields({hp},['hp'])(value)) return true;
   if(!battle(value) || value.round>value.rounds)return false;
@@ -192,10 +197,36 @@ export function validateRulesState(value) {
     const weapon=getProfile(p).weapons[entry.weapon];
     if(!weapon||!effectWeapon(value,p,weapon,plan.unit).precision)return false;
   }
-  return plan.rows.every(r=>{
+  if(!plan.rows.every(r=>{
     const weapon=getProfile(models.get(r.actor)).weapons[r.weapon];
     return weapon && !!weapon.range===(value.step===2) && modelGroup(r.actor)===plan.unit && modelGroup(r.preferred)===r.target &&
       faction(r.actor)!==faction(r.preferred) && (value.step!==2 || faction(r.actor)===value.active) &&
       (weapon.range?r.assigned===0:r.assigned>=1&&r.assigned<=weapon.attacks+r.extra);
-  });
+  }))return false;
+  if(plan.attackRoll){
+    const progress=plan.attackRoll,entry=plan.rows[progress.index];
+    if(!plan.locked||plan.precisionRoll||!entry||entry.done||entry.target!==plan.focus||
+      modelGroup(progress.preferred)!==plan.focus||!progress.records.length)return false;
+    const changes=new Set();
+    for(const [i,r] of progress.records.entries()){
+      const isDie=['attacks','hit','wound','save','damage'].includes(r.kind),last=i===progress.records.length-1;
+      if(last===!!r.closed || (isDie?(!r.raw?.length||Object.hasOwn(r,'choice')):
+        (r.raw||r.change||last===Object.hasOwn(r,'choice'))))return false;
+      if(r.choice&&modelGroup(r.choice)!==plan.focus)return false;
+      if(r.change){
+        const team=groupTeam(r.kind==='save'?plan.focus:plan.unit);
+        const unit=r.kind==='save'?plan.focus:plan.unit;
+        if(last||r.change.index>=r.raw.length||changes.has(team)||
+          value.patrol?.tactics?.['commandReroll-'+team]!==[value.round,value.active,value.step].join('-')+'/'+unit)return false;
+        changes.add(team);
+      }
+    }
+    if(pieceRecords){
+      const removed=new Map(pieceRecords.map(p=>[p?.id,p?.removed]));
+      const pieces=[...models].map(([id,p])=>({...p,id,faction:faction(id),removed:!!removed.get(id)}));
+      const event=inspectAttackRoll(value,pieces);
+      if(!event||event.sizes&&!canCommandReroll(value,event.unit,event.team))return false;
+    }
+  }
+  return true;
 }

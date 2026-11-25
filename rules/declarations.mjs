@@ -4,7 +4,7 @@ import {effectWeapon} from './patrol.mjs';
 import {openCounteroffensive} from '../fight-sequence.mjs';
 
 const unitOrder=(s,id)=>s.units[id]||{};
-const weaponFor=(state,p,i)=>effectWeapon(state,p,getProfile(p).weapons[i],groupId(state,p));
+export const weaponFor=(state,p,i)=>effectWeapon(state,p,getProfile(p).weapons[i],groupId(state,p));
 const item=(pieces,id)=>pieces.find(p=>p.id===id);
 const slotFor=(pieces,row)=>weaponSlot(getProfile(item(pieces,row.actor)).weapons[row.weapon]);
 const meleeLimit=(w,entry)=>w.attacks+entry.extra;
@@ -80,12 +80,13 @@ export function attackPackets(state,pieces) {
     packet.indices.push(i);packet.names.add(w.name);
   }
   const all=[...packets.values()];
-  return plan.precisionRoll?all.filter(p=>p.index===plan.precisionRoll.index):all;
+  const pending=plan.precisionRoll??plan.attackRoll;
+  return pending?all.filter(p=>p.index===pending.index):all;
 }
 
 export function resolvePacket(state,pieces,index,preferred=null,random=Math.random,precisionTarget=undefined) {
   const packet=attackPackets(state,pieces).find(p=>p.index===index);
-  if(!packet)return null;
+  if(!packet||state.declaration.attackRoll)return null;
   const plan=state.declaration,rows=plan.rows.slice(),first=rows[index],actor=item(pieces,first.actor);
   const defenders=pieces.filter(p=>getProfile(p) && groupId(state,p)===first.target && currentHP(state,p)>0);
   const base=weaponFor(state,actor,first.weapon);
@@ -95,7 +96,6 @@ export function resolvePacket(state,pieces,index,preferred=null,random=Math.rand
   if(precisionTarget!=null && (!rolled||!w.precision||!defenders.some(p=>character(p)&&p.id===precisionTarget)))return null;
   const awaitAllocation=!rolled && w.precision && defenders.length>1 && defenders.some(character);
   let count=rolled?.count??0;
-  const order=unitOrder(state,plan.unit),attacks={...order.attacks};
   for(const i of packet.indices){
     const r=rows[i],p=item(pieces,r.actor),weapon=weaponFor(state,p,r.weapon);
     if(!rolled && defenders.length && currentHP(state,p)>0) {
@@ -105,9 +105,6 @@ export function resolvePacket(state,pieces,index,preferred=null,random=Math.rand
       count+=(weapon.range?diceValue(weapon.attacks,random)+r.extra:r.assigned)+
         (half?weapon.rapid||0:0)+Math.floor(r.size/5)*bonus;
     }
-    rows[i]={...r,done:true};
-    const list=attacks[p.id]||[],slot=weaponSlot(weapon);
-    if(!list.some(a=>a.slot===slot)) attacks[p.id]=[...list,{slot,ranged:!!weapon.range,pistol:!!weapon.pistol}];
   }
   const result=count&&defenders.length?resolveAttack({weapon:w,targets:defenders,state,preferred:preferred||first.preferred,precisionTarget,awaitAllocation,rolled,distance:first.distance,
     attackCount:count,hitMod:first.hit-(first.vehiclePenalty||0),woundMod:first.wound,cover:first.cover,lethal:first.lethal,
@@ -117,6 +114,18 @@ export function resolvePacket(state,pieces,index,preferred=null,random=Math.rand
     return {state:{...state,declaration:{...plan,focus:first.target,precisionRoll}},precisionRoll,
       actor,target:item(pieces,first.preferred),packet,removed:{},finished:false,shootingEvent:null};
   }
+  return closePacket(state,pieces,packet,result);
+}
+
+export function closePacket(state,pieces,packet,result) {
+  const plan=state.declaration,rows=plan.rows.slice(),first=rows[packet.index],actor=item(pieces,first.actor);
+  const order=unitOrder(state,plan.unit),attacks={...order.attacks},count=result?.count??0;
+  for(const i of packet.indices){
+    const r=rows[i],p=item(pieces,r.actor),weapon=weaponFor(state,p,r.weapon);
+    rows[i]={...r,done:true};
+    const list=attacks[p.id]||[],slot=weaponSlot(weapon);
+    if(!list.some(a=>a.slot===slot)) attacks[p.id]=[...list,{slot,ranged:!!weapon.range,pistol:!!weapon.pistol}];
+  }
   const hitTargets=[...new Set([...(order.hitTargets||[]),...(result?.hits?[first.target]:[])])];
   const updated={...order,attacks,hitTargets};
   let next={...state,hp:{...state.hp,...result?.hp},units:{...state.units,[plan.unit]:updated}};
@@ -124,7 +133,7 @@ export function resolvePacket(state,pieces,index,preferred=null,random=Math.rand
   const didShoot=state.step===2&&(count>0||(plan.didShoot??plan.rows.some(r=>r.done)));
   const didFight=state.step===4&&(count>0||plan.didFight===true);
   next.declaration=finished?null:{...plan,rows,...(state.step===2?{didShoot}:{didFight}),focus:rows.some(r=>!r.done&&r.target===first.target)?first.target:null};
-  if(next.declaration)delete next.declaration.precisionRoll;
+  if(next.declaration){delete next.declaration.precisionRoll;delete next.declaration.attackRoll;}
   if(finished){
     const dangerous=new Set();
     for(const r of rows){

@@ -146,6 +146,37 @@ export function resolveHazard(state,pieces,preferred=null,random=Math.random,rol
   return {state:next,dice,total,remaining,removed};
 }
 
+export function allocationGroups(defenders,weapon,preferred,precisionTarget){
+  const groups=new Map();
+  for (const p of defenders) {
+    const key=character(p) ? p.id : [p.profile.wounds,p.profile.save,p.profile.invul].join('/');
+    if (!groups.has(key)) groups.set(key,[]);
+    groups.get(key).push(p);
+  }
+  function priority(group) {
+    if (weapon.precision && character(group[0]) && group[0].id===precisionTarget) return -1;
+    return Number(character(group[0]))*4 + Number(!group.some(p=>p.hp<p.profile.wounds))*2
+      + Number(!group.some(p=>p.id===preferred));
+  }
+  return [...groups.values()].sort((a,b)=>priority(a)-priority(b)).map(group=>
+    group.sort((a,b)=>Number(a.hp===a.profile.wounds)-Number(b.hp===b.profile.wounds)
+      || Number(b.id===preferred)-Number(a.id===preferred)));
+}
+
+export function attackThresholds(state,defenders,weapon,{cover,hitMod,woundMod,ignorePenalties}){
+  const bodyguards=defenders.filter(p=>!character(p));
+  const toughness=Math.max(...(bodyguards.length ? bodyguards : defenders).map(p=>p.profile.toughness));
+  if (weapon.strength>toughness && hasWaaagh(state,defenders[0])) woundMod-=1;
+  if (ignorePenalties || weapon.psychic) {cover=false;hitMod=Math.max(0,hitMod);}
+  if (ignorePenalties) woundMod=Math.max(0,woundMod);
+  const hitTarget=weapon.skill + Number(cover && weapon.range>0);
+  const woundTarget=woundThreshold(weapon.strength,toughness);
+  const anti=weapon.antiVehicle&&defenders.some(p=>p.kind==='landSpeeder');
+  const critical=d=>d===6||!!anti&&d>=weapon.antiVehicle;
+  return {critical,hits:d=>d!==1&&(d===6||d+clamp(hitMod,-1,1)>=hitTarget),
+    wounds:d=>d!==1&&(critical(d)||d+clamp(woundMod,-1,1)>=woundTarget)};
+}
+
 // Resolve a single weapon profile. The defender chooses the order of models with
 // otherwise identical allocation priority. Each damage roll belongs to one attack.
 export function resolveAttack({weapon,targets,preferred,precisionTarget=null,awaitAllocation=false,rolled=null,state,distance,cover=false,hitMod=0,
@@ -161,21 +192,15 @@ export function resolveAttack({weapon,targets,preferred,precisionTarget=null,awa
   let count=attackCount??0;
   if(attackCount===null)for(let i=0;i<copies;i++) count+=diceValue(weapon.attacks,random)+bonus;
   const defenders = living.map(p=>({...p,profile:modelProfile(state,p),hp:currentHP(state,p)}));
-  const bodyguards=defenders.filter(p=>!character(p));
-  const toughness=Math.max(...(bodyguards.length ? bodyguards : defenders).map(p=>p.profile.toughness));
-  if (weapon.strength>toughness && hasWaaagh(state,defenders[0])) woundMod-=1;
-  if (ignorePenalties || weapon.psychic) {cover=false;hitMod=Math.max(0,hitMod);}
-  if (ignorePenalties) woundMod=Math.max(0,woundMod);
-  const hitTarget=weapon.skill + Number(cover && weapon.range>0);
-  const woundTarget=woundThreshold(weapon.strength,toughness);
+  const required=attackThresholds(state,defenders,weapon,{cover,hitMod,woundMod,ignorePenalties});
   const hitDice=rolled?.hitDice??[],woundDice=rolled?.woundDice??[],saves=[],damage=[];
   let hits=rolled?.hits??0,wounds=rolled?.wounds??0,devastating=rolled?.devastating??0;
   const woundOnce=autoWound=>{
     hits++;
     const die=autoWound ? null : roll(6,random);
     if (die!==null) woundDice.push(die);
-    const critical=die===6 || (weapon.antiVehicle && living.some(t=>t.kind==='landSpeeder') && die>=weapon.antiVehicle);
-    if (die!==null && (die===1 || (!critical && die+clamp(woundMod,-1,1)<woundTarget))) return;
+    const critical=die!==null && required.critical(die);
+    if (die!==null && !required.wounds(die)) return;
     wounds++;
     if (weapon.devastating && critical) devastating++;
     else if(!awaitAllocation)saves.push(roll(6,random));
@@ -183,27 +208,14 @@ export function resolveAttack({weapon,targets,preferred,precisionTarget=null,awa
   for (let i=0;!rolled&&i<count;i++) {
     const hit=weapon.torrent ? null : roll(6,random);
     if (hit!==null) hitDice.push(hit);
-    if (hit!==null && (hit===1 || (hit!==6 && hit+clamp(hitMod,-1,1)<hitTarget))) continue;
+    if (hit!==null && !required.hits(hit)) continue;
     woundOnce(hit===6 && lethal);
     if (hit===6 && sustained) woundOnce(false);
   }
   if(awaitAllocation && wounds)return {count,hits,wounds,hitDice,woundDice,devastating};
   if(rolled)for(let i=0;i<wounds-devastating;i++)saves.push(roll(6,random));
   // A group with an already wounded non-character must take damage first.
-  const groups=new Map();
-  for (const p of defenders) {
-    const key=character(p) ? p.id : [p.profile.wounds,p.profile.save,p.profile.invul].join('/');
-    if (!groups.has(key)) groups.set(key,[]);
-    groups.get(key).push(p);
-  }
-  function priority(group) {
-    if (weapon.precision && character(group[0]) && group[0].id===precisionTarget) return -1;
-    return Number(character(group[0]))*4 + Number(!group.some(p=>p.hp<p.profile.wounds))*2
-      + Number(!group.some(p=>p.id===preferred));
-  }
-  const ordered=[...groups.values()].sort((a,b)=>priority(a)-priority(b)).flatMap(group=>
-    group.sort((a,b)=>Number(a.hp===a.profile.wounds)-Number(b.hp===b.profile.wounds)
-      || Number(b.id===preferred)-Number(a.id===preferred)));
+  const ordered=allocationGroups(defenders,weapon,preferred,precisionTarget).flat();
   saves.sort((a,b)=>a-b);
   for (const save of [...saves,...Array(devastating).fill(null)]) {
     const target=ordered.find(p=>p.hp>0);
