@@ -112,6 +112,10 @@ export async function buildScene(canvas,api) {
   function sync(){
     const table=api.game(),drill=!!table.training;
     drillBoard.visible=drill;grid.geometry=drill?drillGrid:lineGeom;
+    if(drill){
+      const map=table.surface==='reverse'&&reverse?reverse:texture;
+      if(drillBoard.material.map!==map){drillBoard.material.map=map;drillBoard.material.needsUpdate=true}
+    }
     deck.scale.set((table.width+.15)/(game.width+.15),1,(table.depth+.15)/(game.depth+.15));
     for(const {side,mat,board} of panels){
       board.visible=!drill;
@@ -159,8 +163,12 @@ export async function buildScene(canvas,api) {
   function home(top=false){sightPair=null;eyeOffset=0;photo=!top;photoZoom=1;offsetX=offsetY=0;target.set(0,.4,0);yaw=top?0:-.24;pitch=top?Math.PI/2-.0001:.67;
     const aspect=canvas.clientWidth/Math.max(1,canvas.clientHeight);
     const table=api.game();
-    if(table.training){photo=false;target.set(0,top?0:1.15,0);pitch=top?Math.PI/2-.0001:.34;
-      half=top?Math.max(table.depth*.56,table.width*.56/aspect):Math.max(2.6,2.8/aspect);projection();return}
+    if(table.training){photo=false;
+      const duel=table.training.scenario===1;
+      target.set(0,top?0:duel?1.15:.4,0);
+      pitch=top?Math.PI/2-.0001:duel?.34:.92;
+      half=top||!duel?Math.max(table.depth*.57,(table.width*Math.cos(yaw)+table.depth*Math.abs(Math.sin(yaw)))*.56/aspect):Math.max(2.6,2.8/aspect);
+      projection();return}
     half=Math.max(top?game.depth*.61:game.depth*.46,(game.width*Math.cos(yaw)+game.depth*Math.abs(Math.sin(yaw)))*.56/aspect);projection()}
   function resize(){renderer.setSize(canvas.clientWidth,canvas.clientHeight,false);projection()}
   new ResizeObserver(resize).observe(canvas);
@@ -202,7 +210,7 @@ export async function buildScene(canvas,api) {
     const id=pan||orbit?null:pick(e),g=ground(e);
     gesture={type:pan?'pan':orbit?'orbit':mode==='ruler'?'measure':mode==='sight'?'sight':mode==='path'?'path':id?'move':'orbit',id,g,sx:e.clientX,sy:e.clientY,angle:yaw,pitch,target:target.clone(),offsetX,offsetY,drag:false,pointer:e.pointerId};
     if(id&&mode==='pick'){api.select(id);const p=lookup(id);
-      if(api.game().training){gesture.type='orbit'}else{
+      if(api.game().training&&!api.trainingDrag(p)){gesture.type='orbit'}else{
         gesture.start={x:p.x,z:p.z,elevation:p.elevation};gesture.records=api.moving(p).map(piece=>({piece,x:piece.x,z:piece.z}));
       }}
     canvas.setPointerCapture(e.pointerId);e.preventDefault();
@@ -220,7 +228,7 @@ export async function buildScene(canvas,api) {
         .addScaledVector(new T.Vector3(Math.sin(yaw),0,Math.cos(yaw)),-dy*ratio/Math.max(.22,Math.sin(pitch)));
       projection();
     }
-    if(d.type==='move'){const g=ground(e);if(g&&d.g){d.distance=translateFormation(d.records,g.x-d.g.x,g.z-d.g.z,game);sync()}}
+    if(d.type==='move'){const g=ground(e);if(g&&d.g){d.distance=translateFormation(d.records,g.x-d.g.x,g.z-d.g.z,api.game());sync()}}
   }
   function finish(e,cancel=false){
     const d=gesture;if(!d||d.pointer!==e.pointerId)return;
@@ -262,6 +270,7 @@ export async function buildScene(canvas,api) {
     },
     stats(){return {pieces:objects.size,visiblePieces:[...objects.values(),...painted.values(),...studio.objects].filter(o=>o.visible).length,
       boardPanels:panels.filter(p=>p.board.visible).length+Number(drillBoard.visible),
+      boardSurface:drillBoard.visible?(reverse&&drillBoard.material.map===reverse?'reverse':'front'):api.game().surface,
       boardWidth:drillBoard.visible?drillGeometry.parameters.width:game.width,boardDepth:drillBoard.visible?drillGeometry.parameters.height:game.depth,
       drawCalls:renderer.info.render.calls,triangles:renderer.info.render.triangles,
       reconstructed:[...objects.values()].filter(o=>o.userData.reconstruction).length,

@@ -139,6 +139,14 @@ try{
   assert.equal((await state()).training.rolls.length,1);
   await click('#training-exit');assert.equal((await state()).training,undefined);
   assert.deepEqual(await js('(()=>{const s=tabletopView.stats();return [s.boardPanels,s.boardWidth,s.boardDepth]})()'),[2,44,30]);
+  const beforeSecond=await state();
+  await click('#training-two-start');
+  await until(()=>js('tabletopView.stats().boardSurface==="reverse"&&tabletopView.stats().visiblePieces===20'));
+  assert.deepEqual(await js('(()=>{const s=tabletopView.stats();return [s.boardPanels,s.boardWidth,s.boardDepth]})()'),[1,30,22]);
+  await click('#camera');await screenshot('04-handbook-moving.png');
+  await click('#training-two-options [data-action="move"][data-unit="warboss"][data-mode="normal"]');
+  assert.equal((await state()).training.plan.unit,'warboss');
+  await click('#training-two-exit');assert.deepEqual(await state(),beforeSecond);
   await js('document.querySelector("#deployment").open=true');
   const beforePreview=await state(),diagrams=new Set();
   for(const map of ['B','C','A']){
