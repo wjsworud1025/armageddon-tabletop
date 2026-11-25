@@ -1,21 +1,27 @@
 import {createTrainingTwoTable, trainingTwoWallSegments, validateTrainingTwoLayout} from '../data/training-two-layout.mjs';
-import {assessMove} from '../movement.mjs';
+import {handbookFacing,handbookTurn} from './handbook-deployment.mjs';
+import {assessMove,sweptGap,crossesOnTurn} from '../movement.mjs';
+import {measureFootprints} from '../ruler.mjs';
 import {getProfile, unitId} from './profiles.mjs';
 import {opposite, woundThreshold} from './battle.mjs';
 
-export function handbookBattleEngine({scenario,field,names,validateLayout,wallSegments,shooting=null}){
+export function handbookBattleEngine({scenario,field,names,validateLayout,wallSegments,shooting=null,command=null}){
   const models=field.pieces.filter(p=>p.faction!=='terrain');
   const keys=Object.keys(names);
   const factions=Object.fromEntries(models.map(p=>[unitId(p),p.faction]));
   const eps = 1e-6;
   const pose = p => ({x:p.x,z:p.z,yaw:p.yaw});
-  const gap = (a,b) => Math.max(0, Math.hypot(a.x-b.x,a.z-b.z)-(a.baseWidth+b.baseWidth)/2);
+  const gap = (a,b) => a.baseWidth!==a.baseDepth||b.baseWidth!==b.baseDepth?measureFootprints(a,b).horizontal:
+    Math.max(0, Math.hypot(a.x-b.x,a.z-b.z)-(a.baseWidth+b.baseWidth)/2);
   const req = (condition, message) => {if (!condition) throw new Error(message);};
   const isDie = n => Number.isInteger(n) && n>=1 && n<=6;
   const terrainLines=field.pieces.filter(p=>p.faction==='terrain').flatMap(wall=>{
     const vertices=wallSegments(wall);
     return vertices.slice(1).map((end,i)=>[vertices[i],end]);
   });
+  const wallFootprints=terrainLines.map(([a,b])=>({faction:'terrain',x:(a.x+b.x)/2,z:(a.z+b.z)/2,
+    baseWidth:Math.hypot(b.x-a.x,b.z-a.z),baseDepth:scenario===4?.2:0,yaw:-Math.atan2(b.z-a.z,b.x-a.x)}));
+  const wallClearance=scenario===4?0:.1;
   function pointSegment(p,a,b) {
     const dx=b.x-a.x,dz=b.z-a.z;
     const t=Math.max(0,Math.min(1,((p.x-a.x)*dx+(p.z-a.z)*dz)/(dx*dx+dz*dz || 1)));
@@ -28,7 +34,8 @@ export function handbookBattleEngine({scenario,field,names,validateLayout,wallSe
   }
 
   function initial(poses) {
-    return {version:1,scenario,...(shooting?{first:'orks',shooting:null}:{}),round:1,active:'orks',phase:'movement',initial:poses,poses:{...poses},
+    return {version:1,scenario,...(shooting?{first:'orks',shooting:null}:{}),...(command?{mission:command.create()}:{}),
+      round:1,active:'orks',phase:command?'command':'movement',initial:poses,poses:{...poses},
       hp:Object.fromEntries(models.map(p=>[p.id,getProfile(p).wounds])),moved:{},charged:{},
       fight:null,plan:null,attack:null,winner:null,rolls:[],history:[]};
   }
@@ -40,7 +47,7 @@ export function handbookBattleEngine({scenario,field,names,validateLayout,wallSe
     }
     const poses=Object.fromEntries(table.pieces.filter(p=>p.faction!=='terrain').map(p=>[p.id,pose(p)]));
     if(!shooting)req(keys.every(u=>coherent(members(table.pieces,u))),'배치한 분대는 2″ 간격으로 이어져야 합니다.');
-    if(shooting)req(models.every(p=>poses[p.id].yaw===p.yaw),'훈련 3의 배치 방향을 확인하세요.');
+    if(shooting)req(models.every(p=>scenario===4?handbookFacing(p.yaw,poses[p.id].yaw)!==null:poses[p.id].yaw===p.yaw),'훈련 '+scenario+'의 배치 방향을 확인하세요.');
     return initial(poses);
   }
   function pieces(s) {
@@ -138,9 +145,10 @@ export function handbookBattleEngine({scenario,field,names,validateLayout,wallSe
   function view(s) {
     const all=forces(s);
     const ranged=s.phase==='shooting'?shooting.view(s,pieces(s)):null;
+    const orders=s.phase==='command'?command.view(s,pieces(s)):null;
     const actor=s.winner?null:ranged?ranged.actor:s.attack && ['save','allocate'].includes(s.attack.stage)?opposite(factions[s.attack.unit]):
       s.fight?.actor || s.active;
-    const options=s.winner?[]:ranged?ranged.options:s.plan?planOptions(s):s.attack?attackOptions(s,all):
+    const options=s.winner?[]:orders?orders.options:ranged?ranged.options:s.plan?planOptions(s):s.attack?attackOptions(s,all):
       s.phase==='movement'?moveOptions(s,all):s.phase==='charge'?chargeOptions(s,all):fightOptions(s,all);
     return {round:s.round,active:s.active,phase:s.phase,actor,options,...(shooting?{shooting:ranged}:{}),plan:s.plan,attack:s.attack,fight:s.fight,winner:s.winner};
   }
@@ -166,12 +174,21 @@ export function handbookBattleEngine({scenario,field,names,validateLayout,wallSe
     const ends=unit.map(m=>{
       const route=p.paths[m.id]||[];
       let at=m;
-      for(const end of route) {
+      for(const waypoint of route) {
+        const end={...at,...waypoint};
+        const delta=Math.atan2(Math.sin(end.yaw-at.yaw),Math.cos(end.yaw-at.yaw));
+        if(Math.abs(delta)>eps){
+          for(const wall of wallFootprints)req(!crossesOnTurn(at,delta,wall,wallClearance),'회전 중 베이스가 지형 벽에 닿습니다.');
+          if(p.mode==='normal'||p.mode==='advance')for(const enemy of opponents)
+            req(!crossesOnTurn(at,delta,enemy,2+2*eps),'회전 중 적 교전 거리에 들어갈 수 없습니다.');
+        }
         if(Math.hypot(end.x-at.x,end.z-at.z)>eps) {
-          for(const [a,b] of terrainLines)
-            req(segmentDistance(at,end,a,b)>=m.baseWidth/2+.1-eps,'지형 벽을 가로지르는 경로입니다.');
+          if(scenario===4||m.baseWidth!==m.baseDepth){
+            for(const wall of wallFootprints)req(sweptGap(at,end,wall,wallClearance)>=wallClearance-eps,'지형 벽을 가로지르는 경로입니다.');
+          }else for(const [a,b] of terrainLines)
+              req(segmentDistance(at,end,a,b)>=m.baseWidth/2+.1-eps,'지형 벽을 가로지르는 경로입니다.');
           if(p.mode==='normal'||p.mode==='advance') for(const enemy of opponents)
-            req(pointSegment(enemy,at,end)>2+(m.baseWidth+enemy.baseWidth)/2+eps,'일반·전력 이동으로 적 교전 거리에 들어갈 수 없습니다.');
+            req(sweptGap({...m,...at},end,enemy,2)>2+eps,'일반·전력 이동으로 적 교전 거리에 들어갈 수 없습니다.');
         }
         at=end;
       }
@@ -181,7 +198,7 @@ export function handbookBattleEngine({scenario,field,names,validateLayout,wallSe
         req(approaching,'돌격 경로는 도달 가능한 적 분대를 향해야 합니다.');
       }
       if(finish && route.length && (p.mode==='pile'||p.mode==='consolidate') &&
-          Math.hypot(end.x-m.x,end.z-m.z)>eps) {
+          (Math.hypot(end.x-m.x,end.z-m.z)>eps||Math.abs(end.yaw-m.yaw)>eps)) {
         const target=members(all,p.target);
         req(distanceTo(end,target)<distanceTo(m,target)-eps,'선택한 적 분대에 더 가까워져야 합니다.');
         if(p.mode==='pile') {
@@ -229,9 +246,9 @@ export function handbookBattleEngine({scenario,field,names,validateLayout,wallSe
   }
   function nextTurn(s) {
     const last=s.active==='marines';
-    if(s.round===5 && last){endGame(s,'draw');return;}
+    if(s.round===5 && last){endGame(s,command?command.outcome(s,pieces(s),{endOfTurn:true}):'draw');return;}
     if(last)s.round++;
-    s.active=opposite(s.active);s.phase='movement';s.fight=null;s.moved={};s.charged={};
+    s.active=opposite(s.active);s.phase=command?'command':'movement';s.fight=null;s.moved={};s.charged={};
   }
   function advanceFight(s,all,pass=false) {
     const f=s.fight;
@@ -277,6 +294,7 @@ export function handbookBattleEngine({scenario,field,names,validateLayout,wallSe
   }
   const actionKeys=['unit','mode','model','target','weapon','id','x','z'];
   if(shooting)actionKeys.push('visibility');
+  if(scenario===4)actionKeys.push('direction');
   function normalize(a) {
     const out={type:a?.type};
     for(const key of actionKeys) if(a && key in a)out[key]=a[key];
@@ -285,21 +303,42 @@ export function handbookBattleEngine({scenario,field,names,validateLayout,wallSe
   function apply(s,a,d6) {
     req(!s.winner,'종료된 훈련입니다.');
     const all=forces(s),p=s.plan;
+    if(s.phase==='command'){
+      const board=pieces(s);
+      req(command.view(s,board).options.some(o=>same(normalize(o),a)),'현재 선택할 수 없는 지휘 행동입니다.');
+      const result=command.apply(s,board,a,d6);
+      s.mission=result.mission;s.rolls.push(...result.rolls);
+      if(result.finished)s.phase='movement';
+      return;
+    }
     if(s.phase==='shooting'){
       const boardPieces=pieces(s);
       req(shooting.view(s,boardPieces).options.some(o=>same(normalize(o),a)),'현재 단계에서 선택할 수 없는 사격 행동입니다.');
       const result=shooting.apply(s,boardPieces,a,d6);
       s.shooting=result.shooting;s.hp=result.hp;s.rolls.push(...result.rolls);
-      if(!models.some(m=>m.faction!==s.active&&s.hp[m.id]>0))endGame(s,s.active);
+      if(!models.some(m=>m.faction!==s.active&&s.hp[m.id]>0))endGame(s,command?command.outcome(s,pieces(s)):s.active);
       else if(result.finished){s.shooting=null;s.phase='charge';}
       return;
     }
-    if(a.type==='path') {
-      req(!shooting||Object.keys(a).length===4,'이동할 모델과 목적지만 지정하세요.');
-      req(p && (p.mode!=='charge'||p.target) && p.ids.includes(a.id) && Number.isFinite(a.x)&&Number.isFinite(a.z),'진행 중인 분대의 모델과 목적지를 확인하세요.');
+    if(a.type==='path'||a.type==='pivot'&&scenario===4) {
+      const rotate=a.type==='pivot';
+      req(p&&(p.mode!=='charge'||p.target)&&p.ids.includes(a.id),'진행 중인 분대의 모델을 선택하세요.');
       const route=p.paths[a.id]??=[];
       req(route.length<512,'모델 경로는 최대 512점입니다. 경로를 확정하거나 되돌리세요.');
-      route.push({x:a.x,z:a.z});checkPath(s,all,false);return;
+      const previous=route.at(-1)??s.poses[a.id];
+      if(rotate){
+        req(Object.keys(a).length===3&&(a.direction===1||a.direction===-1),'회전 방향은 오른쪽 또는 왼쪽을 선택하세요.');
+        const yaw=handbookFacing(field.pieces.find(m=>m.id===a.id).yaw,(previous.yaw??s.poses[a.id].yaw)+a.direction*handbookTurn);
+        route.push({x:previous.x,z:previous.z,yaw});
+      }else{
+        req(!shooting||Object.keys(a).length===4,'이동할 모델과 목적지만 지정하세요.');
+        req(Number.isFinite(a.x)&&Number.isFinite(a.z),'유효한 이동 목적지를 지정하세요.');
+        const waypoint={x:a.x,z:a.z};
+        // Earlier saves contain only x/z before the first rotation.
+        if(scenario===4&&route.at(-1)?.yaw!==undefined)waypoint.yaw=previous.yaw;
+        route.push(waypoint);
+      }
+      checkPath(s,all,false);return;
     }
     const options=view(s).options;
     req(options.some(o=>shooting?same(normalize(o),a):Object.keys(o).every(k=>k==='label'||a[k]===o[k])),'현재 단계에서 선택할 수 없는 행동입니다.');
@@ -335,7 +374,7 @@ export function handbookBattleEngine({scenario,field,names,validateLayout,wallSe
         const attack=s.attack,w=profileOf(attack.model).weapons[attack.weapon];
         s.hp[a.model]=Math.max(0,s.hp[a.model]-w.damage);attack.count--;
         const alive=forces(s);
-        if(!alive.some(m=>m.faction===factions[attack.target])){endGame(s,factions[attack.unit]);return;}
+        if(!alive.some(m=>m.faction===factions[attack.target])){endGame(s,command?command.outcome(s,pieces(s)):factions[attack.unit]);return;}
         if(!attack.count||!members(alive,attack.target).length)nextModel(s,alive);
         return;
       }
@@ -353,7 +392,7 @@ export function handbookBattleEngine({scenario,field,names,validateLayout,wallSe
   }
   function act(state,action,d6=()=>1+Math.floor(Math.random()*6)) {
     req(state?.scenario===scenario,'훈련 시나리오를 확인하세요.');
-    req(!shooting||state.first==='orks','훈련 3은 오크가 선공합니다.');
+    req(!shooting||state.first==='orks','훈련 '+scenario+'은 오크가 선공합니다.');
     const a=normalize(action),next=structuredClone({...state,history:[]}),draws=[];
     apply(next,a,()=>{const n=d6();req(isDie(n),'D6 결과가 잘못되었습니다.');draws.push(n);return n;});
     next.history=[...state.history,{action:a,dice:draws}];

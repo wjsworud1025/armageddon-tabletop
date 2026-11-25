@@ -51,6 +51,8 @@ try{
   if(publicFlag!==-1)assert.equal(studioInstalled,false,'Public executable must run without the studio pack');
   if(studioInstalled)await click('#appearance');
   await delay(400);const meshes=await js('tabletopView.stats()');assert.ok(meshes.triangles>10000);await screenshot('01b-meshes.png');
+  if(publicFlag!==-1)assert.equal(meshes.reconstructed,0);
+  else if(studioInstalled&&existsSync(join(root,'reconstruction','models','14.whm')))assert.ok(meshes.reconstructed>=17,'Installed set must display both reconstructed pylons');
   if(studioInstalled){
     await click('#appearance');
     await click('#reference-toggle');assert.equal(await js('document.querySelector("#reference").hidden'),false);await screenshot('02-reference.png');await click('#reference-toggle');
@@ -160,6 +162,16 @@ try{
   await until(()=>js('document.querySelector("#hint").textContent.includes("시점 높이")'));
   await screenshot('04-handbook-sight.png');
   await click('#training-three-exit');assert.deepEqual(await state(),beforeSecond);
+  await click('#training-four-start');
+  await until(()=>js('tabletopView.stats().boardSurface==="reverse"&&tabletopView.stats().visiblePieces===28'));
+  await click('#camera');
+  await click('#training-four-begin');
+  assert.equal((await state()).training.phase,'command');
+  assert.equal(await js('document.querySelectorAll("#training-four-objectives [data-area]").length'),3);
+  await click('#training-four-options [data-action="four-score"]');
+  assert.match(await js('document.querySelector("#training-four-objectives strong").textContent'),/오크 15/);
+  await screenshot('04-handbook-objectives.png');
+  await click('#training-four-exit');assert.deepEqual(await state(),beforeSecond);
   await js('document.querySelector("#deployment").open=true');
   const beforePreview=await state(),diagrams=new Set();
   for(const map of ['B','C','A']){

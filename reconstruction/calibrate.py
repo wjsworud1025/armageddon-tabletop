@@ -9,14 +9,14 @@ from pathlib import Path
 import cv2
 import numpy as np
 from scipy.optimize import least_squares
-from reconstruct import cameras
+from reconstruct import HELD_OUT, apply_lens, cameras, carve, surface_nets
 
 
 def matrices(params):
     """Projection relative to a ground origin; principal point near the image centre."""
     group=np.repeat(params,12,axis=0)
     cx,cy,s,pitch,yaw,roll,dist=group.T
-    yaw=yaw+np.tile(np.arange(12)*np.pi/6,3)
+    yaw=yaw+np.tile(np.arange(12)*np.pi/6,len(params))
     sy,cyaw=np.sin(yaw),np.cos(yaw)
     sp,cp=np.sin(pitch),np.cos(pitch)
     eye=np.stack((sy*cp,sp,cyaw*cp),axis=1)
@@ -35,7 +35,7 @@ def matrices(params):
     return proj,eye,right,down
 
 
-def feature_pairs(views):
+def feature_pairs(views, held_out=HELD_OUT):
     sift=cv2.SIFT_create(nfeatures=1100)
     matcher=cv2.BFMatcher(cv2.NORM_L2)
     features=[]
@@ -44,7 +44,7 @@ def feature_pairs(views):
         key,desc=sift.detectAndCompute(gray,v.mask.astype('u1')*255)
         features.append((np.array([k.pt for k in key]),desc))
     indices=[];first=[];second=[]
-    skip={'01-03','02-07','03-11'}
+    skip=set(held_out)
     for a in range(36):
         neighbors=[a//12*12+(a+1)%12]
         if a<24:
@@ -70,8 +70,8 @@ def feature_pairs(views):
     return np.array(indices),np.array(first),np.array(second)
 
 
-def fit(views):
-    edges,first,second=feature_pairs(views)
+def fit(views, held_out=HELD_OUT):
+    edges,first,second=feature_pairs(views, held_out)
     pairs=first[:,0].astype(int);pts1=first[:,1:];pts2=second[:,1:]
     a,b=edges.T
     initial=[]
@@ -117,10 +117,57 @@ def fit(views):
     return settings
 
 
+def align_high_ring(views, settings, held_out):
+    """Recover the high camera from the two lower elevations' common exterior profile."""
+    from scipy.spatial import ConvexHull
+    apply_lens(views, settings)
+    low = [v for v in views[:24] if v.tag not in held_out]
+    inside, start, step = carve(low, 58, 0, 1.35)
+    vertices, _ = surface_nets(inside, start, step)
+    vertices = vertices[::3]
+    hull = vertices[ConvexHull(vertices).vertices]
+    angles = np.linspace(0, 2*np.pi, 32, endpoint=False)
+    directions = np.stack([np.cos(angles), np.sin(angles)])
+    targets = {}
+    for i, view in enumerate(views[24:]):
+        if view.tag in held_out:
+            continue
+        contours, _ = cv2.findContours(view.mask.astype('u1'), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        points = np.concatenate([c.reshape(-1, 2) for c in contours if cv2.contourArea(c) > 6])
+        targets[i] = (points @ directions).max(axis=0)
+    view = views[24]
+    size = view.rgb.shape[1]
+    initial = np.array([*(view.center/size), view.scale/size, np.arcsin(view.eye[1]),
+                        np.arctan2(view.eye[0], view.eye[2]), 0, view.distance])
+    def residual(x):
+        _, eyes, rights, downs = matrices(x[None, :])
+        errors = []
+        for i, expected in targets.items():
+            scale = x[2] / (1 - (hull @ eyes[i]) / x[6])
+            uv = (x[:2] + scale[:, None] * (hull @ np.stack([rights[i], downs[i]]).T)) * size
+            errors.extend((uv @ directions).max(axis=0) - expected)
+        return np.r_[errors, (x-initial)/[.08, .15, .12, .2, .08, .05, 10]]
+    bounds = ([.2,.3,.15,.6,-.28,-.12,5], [.8,1.15,1.2,1.45,.28,.12,90])
+    x = least_squares(residual, np.clip(initial, *bounds), bounds=bounds, loss='soft_l1', f_scale=2).x
+    _, eyes, rights, downs = matrices(x[None, :])
+    for i, view in enumerate(views[24:]):
+        settings[view.tag] = dict(center=x[:2].tolist(), scale=x[2], distance=x[6],
+                                  eye=eyes[i].tolist(), right=rights[i].tolist(), down=downs[i].tolist())
+    return settings
+
+
 if __name__=='__main__':
     arg=argparse.ArgumentParser(description=__doc__)
     arg.add_argument('frames',type=Path);arg.add_argument('out',type=Path);arg.add_argument('--footprint',action='store_true')
+    arg.add_argument('--align-high',action='store_true',help='Fit the highest terrain camera to the low and middle silhouettes')
+    arg.add_argument('--holdout',nargs='+',default=HELD_OUT)
     args=arg.parse_args()
+    if args.align_high and not args.footprint:
+        arg.error('--align-high requires --footprint')
     cv2.setNumThreads(2)
-    views=cameras(args.frames,600,15,1,None,args.footprint)
-    args.out.write_text(json.dumps(fit(views),separators=(',',':')))
+    excluded = args.holdout if args.align_high or args.holdout != HELD_OUT else ()
+    views=cameras(args.frames,600,15,1,None,args.footprint,excluded=excluded)
+    settings=fit(views,args.holdout)
+    if args.align_high:
+        settings=align_high_ring(views,settings,args.holdout)
+    args.out.write_text(json.dumps(settings,separators=(',',':')))

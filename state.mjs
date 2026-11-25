@@ -4,6 +4,7 @@ import {validateTrainingOne} from './rules/training-one.mjs';
 import {validateTrainingTwo} from './rules/training-two.mjs';
 import {validateTrainingThreeDeployment} from './rules/training-three-deployment.mjs';
 import {validateTrainingThreeBattle} from './rules/training-three-battle.mjs';
+import {trainingFourBattle,trainingFourDeployment} from './rules/training-four-battle.mjs';
 
 const clamp = (n, low, high) => Math.max(low, Math.min(high, n));
 const finite = Number.isFinite;
@@ -52,8 +53,9 @@ export function restore(template, save) {
   if(!validateRulesState(save.rules,save.pieces))throw new Error('저장 파일의 대전 규칙 데이터가 올바르지 않습니다.');
   if(save.training!=null){
     const validators={1:validateTrainingOne,2:validateTrainingTwo,
-      3:save.training.phase==='deployment'?validateTrainingThreeDeployment:validateTrainingThreeBattle};
-    const titles={1:'첫',2:'두 번째',3:'세 번째'};
+      3:save.training.phase==='deployment'?validateTrainingThreeDeployment:validateTrainingThreeBattle,
+      4:save.training.phase==='deployment'?trainingFourDeployment.validate:trainingFourBattle.validate};
+    const titles={1:'첫',2:'두 번째',3:'세 번째',4:'네 번째'};
     const scenario=save.training.scenario;
     if(!Number.isInteger(scenario)||!validators[scenario]?.(save.training))
       throw new Error((titles[scenario]??'선택한')+' 훈련 임무의 저장 기록이 올바르지 않습니다.');

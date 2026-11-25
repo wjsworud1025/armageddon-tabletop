@@ -49,12 +49,12 @@ const outerRadius = p => (p.faction==='terrain'?Math.hypot(p.baseWidth,p.baseDep
 // Negative when the open interior of the swept base intersects the obstacle.
 // A straight segment with fixed yaw sweeps a convex hull. Evaluate separating
 // axes of that hull, including segment and rectangle face normals at cusps.
-function sweptGap(start,end,other) {
+export function sweptGap(start,end,other,clearance=0) {
   const sx=end.x-start.x, sz=end.z-start.z, dx=other.x-start.x, dz=other.z-start.z;
   const len2=sx*sx+sz*sz;
   const t=len2?Math.max(0,Math.min(1,(dx*sx+dz*sz)/len2)):0;
   const bound=Math.hypot(dx-t*sx,dz-t*sz)-outerRadius(start)-outerRadius(other);
-  if (bound>EPS || (start.baseWidth===start.baseDepth && other.baseWidth===other.baseDepth && other.faction!=='terrain')) return bound;
+  if (bound>clearance+EPS || (start.baseWidth===start.baseDepth && other.baseWidth===other.baseDepth && other.faction!=='terrain')) return bound;
   function gap(axis) {
     const nx=Math.cos(axis), nz=Math.sin(axis);
     return dx*nx+dz*nz-Math.max(0,sx*nx+sz*nz)-radius(start,nx,nz)-radius(other,nx,nz);
@@ -81,10 +81,10 @@ function sweptGap(start,end,other) {
 // The swept ellipse at a pivot need not be convex. The angular distance
 // bounds point displacement, letting clear intervals terminate without samples
 // that could skip a thin obstacle inside the turn.
-function crossesOnTurn(p,delta,other) {
+export function crossesOnTurn(p,delta,other,clearance=0) {
   if(Math.abs(delta)<EPS || p.baseWidth===p.baseDepth) return false;
-  if(Math.hypot(p.x-other.x,p.z-other.z)>outerRadius(p)+outerRadius(other)+EPS) return false;
-  const gapAt=t=>{const q={...p,yaw:p.yaw+delta*t};return sweptGap(q,q,other);};
+  if(Math.hypot(p.x-other.x,p.z-other.z)>outerRadius(p)+outerRadius(other)+clearance+EPS) return false;
+  const gapAt=t=>{const q={...p,yaw:p.yaw+delta*t};return sweptGap(q,q,other,clearance)-clearance;};
   const queue=[[0,1]];
   while(queue.length) {
     const [lo,hi]=queue.pop(),mid=(lo+hi)/2,gap=gapAt(mid);

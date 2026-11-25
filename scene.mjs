@@ -4,6 +4,7 @@ import {createPiece} from './assets/pieces.mjs';
 import {paintedFigures} from './painted.mjs';
 import {layoutGeometry} from './layouts.mjs';
 import {trainingThreePlan,trainingThreeWorldPoint} from './data/training-three-layout.mjs';
+import {trainingFourAreas} from './data/training-four-layout.mjs';
 import {studioScene} from './studio-scene.mjs';
 import {loadReconstruction} from './reconstruction/mesh.mjs';
 import {loadWallSurvey} from './assets/wall-relief.mjs';
@@ -93,7 +94,8 @@ export async function buildScene(canvas,api) {
   const zones=new T.Group();scene.add(zones);let drawnMap=null;
   function updateZones(){
     const table=api.game();
-    const code=table.training?.scenario===3&&table.training.phase==='deployment'?'training-three':table.layout?.map??null;
+    const code=table.training?.scenario===4?'training-four-'+(table.training.phase==='deployment'?'setup':'battle'):
+      table.training?.scenario===3&&table.training.phase==='deployment'?'training-three':table.layout?.map??null;
     zones.visible=api.zones()&&!!code;
     if(code===drawnMap)return;drawnMap=code;
     for(const obj of [...zones.children]){obj.geometry.dispose();obj.material.dispose();zones.remove(obj)}
@@ -102,6 +104,13 @@ export async function buildScene(canvas,api) {
       const mesh=new T.Mesh(new T.ShapeGeometry(shape),new T.MeshBasicMaterial({color,transparent:true,opacity,depthWrite:false,side:T.DoubleSide}));
       mesh.rotation.x=-Math.PI/2;mesh.position.y=y;mesh.renderOrder=-3;zones.add(mesh);
       const edge=new T.LineLoop(new T.BufferGeometry().setFromPoints(polygon.map(([x,z])=>new T.Vector3(x,y+.01,z))),new T.LineBasicMaterial({color}));zones.add(edge);
+    }
+    if(code?.startsWith('training-four-')){
+      for(const area of trainingFourAreas){
+        if(area.terrainIds.length)patch(area.polygon,0xe3bd62,.19,.035);
+        else if(code==='training-four-setup'&&area.id==='eastern-vent')patch(area.polygon,0x3c9bee,.14,.035);
+      }
+      return;
     }
     if(code==='training-three'){
       const colors={marines:0x3c9bee,orks:0xa6b955,gretchin:0xe3bd62};

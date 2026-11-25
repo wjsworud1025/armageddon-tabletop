@@ -15,6 +15,9 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFilter
 
 
+HELD_OUT = ('01-03', '02-07', '03-11')
+
+
 @dataclass
 class Camera:
     rgb: np.ndarray
@@ -79,7 +82,7 @@ def base_rim(mask):
     return np.array([np.median(centers), best[3], best[1], best[2]])
 
 
-def cameras(folder, limit, distance, clockwise, ellipse, footprint=False):
+def cameras(folder, limit, distance, clockwise, ellipse, footprint=False, excluded=()):
     records = []
     calibration = json.loads(ellipse.read_text()) if ellipse else {}
     for path in sorted(folder.glob('*-*.*')):
@@ -119,13 +122,14 @@ def cameras(folder, limit, distance, clockwise, ellipse, footprint=False):
                 yy,xx=np.nonzero(mask)
                 boxes.append([xx.min(),xx.max(),yy.min(),yy.max()])
             boxes=np.array(boxes)
+            retained=np.array([f'{ring:02}-{g[1]:02}' not in excluded for g in group])
             pitches={1:8,2:32,3:61}
             sine=np.sin(np.radians(pitches[ring]))
             widths=boxes[:,1]-boxes[:,0]
-            span=np.median(widths)
-            cx=np.median((boxes[:,1]+boxes[:,0])/2)
+            span=np.median(widths[retained])
+            cx=np.median(((boxes[:,1]+boxes[:,0])/2)[retained])
             front=np.roll(boxes[:,1]-cx,3)
-            cy=np.median(boxes[:,3]-sine*front)
+            cy=np.median((boxes[:,3]-sine*front)[retained & np.roll(retained,3)])
             rims[:]=[cx,cy,span/2,span*sine/2]
         rx = np.nanmedian(rims[:,2])
         sine = np.nanmedian(rims[:,3]/rims[:,2])
@@ -150,7 +154,28 @@ def cameras(folder, limit, distance, clockwise, ellipse, footprint=False):
     return views
 
 
-def carve(views,density,allow,limits):
+def carving_mask(mask, apertures):
+    if apertures is None:
+        return np.asarray(Image.fromarray(mask.astype('u1')).filter(ImageFilter.MaxFilter(3)))
+    # Preserve the exterior edge. Give enclosed white gaps their own antialiasing
+    # margin so a subpixel hole does not become a solid voxel at grazing angles.
+    if apertures == 0:
+        return mask
+    from scipy import ndimage
+    holes = ndimage.binary_fill_holes(mask) & ~mask
+    return mask & ~ndimage.binary_dilation(holes, iterations=apertures)
+
+
+def apply_lens(views, fitted):
+    if 'cameras' in fitted:
+        fitted={c.tag:{**v,'center':[v['cx'],v['cy']]} for c,v in zip(views,fitted['cameras'])}
+    for c in views:
+        f=fitted[c.tag];w=c.rgb.shape[1]
+        c.center=np.asarray(f['center'])*w;c.scale=f['scale']*w;c.distance=f['distance']
+        c.eye=np.asarray(f['eye']);c.right=np.asarray(f['right']);c.down=np.asarray(f['down'])
+
+
+def carve(views,density,allow,limits,apertures=None):
     start=np.array([-limits, -.24, -limits])
     stop=np.array([limits, 2.5, limits])
     step=1/density
@@ -166,7 +191,7 @@ def carve(views,density,allow,limits):
         h,w=camera.mask.shape
         outside=(x<0)|(y<0)|(x>=w)|(y>=h)
         # One pixel of calibration tolerance preserves subpixel silver blades and trophy spikes.
-        expanded=np.asarray(Image.fromarray(camera.mask.astype('u1')).filter(ImageFilter.MaxFilter(3)))
+        expanded=carving_mask(camera.mask,apertures)
         votes[indices]+=outside | (expanded[np.clip(y,0,h-1),np.clip(x,0,w-1)]==0)
     inside=(votes<=allow).reshape(shape)
     inside[:,0,:]=False
@@ -237,7 +262,23 @@ def color_vertices(vertices,faces,views,step):
     return np.rint(np.clip(color,0,255)).astype('u1')
 
 
-def preview(vertices,faces,colors,view,size=240):
+def profile_metrics(rendered, target):
+    from scipy import ndimage
+    def substantial(mask):
+        labels, _ = ndimage.label(mask)
+        keep = np.bincount(labels.ravel()) >= 12
+        keep[0] = False
+        return keep[labels]
+    def span(mask):
+        ys, xs = np.where(substantial(mask))
+        return np.array([np.ptp(xs), np.ptp(ys)])
+    holes = substantial(ndimage.binary_fill_holes(target) & ~target)
+    recall = 1 - rendered[holes].mean() if holes.any() else None
+    return dict(projectedExtentRatio=(span(rendered)/span(target)).round(3).tolist(),
+                enclosedWhitePixels=int(holes.sum()), enclosedWhiteRecall=round(float(recall),3) if recall is not None else None)
+
+
+def preview(vertices,faces,colors,view,size=240,profile=None):
     u,v,z=view.project(vertices)
     factor=size/view.rgb.shape[1]
     xy=np.stack((u,v),axis=1)*factor
@@ -252,6 +293,8 @@ def preview(vertices,faces,colors,view,size=240):
     reference=Image.fromarray(view.rgb).resize((size,size),Image.Resampling.LANCZOS)
     target=np.asarray(Image.fromarray(view.mask).resize((size,size),Image.Resampling.NEAREST))
     rendered=np.asarray(mask)
+    if profile is not None:
+        profile.update(profile_metrics(rendered,target))
     iou=np.sum(rendered & target)/np.sum(rendered | target)
     loss=np.abs(np.asarray(image,dtype=float)-np.asarray(reference,dtype=float)).mean(2)
     return reference,image,float(iou),float(loss[rendered & target].mean())
@@ -304,19 +347,15 @@ def run(args):
     started=time.perf_counter()
     views=cameras(args.frames,args.image_size,args.distance,args.direction,args.calibration,args.footprint)
     if args.lens:
-        fitted=json.loads(args.lens.read_text())
-        if 'cameras' in fitted:
-            fitted={c.tag:{**v,'center':[v['cx'],v['cy']]} for c,v in zip(views,fitted['cameras'])}
-        for c in views:
-            f=fitted[c.tag];w=c.rgb.shape[1]
-            c.center=np.asarray(f['center'])*w;c.scale=f['scale']*w;c.distance=f['distance']
-            c.eye=np.asarray(f['eye']);c.right=np.asarray(f['right']);c.down=np.asarray(f['down'])
+        apply_lens(views,json.loads(args.lens.read_text()))
     if len(views)!=36:
         raise ValueError(f'expected 36 photographs and found {len(views)}')
-    held=[v for v in views if v.tag in ('01-03','02-07','03-11')]
+    held=[v for v in views if v.tag in args.holdout]
+    if len(held) != len(args.holdout) or len(held) >= len(views):
+        raise ValueError('expected unique, existing held-out frame names and at least one training frame')
     train=[v for v in views if v.tag not in {h.tag for h in held}]
     def build(frames):
-        inside,start,step=carve(frames,args.density,args.allow,args.extent)
+        inside,start,step=carve(frames,args.density,args.allow,args.extent,args.apertures)
         if not args.footprint or args.depth:
             # All studio cameras look down on the plinth. Their silhouette intersection
             # continues below it as a cone; terminate it at the calibrated ground plane.
@@ -330,6 +369,8 @@ def run(args):
         reference,render,iou,error=preview(vertices,faces,colors,cam)
         comparison.paste(reference,(i*240,0));comparison.paste(render,(i*240,240))
         metrics.append(dict(frame=cam.tag,silhouetteIoU=round(iou,3),meanColorError=round(error,2)))
+        if args.audit_profile:
+            preview(vertices,faces,colors,cam,size=480,profile=metrics[-1])
     comparison.save(args.comparison)
     if args.output:
         vertices,faces,colors=build(views)
@@ -360,6 +401,9 @@ if __name__=='__main__':
     parser.add_argument('--density',type=float,default=64)
     parser.add_argument('--image-size',type=int,default=560)
     parser.add_argument('--allow',type=int,default=2)
+    parser.add_argument('--holdout',nargs='+',default=HELD_OUT,help='Frame names excluded from validation geometry and color')
+    parser.add_argument('--apertures',type=int,choices=range(4),help='Keep the exterior contour and expand enclosed white gaps by this many image pixels (requires SciPy)')
+    parser.add_argument('--audit-profile',action='store_true',help='Measure projected extents and enclosed background at 480 pixels (requires SciPy)')
     parser.add_argument('--extent',type=float,default=1.5)
     parser.add_argument('--direction',type=int,choices=[-1,1],default=1)
     parser.add_argument('--distance',type=float,default=22)

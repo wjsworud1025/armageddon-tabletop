@@ -4,6 +4,8 @@ import {createTrainingOne,rollTrainingOne,trainingOneView} from './rules/trainin
 import {actTrainingTwo,createTrainingTwo,trainingTwoPieces,trainingTwoView} from './rules/training-two.mjs';
 import {createTrainingThreeDeployment,moveTrainingThreeDeployment,trainingThreeDeploymentPieces} from './rules/training-three-deployment.mjs';
 import {createTrainingThreeBattle,actTrainingThreeBattle,trainingThreeBattlePieces,trainingThreeBattleView} from './rules/training-three-battle.mjs';
+import {trainingFourBattle,trainingFourDeployment,trainingFourObjectivesView} from './rules/training-four-battle.mjs';
+import {trainingFourDeploymentArea} from './data/training-four-layout.mjs';
 import {mountRules} from './rules/panel.mjs';
 import {baseDistance,place,restore,snapshot,translateFormation} from './state.mjs';
 import {buildScene} from './scene.mjs';
@@ -40,10 +42,11 @@ for(const [team,p] of Object.entries(duelists)){
 const trainingField={width:30,depth:22,surface:'reverse',pieces:structuredClone(template.pieces)};
 function shownTable(){
   if(!game.training)return game;
-  if(game.training.scenario===2||game.training.scenario===3){
+  if(game.training.scenario>=2){
     if(trainingField.training!==game.training){
-      const project=game.training.scenario===2?trainingTwoPieces:
-        game.training.phase==='deployment'?trainingThreeDeploymentPieces:trainingThreeBattlePieces;
+      const deploying=game.training.phase==='deployment';
+      const project={2:trainingTwoPieces,3:deploying?trainingThreeDeploymentPieces:trainingThreeBattlePieces,
+        4:deploying?trainingFourDeployment.pieces:trainingFourBattle.pieces}[game.training.scenario];
       const poses=new Map(project(game.training).map(p=>[p.id,p]));
       for(const p of trainingField.pieces){
         const pose=poses.get(p.id);
@@ -88,7 +91,7 @@ function changed(){persist();redraw()}
 function mutate(fn,message){checkpoint();fn();log(message);changed()}
 function select(id){active=piece(id)?.id??null;scene?.select(active);roster();selection();
   if(game.training?.scenario===2)renderFieldBattle(game.training);
-  if(game.training?.scenario===3)renderTrainingThree();
+  if(game.training?.scenario>=3)renderFieldMission(game.training);
   notify()}
 function history(){
   const list=$('log');list.replaceChildren();
@@ -185,7 +188,10 @@ function editPose(p,delta,message){
     try{applyMovement(proposeTableMotion(p,{[p.id]:[delta]}))}catch(e){toast(e.message);selection()}
   }else mutate(()=>{Object.assign(p,delta);place(p,p.x,p.z,game)},message);
 }
-function rotate(){const p=piece(active);if(p)editPose(p,{yaw:(p.yaw+Math.PI/12)%(2*Math.PI)},p.name+' 15° 회전')}
+function rotate(){
+  if(game.training?.scenario===4){pivotFourth(1);return}
+  const p=piece(active);if(p)editPose(p,{yaw:(p.yaw+Math.PI/12)%(2*Math.PI)},p.name+' 15° 회전');
+}
 function pendingAttack(){return game.rules?.declaration?.attackRoll||game.rules?.declaration?.precisionRoll}
 function remove(id,removed){const p=piece(id);
   if(game.training)return;
@@ -211,8 +217,10 @@ function renderTraining(){
   document.body.dataset.training=scenario;
   document.body.classList.toggle('training-active',enabled);
   $('training').hidden=enabled&&scenario!=='1';$('training-two').hidden=enabled&&scenario!=='2';
-  $('training-three').hidden=enabled&&scenario!=='3';
-  $('training-three-play').hidden=scenario!=='3';$('training-three-intro').hidden=enabled;
+  for(const [id,n] of [['three','3'],['four','4']]){
+    $('training-'+id).hidden=enabled&&scenario!==n;
+    $('training-'+id+'-play').hidden=scenario!==n;$('training-'+id+'-intro').hidden=enabled;
+  }
   $('training-two-play').hidden=scenario!=='2';$('training-two-intro').hidden=enabled;
   $('training-play').hidden=scenario!=='1';$('training-start').hidden=enabled;
   $('training-intro').hidden=enabled;
@@ -222,9 +230,10 @@ function renderTraining(){
     if(scenario==='1')$('hint').textContent='두 베이스가 맞닿은 상태에서 싸웁니다. 드래그로 시점 회전 · 휠로 확대';
     if(scenario==='2')$('hint').textContent='분대의 행동을 선택한 뒤 미니어처를 드래그하세요. 경유지가 필요하면 경로 도구를 사용하세요.';
     if(scenario==='3')$('hint').textContent='미니어처를 드래그해 같은 구역 안에 놓으세요. 상대 모델까지의 거리는 거리 측정으로 확인하세요.';
+    if(scenario==='4')$('hint').textContent='금색 테두리는 득점 거점입니다. 파란 환기구에서 인터세서가 출발합니다.';
   }
   if(!state)return;
-  if(state.scenario===3){renderTrainingThree();return}
+  if(state.scenario>=3){renderFieldMission(state);return}
   if(state.scenario===2){renderFieldBattle(state);return}
   const view=trainingOneView(state);
   $('training-wounds').textContent='캡틴 '+state.wounds.marines+' / 6 W　·　워보스 '+state.wounds.orks+' / 6 W';
@@ -254,52 +263,98 @@ $('training-roll').onclick=()=>{
 $('training-exit').onclick=()=>{if(game.training)mutate(()=>{delete game.training})};
 $('training-two-start').onclick=()=>{if(!game.training)mutate(()=>{game.training=createTrainingTwo()})};
 $('training-two-exit').onclick=$('training-exit').onclick;
-$('training-three-start').onclick=()=>{if(!game.training)mutate(()=>{game.training=createTrainingThreeDeployment()})};
-$('training-three-exit').onclick=$('training-exit').onclick;
-$('training-three-begin').onclick=()=>{
-  try{
-    const next=createTrainingThreeBattle(game.training);
-    mutate(()=>{game.training=next});setMode('pick');scene?.home();
-  }catch(error){toast(error.message)}
+const fieldMissions={
+  2:{id:'two',act:actTrainingTwo,view:trainingTwoView},
+  3:{id:'three',deploy:createTrainingThreeDeployment,begin:createTrainingThreeBattle,move:moveTrainingThreeDeployment,act:actTrainingThreeBattle,view:trainingThreeBattleView},
+  4:{id:'four',deploy:trainingFourDeployment.create,begin:trainingFourBattle.create,move:trainingFourDeployment.move,act:trainingFourBattle.act,view:trainingFourBattle.view},
 };
-$('training-three-zones').onchange=()=>scene?.sync();
-$('training-three-sight').onclick=()=>{if(!active)return;setMode('sight');$('hint').textContent='시선을 확인할 다른 모델을 클릭하세요. 전체 보기로 돌아올 수 있습니다.'};
-function renderTrainingThree(){
-  const deployment=game.training.phase==='deployment';
+for(const mission of [fieldMissions[3],fieldMissions[4]]){
+  const el=key=>$('training-'+mission.id+'-'+key);
+  el('start').onclick=()=>{if(!game.training)mutate(()=>{game.training=mission.deploy()})};
+  el('exit').onclick=$('training-exit').onclick;
+  el('begin').onclick=()=>{
+    try{
+      const next=mission.begin(game.training);
+      mutate(()=>{game.training=next});setMode('pick');scene?.home();
+    }catch(error){toast(error.message)}
+  };
+  el('zones').onchange=()=>scene?.sync();
+  el('sight').onclick=()=>{if(!active)return;setMode('sight');$('hint').textContent='시선을 확인할 다른 모델을 클릭하세요. 전체 보기로 돌아올 수 있습니다.'};
+}
+function renderFieldMission(state){
+  const deployment=state.phase==='deployment',el=k=>$('training-'+fieldMissions[state.scenario].id+'-'+k);
   document.body.classList.toggle('training-deployment',deployment);
-  $('training-three-setup').hidden=!deployment;$('training-three-battle').hidden=deployment;
+  el('setup').hidden=!deployment;el('battle').hidden=deployment;
   const p=shownTable().pieces.find(m=>m.id===active&&!m.removed&&m.faction!=='terrain');
-  $('training-three-sight').disabled=!p;
-  if(!deployment){renderFieldBattle(game.training);return}
-  $('training-three-status').textContent=p?p.name+' · '+(p.kind==='gretchin'?'그레친':factionNames[p.faction])+' 배치 구역':
+  el('sight').disabled=!p;
+  if(state.scenario===4)el('pivots').hidden=!p||(!deployment&&(!state.plan?.ids.includes(p.id)||(state.plan.mode==='charge'&&!state.plan.target)));
+  if(!deployment){renderFieldBattle(state);return}
+  if(state.scenario===4){
+    el('status').textContent=p?p.name+' · '+trainingFourDeploymentArea(p).name:'마린 7기 · 오크 17기 · 득점 거점 3곳';
+    return;
+  }
+  el('status').textContent=p?p.name+' · '+(p.kind==='gretchin'?'그레친':factionNames[p.faction])+' 배치 구역':
     '마린 6명 · 워보스와 보이 11명 · 그레친 5명 · 폐허 4개';
 }
+function pivotFourth(direction){
+  const state=game.training,p=shownTable().pieces.find(m=>m.id===active&&!m.removed&&m.faction!=='terrain');
+  if(state?.scenario!==4||!p)return;
+  if(state.phase!=='deployment'){
+    if(state.plan?.ids.includes(p.id))applyTrainingActions([{type:'pivot',id:p.id,direction}]);
+    return;
+  }
+  try{
+    const next=trainingFourDeployment.move(state,p.id,p.x,p.z,(p.yaw+direction*Math.PI/12)%(2*Math.PI));
+    mutate(()=>{game.training=next});
+  }catch(error){toast(error.message)}
+}
+$('training-four-left').onclick=()=>pivotFourth(-1);
+$('training-four-right').onclick=()=>pivotFourth(1);
 function applyTrainingActions(actions){
   try{
     let next=game.training;
-    const apply=next.scenario===3?actTrainingThreeBattle:actTrainingTwo;
+    const apply=fieldMissions[next.scenario].act;
     for(const action of actions)next=apply(next,action);
     mutate(()=>{game.training=next});return true;
   }catch(error){toast(error.message);return false}
 }
 function describeSecondRoll(record){
-  const step={...trainingSteps,advance:'전력 이동',charge:'돌격'}[record.step];
+  const step={...trainingSteps,advance:'전력 이동',charge:'돌격',attacks:'공격 횟수',damage:'피해량',shock:'전장 충격'}[record.step]??record.step;
+  if(record.step==='shock')return factionNames[record.actor]+' · '+step+'　'+record.dice.join(' + ')+' / '+record.threshold+'+ · '+(record.successes?'통과':'실패');
+  if(record.formula)return factionNames[record.actor]+' '+step+'　'+record.formula+' · 주사위 '+record.dice.join(' · ')+' → '+record.result;
   const result=record.threshold==null?'합계 '+record.dice.reduce((a,b)=>a+b,0)+'″':
     record.threshold+'+ · 성공 '+record.successes+'개';
   return factionNames[record.actor]+' '+step+'　'+record.dice.join(' · ')+'　'+result;
 }
 function renderFieldBattle(state){
-  const third=state.scenario===3,el=name=>$('training-'+(third?'three':'two')+'-'+name);
-  const view=third?trainingThreeBattleView(state):trainingTwoView(state),models=shownTable().pieces;
-  const phases={movement:'이동',shooting:'사격',charge:'돌격',fight:'근접전',ended:'종료'};
+  const mission=fieldMissions[state.scenario],el=name=>$('training-'+mission.id+'-'+name);
+  const view=mission.view(state),models=shownTable().pieces;
+  const phases={command:'지휘',movement:'이동',shooting:'사격',charge:'돌격',fight:'근접전',ended:'종료'};
   const fightStage={pile:'접근 이동',first:'선제 공격',other:'일반 공격',consolidate:'재정비'};
   el('status').textContent=view.winner?(view.winner==='draw'?'무승부':factionNames[view.winner]+' 승리'):
     view.round+' / 5 라운드 · '+factionNames[view.active]+' 턴 · '+phases[view.phase]+
     (view.fight?' · '+fightStage[view.fight.stage]+' · '+factionNames[view.actor]+' 차례':
       view.phase==='shooting'?' · '+factionNames[view.actor]+' 차례':'');
   const count=f=>models.filter(p=>p.faction===f&&!p.removed).length;
-  el('forces').textContent='생존　마린 '+count('marines')+' / 6　·　오크 '+count('orks')+' / '+(third?16:11);
+  const totals={2:[6,11],3:[6,16],4:[7,17]}[state.scenario];
+  el('forces').textContent='생존　마린 '+count('marines')+' / '+totals[0]+'　·　오크 '+count('orks')+' / '+totals[1];
   let instruction='';
+  if(state.scenario===4){
+    const control=trainingFourObjectivesView(state,models),box=el('objectives');
+    const score=document.createElement('strong');
+    score.textContent='승점　오크 '+control.vp.orks+' · 스페이스 마린 '+control.vp.marines;
+    const list=document.createElement('ul');
+    for(const area of control.areas){
+      const row=document.createElement('li');
+      row.dataset.area=area.id;row.dataset.marines=area.marines;row.dataset.orks=area.orks;
+      const owner=area.controller?factionNames[area.controller]+' 점령':'미점령';
+      row.textContent=area.name+' · '+owner+' (OC '+area.orks+' 대 '+area.marines+')';list.append(row);
+    }
+    box.replaceChildren(score,list);
+    if(view.phase==='command')instruction=control.award?
+      '한 곳 점령, 두 곳 이상 점령, 상대보다 많이 점령하면 각각 5점입니다. 이번 지휘 단계에 '+control.award.points+'점을 얻습니다.':
+      '거점 점수를 계산하기 전에 해당 분대의 전장 충격을 검사하세요.';
+  }
   if(view.plan){
     const p=view.plan;
     instruction=p.mode==='charge'&&!p.target?'돌격할 상대 분대를 선택하세요.':
@@ -468,7 +523,7 @@ async function start(){
   if(original)await loadPortraitMap();
   for(const id of ['reference-toggle','appearance'])$(id).hidden=!original;
   redraw();mountRules($('rules'),api);
-  scene=await buildScene($('view'),{game:shownTable,template,localArt:!!original,select,checkpoint,zones:()=>game.training?.scenario===3?$('training-three-zones').checked:$('zones').checked,
+  scene=await buildScene($('view'),{game:shownTable,template,localArt:!!original,select,checkpoint,zones:()=>game.training?.scenario>=3?$('training-'+fieldMissions[game.training.scenario].id+'-zones').checked:$('zones').checked,
     sightInfo:text=>{$('hint').textContent=text},
     appearance:(on,photo)=>{$('appearance').setAttribute('aria-pressed',String(on));$('appearance').textContent=on?(photo?'사진 기물':'회전 사진'):'3D 조형'},
     progress:(i,n)=>$('stage-load').textContent='미니어처 준비 중 · '+i+' / '+n,
@@ -480,7 +535,7 @@ async function start(){
       if(game.training?.phase==='deployment'){
         const {x,z}=points.at(-1);
         try{
-          const next=moveTrainingThreeDeployment(game.training,p.id,x,z);
+          const next=fieldMissions[game.training.scenario].move(game.training,p.id,x,z);
           if(next!==game.training)mutate(()=>{game.training=next});
           return true;
         }catch(error){toast(error.message);return false}
