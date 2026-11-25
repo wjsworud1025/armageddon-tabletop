@@ -16,8 +16,9 @@ import {newBattle,startBattle,advance,opposite,steps,teams,roll,currentHP,unitMe
   groupId,changeUnit,needsShock,shockTest,adjustHP,controlObjective,engaged,modelProfile,
   character,hazardCandidates,resolveHazard,attackSkill} from './battle.mjs';
 import {draftRestriction,appendSightedDeclaration,lockSightedDeclaration,attackPackets,resolvePacket,chooseSuppression,
-  plungingFireAtDeclaration,plungingSightCandidates,confirmPlungingSight} from './declarations.mjs';
-import {canSetPatrolSight,patrolSightStatus,setPatrolSight,visibleInRange} from './patrol-sight.mjs';
+  plungingFireAtDeclaration,plungingSightCandidates,confirmPlungingSight,pendingManualCover,confirmDraftCover} from './declarations.mjs';
+import {canSetPatrolSight,captureSightBoard,patrolSightStatus,setPatrolSight,sightBoardMatches,visibleInRange} from './patrol-sight.mjs';
+import {patrolAreaCover} from './patrol-area-cover.mjs';
 import {doctrines,enhancements,tactics,selectOrder,useTactic,inDoctrine,hasWaaagh,effectWeapon} from './patrol.mjs';
 import {patrolMissions,recordLosses,objectiveSnapshot,missionAward} from './missions.mjs';
 import {officialPreparing,remainingPatrolUnits,patrolPlacementError} from './official-deployment.mjs';
@@ -48,10 +49,10 @@ const unitLabel=(p)=>p.kind==='boy' ? '보이즈 '+(Math.floor(p.variant/10)+1)+
 const pieceLabel=p=>p.name+' · '+p.id;
 const chunk=(title,body)=>'<section class="br-card"><h3>'+title+'</h3>'+body+'</section>';
 const sightLabels={unknown:'미확인',visible:'보임',blocked:'가림'};
-function shootingSkillLabel(weapon,skill,plunging){
+function shootingSkillLabel(weapon,skill,plunging,cover){
   if(!weapon.range)return '';
   if(weapon.torrent)return '자동 명중';
-  return 'BS '+skill+'+'+(plunging?' · 고지 사격':'');
+  return 'BS '+skill+'+'+(plunging?' · 고지 사격':'')+(cover?' · 표적 엄폐':'');
 }
 
 export function mountRules(container,api) {
@@ -64,9 +65,10 @@ export function mountRules(container,api) {
     style.textContent='.battle-rules{display:grid;gap:12px;font-size:13px}.battle-rules *{box-sizing:border-box}.battle-rules h2,.battle-rules h3,.battle-rules p{margin:0}.battle-rules h3{font-size:14px}.battle-rules p{line-height:1.6}.battle-rules .br-card{border-top:1px solid #4c4437;padding-top:12px;display:grid;gap:9px}.battle-rules .br-row{display:flex;flex-wrap:wrap;gap:6px;align-items:end}.battle-rules label{display:grid;gap:5px;font-size:12px;color:#d1c8b8;min-width:0}.battle-rules button,.battle-rules input,.battle-rules select{font:inherit}.battle-rules select,.battle-rules input{border:1px solid #554d40;background:#252522;color:#f4f0df;padding:6px;border-radius:3px;max-width:100%;min-width:0}.battle-rules input[type=number]{width:65px}.battle-rules label:has(input[type=checkbox]){display:flex;align-items:center}.battle-rules .br-phase{color:#e7b678;font-size:17px}.battle-rules .br-sub{font-size:12px;color:#b6b2a8}.battle-rules .br-latest{border-left:2px solid #c29e62;padding-left:9px;overflow-wrap:anywhere}.battle-rules details>summary{cursor:pointer}.battle-rules details[open]>summary{margin-bottom:8px}.battle-rules a{color:#e8c78b}.battle-rules .br-stats{display:flex;flex-wrap:wrap;gap:8px;font-variant-numeric:tabular-nums}.battle-rules .br-score{display:grid;grid-template-columns:1fr auto;gap:5px;align-items:center}.battle-rules .br-card button:disabled{opacity:.45}.battle-rules .br-ref{padding:8px 0;line-height:1.5}';
     document.head.append(style);
   }
-  const defaultChoices={first:'roll',rounds:'5',fighter:'',weapon:'0',target:'',cover:false,
+  const defaultChoices={first:'roll',rounds:'5',fighter:'',weapon:'0',target:'',
     hitMod:'0',woundMod:'0',extra:'0',lethal:false,rollCount:'1',objective:'',marineOC:'0',orkOC:'0',secured:'',attach:''};
   let choices={...defaultChoices};
+  let coverObservation=null;
   let selectedId='', feedback='', opened=new Set(),writing=false;
   const field=id=>root.querySelector('[data-field="'+id+'"]');
   const read=()=> {
@@ -120,6 +122,10 @@ export function mountRules(container,api) {
       choices.target=nearest?.id||'';
     }
     const target=getPiece(choices.target);
+    if(coverObservation&&(coverObservation.game!==api.getTable()||!target||
+      coverObservation.target!==groupId(state,target)||coverObservation.unit!==groupId(state,actor)||
+      coverObservation.round!==state.round||coverObservation.active!==state.active||state.step!==2||
+      !sightBoardMatches(state,api.getPieces(),coverObservation.board)))coverObservation=null;
     const members=target ? unitMembers(state,candidates,target) : [];
     const dist=members.length ? Math.min(...members.map(p=>api.getDistance(actor.id,p.id))) : Infinity;
     return {options,selected,candidates,target,members,dist};
@@ -150,7 +156,7 @@ export function mountRules(container,api) {
     if (targetTied && !contact && !targets.some(t=>t.kind==='landSpeeder')) return '다른 분대와 교전 중인 표적';
     return '';
   }
-  function shooterOptions(state,actor,weapon,targets){
+  function shooterOptions(state,actor,weapon,targets,areaCover){
     const signature=JSON.stringify(weapon);
     const friends=unitMembers(state,living(state),actor);
     const targetIds=targets.map(t=>t.id),pieces=api.getPieces();
@@ -160,13 +166,15 @@ export function mountRules(container,api) {
       const distance=Math.min(...targets.map(t=>api.getDistance(p.id,t.id)));
       const visible=weapon.range?visibleInRange(state,pieces,p.id,targetIds,weapon.range,api.getDistance):[];
       const plunging=plungingFireAtDeclaration(state,pieces,p,weapon,targets,visible.length>0);
-      const skill=attackSkill(weapon,{cover:choices.cover,plunging,ignorePenalties});
-      return {p,distance,visible,skill,plunging,problem:attackRestriction(state,p,weapon,targets,distance,visible)};
+      const manualCover=!!coverObservation?.shooters.has(p.id);
+      const cover=!!weapon.range&&(areaCover.automatic||manualCover);
+      const skill=attackSkill(weapon,{cover,plunging,ignorePenalties});
+      return {p,distance,visible,skill,plunging,cover,manualCover,problem:attackRestriction(state,p,weapon,targets,distance,visible)};
     });
   }
-  function renderShooterSight(state,shooters,target,weapon){
+  function renderShooterSight(state,shooters,target,weapon,areaCover){
     const pieces=api.getPieces();
-    const rows=shooters.map(({p,distance,visible,skill,plunging,problem})=>{
+    const rows=shooters.map(({p,distance,visible,skill,plunging,cover,problem},i)=>{
       const attrs=' data-shooter="'+esc(p.id)+'" data-target="'+esc(target.id)+'"';
       const status=patrolSightStatus(state,pieces,p.id,target.id);
       const enabled=canSetPatrolSight(state,pieces,p.id,target.id);
@@ -177,11 +185,25 @@ export function mountRules(container,api) {
       const witness=status!=='visible'&&visible.length?' · '+getPiece(visible[0]).name+' 보임':'';
       return '<div class="br-sight-pair" data-sight-row="'+esc(p.id)+'"><strong>'+esc(p.name)+'</strong>'+view+
         '<p class="br-sub">분대까지 '+distance.toFixed(1)+'″ · <span data-ballistic-skill="'+(weapon.torrent?'':skill)+'">'+
-        shootingSkillLabel(weapon,skill,plunging)+'</span> · '+esc((problem||'선언 가능')+witness)+'</p>'+
-        '<div class="br-row" role="group" aria-label="'+esc(p.name+' → '+target.name+' 시야')+'">'+choices+'</div></div>';
+        shootingSkillLabel(weapon,skill,plunging,cover)+'</span> · '+esc((problem||'선언 가능')+witness)+'</p>'+
+        '<div class="br-row" role="group" aria-label="'+esc(p.name+' → '+target.name+' 시야')+'">'+choices+'</div>'+
+        '<label><input type="checkbox" data-field="'+(i?'other-cover':'cover')+'" data-cover-shooter="'+esc(p.id)+'"'+
+        (cover?' checked':'')+(areaCover.automatic?' disabled':'')+'>'+
+        (areaCover.automatic?'지형 구역 엄폐 적용':'이 사수에게 나머지 표적 모두 지형에 가림')+'</label></div>';
     }).join('');
     return '<section class="br-card br-sight"><h3>'+esc(target.name)+'의 시야</h3>'+
       '<p class="br-sub">사수마다 이 모델이 보이는지 기록하세요. 분대원 한 명이 보이고, 분대가 사거리 안에 있으면 사격할 수 있습니다.</p>'+rows+'</section>';
+  }
+  function coverStatus(areaCover){
+    const models=areaCover.models;
+    if(!models.length)return '<p id="area-cover-status" data-automatic="false" class="br-sub">패트롤 매트가 없는 전장입니다. 각 사수의 시점에서 표적의 엄폐를 확인하세요.</p>';
+    const covered=models.filter(m=>m.eligible).length;
+    const summary=areaCover.automatic?'표적 전원 지형 구역 엄폐':('지형 구역 엄폐 '+covered+'/'+models.length+'명');
+    const report=models.map(m=>esc(pieceLabel(getPiece(m.id)))+' · '+
+      esc(m.areas.map(a=>a.name).join(', ')||'구역 밖')+(m.eligible?' · 엄폐':' · 시야로 확인')).join('<br>');
+    return '<div id="area-cover-status" data-automatic="'+areaCover.automatic+'"><strong>'+summary+'</strong>'+
+      (areaCover.automatic?'':'<p class="br-sub">나머지 모델이 모두 중간 지형에 일부 또는 전부 가리면 해당 사수의 엄폐를 선택하세요.</p>')+
+      detail('area-cover-models','모델별 엄폐 근거','<p>'+report+'</p>')+'</div>';
   }
   function renderAttack(state,actor) {
     if(state.declaration?.locked)return '';
@@ -189,7 +211,8 @@ export function mountRules(container,api) {
     if (!target || !selected) return '<p>전장에 공격할 적이 없습니다.</p>';
     const weapon=selected.w;
     const range=weapon.range ? weapon.range+'″' : '근접';
-    const shooters=shooterOptions(state,actor,weapon,members);
+    const areaCover=weapon.range?patrolAreaCover(api.getTable(),members):{automatic:false};
+    const shooters=shooterOptions(state,actor,weapon,members,areaCover);
     const blocked=shooters[0].problem;
     const matching=weapon.range||!blocked?shooters.filter(s=>!s.problem):[];
     const allocated=(state.declaration?.rows||[]).filter(r=>r.actor===actor.id).reduce((n,r)=>n+r.assigned,0);
@@ -198,8 +221,7 @@ export function mountRules(container,api) {
       select('target','공격할 분대의 모델',candidates.map(p=>opt(p.id,pieceLabel(p),choices.target)).join(''))+
       '<p class="br-sub">분대까지 최단 거리 '+dist.toFixed(1)+'″ · 사거리 '+range+' · A '+weapon.attacks+' · S '+weapon.strength+
       ' · AP '+weapon.ap+' · D '+weapon.damage+'</p>'+
-      (weapon.range?renderShooterSight(state,shooters,target,weapon):'')+
-      (weapon.range?'<label><input data-field="cover" type="checkbox"'+(choices.cover?' checked':'')+'> 표적 분대에 엄폐 적용</label>':'')+
+      (weapon.range?coverStatus(areaCover)+renderShooterSight(state,shooters,target,weapon,areaCover):'')+
       detail('mods','무기 및 분대 보정',row(number('hitMod','명중 보정',-1,1,choices.hitMod)+number('woundMod','상처 보정',-1,1,choices.woundMod)+number('extra','추가 공격',0,30,choices.extra))+
         '<label><input type="checkbox" data-field="lethal"'+(choices.lethal?' checked':'')+'>치명적 명중 (Lethal Hits)</label>')+
       (!weapon.range?number('allocation','이 표적에 배정할 근접 공격',1,availableAttacks,choices.allocation||availableAttacks):'')+
@@ -214,7 +236,8 @@ export function mountRules(container,api) {
     if(!actor)return '';
     const header=esc(unitLabel(actor))+' · '+(plan.locked?'공격 판정':'분대 공격 선언');
     if(!plan.locked){
-      let cannotLock=false;
+      const stale=new Set(pendingManualCover(state,api.getPieces()));
+      let cannotLock=stale.size>0;
       const list=plan.rows.map((r,i)=>{
         const shooter=getPiece(r.actor),weapon=getProfile(shooter).weapons[r.weapon];
         let problem='';
@@ -226,7 +249,9 @@ export function mountRules(container,api) {
         }
         return '<div>'+esc(pieceLabel(shooter))+' · '+esc(weapon.name)+' → '+esc(unitLabel(getPiece(r.preferred)))+
           (r.assigned?' × '+r.assigned:'')+' '+btn('drop-'+i,'삭제')+
-          (problem?'<p class="br-sub">'+esc(problem)+'</p>':'')+'</div>';
+          (problem?'<p class="br-sub">'+esc(problem)+'</p>':'')+
+          (stale.has(i)?'<p>현재 배치에서 이 사수의 엄폐를 다시 확인하세요.</p>'+
+            row(btn('cover-yes-'+i,'지형 가림 확인')+btn('cover-no-'+i,'수동 엄폐 없음')):'')+'</div>';
       }).join('');
       return chunk(header,list+'<p>같은 분대에서 다른 모델·무기를 더 지정할 수 있습니다. 확정하면 미지정 사격 무기는 이번에 발사하지 않습니다.</p>'+
         row(btn('lock','분대 전체 선언 확정',cannotLock)+btn('cancel-plan','선언 취소')));
@@ -255,7 +280,7 @@ export function mountRules(container,api) {
           btn('packet-select','배정 확정');
       }
       const r=plan.rows[event.packet.index],w=getProfile(getPiece(r.actor)).weapons[r.weapon];
-      const skillLabel=shootingSkillLabel(w,event.packet.skill,event.packet.plunging);
+      const skillLabel=shootingSkillLabel(w,event.packet.skill,event.packet.plunging,event.packet.cover);
       return chunk(header,'<p>'+who+(skillLabel?' · '+skillLabel:'')+'</p>'+body+(state.last?'<p class="br-latest">'+esc(state.last)+'</p>':''));
     }
     const groups=attackPackets(state,api.getPieces());
@@ -272,7 +297,7 @@ export function mountRules(container,api) {
       groups.map(p=>{
         const r=plan.rows[p.index],defenders=living(state).filter(t=>groupId(state,t)===p.target);
         const w=getProfile(getPiece(r.actor)).weapons[r.weapon];
-        const skillLabel=shootingSkillLabel(w,p.skill,p.plunging);
+        const skillLabel=shootingSkillLabel(w,p.skill,p.plunging,p.cover);
         const label=unitLabel(getPiece(r.preferred))+' · '+[...p.names].join(' / ')+' × '+p.indices.length+(skillLabel?' · '+skillLabel:'');
         const pref=defenders.some(t=>t.id===choices['allocate-'+p.index])?choices['allocate-'+p.index]:r.preferred;
         let precision='';
@@ -740,6 +765,12 @@ export function mountRules(container,api) {
       }catch(e){feedback=e.message;refresh()}
       return;
     }
+    if(action.startsWith('cover-yes-')||action.startsWith('cover-no-')){
+      const index=Number(action.split('-')[2]),manual=action.startsWith('cover-yes-');
+      const next=confirmDraftCover(state,api.getPieces(),index,manual);
+      if(next)return commit(next,'현재 배치에서 사수의 수동 엄폐 '+(manual?'확인':'해제'));
+      return;
+    }
     if (action==='cancel-plan' || action.startsWith('drop-') || action==='reopen') {
       const plan=state.declaration;
       if(!plan)return;
@@ -776,7 +807,7 @@ export function mountRules(container,api) {
         }
         rows.push({...r,distance,size:targets.length,guard,vehiclePenalty});
       }
-      const next=lockSightedDeclaration({...state,declaration:{...plan,rows}},api.getPieces(),eligible,api.getDistance);
+      const next=lockSightedDeclaration({...state,declaration:{...plan,rows}},api.getPieces(),eligible,api.getDistance,api.getTable().layout);
       if(!next){feedback=state.step===2?'사수별 시야와 표적 분대까지의 사거리를 다시 확인하세요.':'교전 중인 각 모델의 근접 공격을 모두 배정하세요.';return refresh();}
       return commit(next,'분대 공격 선언 확정 · 무기·표적 배정 '+rows.length+'건');
     }
@@ -933,20 +964,21 @@ export function mountRules(container,api) {
     if (action==='attack' || action==='volley') {
       const {selected,target,members:targets}=attackContext(state,actor);
       if (!selected||!target) return;
-      const candidates=shooterOptions(state,actor,selected.w,targets);
+      const areaCover=selected.w.range?patrolAreaCover(api.getTable(),targets):{automatic:false};
+      const candidates=shooterOptions(state,actor,selected.w,targets,areaCover);
       if(!selected.w.range&&candidates[0].problem){feedback=candidates[0].problem;return refresh();}
       const shooters=(action==='volley'?candidates:candidates.slice(0,1)).filter(s=>!s.problem);
       if(!shooters.length){feedback=candidates[0].problem;return refresh();}
       const blades=state.patrol.enhanced.blades && targets.some(t=>t.kind==='vanguard') && unit.charged && !selected.w.range;
       const withWarboss=!selected.w.range && members.some(p=>p.kind==='warboss' && currentHP(state,p)>0);
       const withLibrarian=!!selected.w.range && members.some(p=>p.kind==='librarian' && currentHP(state,p)>0);
-      const rows=shooters.map(({p,distance})=>({actor:p.id,weapon:getProfile(p).weapons.findIndex(w=>w.name===selected.w.name),
+      const rows=shooters.map(({p,distance,manualCover})=>({actor:p.id,weapon:getProfile(p).weapons.findIndex(w=>w.name===selected.w.name),
         target:groupId(state,target),preferred:target.id,distance,size:targets.length,
         assigned:selected.w.range?0:integer('allocation',1,selected.w.attacks+integer('extra',0,30)),
         hit:integer('hitMod',-1,1)-Number(state.patrol.suppressed===groupId(state,actor)),wound:integer('woundMod',-1,1)-Number(Boolean(blades)),
-        extra:integer('extra',0,30),cover:!!(selected.w.range&&choices.cover),lethal:!!(choices.lethal || (withWarboss&&choices.bossStyle!=='sustained')),
+        extra:integer('extra',0,30),cover:!!(selected.w.range&&manualCover),lethal:!!(choices.lethal || (withWarboss&&choices.bossStyle!=='sustained')),
         sustained:!!(withWarboss&&choices.bossStyle==='sustained'),ignore:withLibrarian,guard:false}));
-      const next=appendSightedDeclaration(state,api.getPieces(),rows,api.getDistance);
+      const next=appendSightedDeclaration(state,api.getPieces(),rows,api.getDistance,api.getTable().layout);
       if(!next){feedback='선언할 수 없는 배정입니다. 모델별 근접 공격 수와 이미 선택한 무기를 확인하세요.';return refresh();}
       return commit(next,unitLabel(actor)+' · '+selected.w.name+' × '+rows.length+' → '+unitLabel(target)+' 선언');
     }
@@ -961,6 +993,15 @@ export function mountRules(container,api) {
     }
     if(key.startsWith('fight-')){fights.change(key,el.value,el.checked);return}
     const state=read();
+    if(el.dataset.coverShooter){
+      const actor=getPiece(choices.fighter),target=getPiece(choices.target);
+      if(el.disabled||!actor||!target||state.declaration?.locked||state.step!==2)return;
+      if(!coverObservation)coverObservation={game:api.getTable(),target:groupId(state,target),unit:groupId(state,actor),
+        round:state.round,active:state.active,board:captureSightBoard(state,api.getPieces()),shooters:new Set()};
+      if(el.checked)coverObservation.shooters.add(el.dataset.coverShooter);
+      else coverObservation.shooters.delete(el.dataset.coverShooter);
+      return refresh();
+    }
     if (key==='mission') {
       state.mission=el.value.slice(0,80);
       return commit(state,'임무 지정 · '+state.mission);
@@ -989,7 +1030,7 @@ export function mountRules(container,api) {
     }
     if(['fighter','weapon','target'].includes(key))choices.allocation='';
     if (['fighter','target'].includes(key))api.exitSight?.();
-    if (['fighter','weapon','target','objective','cover'].includes(key)) refresh();
+    if (['fighter','weapon','target','objective'].includes(key)) refresh();
   }
   function toggle(event) {
     const id=event.target.dataset.detail;

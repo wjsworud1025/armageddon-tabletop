@@ -14,6 +14,7 @@ import {checkRuinSight} from './browser-ruin-sight.mjs';
 import {checkShooterSight} from './browser-shooter-sight.mjs';
 import {checkPlungingFire} from './browser-plunging-fire.mjs';
 import {checkTerrainAreas} from './browser-terrain-areas.mjs';
+import {checkAreaCover} from './browser-area-cover.mjs';
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 // --public-exe <file> exercises a clean distribution using the same native host.
 const publicFlag=process.argv.indexOf('--public-exe');
@@ -62,6 +63,7 @@ try{
   await checkTerrainAreas({...shootingTools,until});
   await checkShooterSight(shootingTools);
   await checkPlungingFire(shootingTools);
+  await checkAreaCover(shootingTools);
   await screenshot('01-table.png');
   const studioInstalled=await js('!document.querySelector("#appearance").hidden');
   if(publicFlag!==-1)assert.equal(studioInstalled,false,'Public executable must run without the studio pack');

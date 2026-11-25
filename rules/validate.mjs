@@ -8,6 +8,7 @@ import {validPatrolFormations} from './patrol-formations.mjs';
 import {createTable} from '../data/catalog.mjs';
 import {sightBoardMatches,sightHP} from './patrol-sight.mjs';
 import {plungingFireAtDeclaration} from './declarations.mjs';
+import {patrolAreaCover} from './patrol-area-cover.mjs';
 
 const boolean = value => typeof value === 'boolean';
 const string = value => typeof value === 'string';
@@ -33,7 +34,8 @@ const catalog=new Map(createTable().pieces.map(p=>[p.id,p]));
 const sightPose=value=>Array.isArray(value)&&value.length===6&&value.slice(0,4).every(Number.isFinite)&&
   value[2]>=0&&value[2]<=20&&boolean(value[4])&&(value[5]===null||int(0,100)(value[5]));
 const sightPairs=map(model,map(model,oneOf(['visible','blocked'])));
-const shootingSight=fields({round:int(1,20),active:team,board:map(id=>catalog.has(id),sightPose),pairs:sightPairs},
+const sightBoard=map(id=>catalog.has(id),sightPose);
+const shootingSight=fields({round:int(1,20),active:team,board:sightBoard,pairs:sightPairs},
   ['round','active','board','pairs']);
 const groupTeam=key=>['captain','librarian','intercessor','vanguard','landSpeeder'].includes(key)?'marines':'orks';
 const faction=id=>groupTeam(models.get(id).kind);
@@ -52,7 +54,8 @@ const rowFields={
   size:int(1,46),assigned:int(0,45),hit:int(-2,1),wound:int(-2,1),extra:int(0,30),
   cover:boolean,lethal:boolean,sustained:boolean,ignore:boolean,guard:boolean,done:boolean
 };
-const validRow=fields({...rowFields,vehiclePenalty:int(0,2),plunging:boolean,plungingVisible:list(model,46)},Object.keys(rowFields));
+const validRow=fields({...rowFields,vehiclePenalty:int(0,2),plunging:boolean,plungingVisible:list(model,46),
+  manualCover:boolean,areaCover:boolean,coverReview:oneOf([true])},Object.keys(rowFields));
 const diceArray=list(int(1,6),40000);
 const precisionRoll=fields({index:int(0,275),count:int(1,20000),hits:int(1,40000),wounds:int(1,40000),
   hitDice:diceArray,woundDice:diceArray,devastating:int(0,40000)},['index','count','hits','wounds','hitDice','woundDice','devastating']);
@@ -60,7 +63,8 @@ const attackRecord=fields({kind:oneOf(['attacks','hit','wound','save','damage','
   raw:diceArray,closed:oneOf([true]),choice:nullable(model),
   change:fields({index:int(0,39999),value:int(1,6)},['index','value'])},['kind']);
 const attackRoll=fields({index:int(0,275),preferred:model,records:list(attackRecord,500)},['index','preferred','records']);
-const declaration=fields({unit:group,locked:boolean,didShoot:boolean,didFight:boolean,focus:nullable(group),rows:list(validRow,276),precisionRoll,attackRoll},['unit','locked','focus','rows']);
+const declaration=fields({unit:group,locked:boolean,didShoot:boolean,didFight:boolean,focus:nullable(group),rows:list(validRow,276),precisionRoll,attackRoll,
+  coverBoard:v=>sightBoard(v)&&Object.keys(v).length===catalog.size},['unit','locked','focus','rows']);
 const characterId=oneOf(['captain-1','librarian-1','warboss-1','weirdboy-1']);
 const unit = fields({
   shocked:boolean,shockChecked:boolean,epicChallengeModel:characterId,reinforcing:boolean,movementTracked:boolean,movement:oneOf(['normal','advance','fallback','remain']),
@@ -150,7 +154,7 @@ function officialStateOK(r,records){
     (!d.pending||left.has(d.pending)&&groupTeam(d.pending)===next);
 }
 
-export function validateRulesState(value,pieceRecords=null) {
+export function validateRulesState(value,pieceRecords=null,layout=undefined) {
   if (value==null) return true;
   if (fields({hp},['hp'])(value)) return true;
   if(pieceRecords&&(!Array.isArray(pieceRecords)||pieceRecords.some(p=>!p||!catalog.has(p.id))))return false;
@@ -256,6 +260,7 @@ export function validateRulesState(value,pieceRecords=null) {
   if(value.status!=='playing'||!attackStep(value.step))return false;
   const plan=value.declaration;
   if(!plan)return true;
+  if(plan.coverBoard&&value.step!==2)return false;
   if(plan.didFight!==undefined&&value.step!==4)return false;
   if(value.hazard||!plan.rows.length||!plan.rows.some(r=>!r.done)||(!plan.locked&&plan.rows.some(r=>r.done)))return false;
   if(plan.focus && (!plan.locked||!plan.rows.some(r=>r.target===plan.focus&&!r.done)))return false;
@@ -267,9 +272,18 @@ export function validateRulesState(value,pieceRecords=null) {
     const weapon=getProfile(p).weapons[entry.weapon];
     if(!weapon||!effectWeapon(value,p,weapon,plan.unit).precision)return false;
   }
+  const coverByTarget=new Map();
   if(!plan.rows.every(r=>{
     const weapon=getProfile(models.get(r.actor)).weapons[r.weapon];
     const visible=r.plungingVisible;
+    if(r.coverReview&&(plan.locked||r.manualCover!==false||r.areaCover===undefined))return false;
+    if(r.manualCover!==undefined||r.areaCover!==undefined){
+      if(!weapon?.range||r.manualCover===undefined||r.areaCover===undefined||r.cover!==(r.manualCover||r.areaCover)||r.manualCover&&!plan.coverBoard)return false;
+      if(plan.locked){
+        if(coverByTarget.has(r.target)&&coverByTarget.get(r.target)!==r.areaCover)return false;
+        coverByTarget.set(r.target,r.areaCover);
+      }
+    }
     return weapon && (r.plunging?weapon.range>0&&!weapon.torrent&&visible?.length&&
       new Set(visible).size===visible.length&&visible.every(id=>modelGroup(id)===r.target):visible===undefined) &&
       !!weapon.range===(value.step===2) && modelGroup(r.actor)===plan.unit && modelGroup(r.preferred)===r.target &&
@@ -279,8 +293,14 @@ export function validateRulesState(value,pieceRecords=null) {
   const savedPieces=()=>pieceRecords.map(({id,x,z,elevation,yaw,removed})=>({...catalog.get(id),x,z,elevation,yaw,removed:!!removed}));
   // An intact sight record refers to this exact board. Once casualties or
   // movement invalidate it, original row qualifiers remain historical.
-  if(pieceRecords&&plan.locked&&value.shootingSight&&plan.rows.some(r=>r.plunging)){
+  if(pieceRecords&&plan.locked&&value.shootingSight&&plan.rows.some(r=>r.manualCover)&&
+    !sightBoardMatches(value,pieceRecords,plan.coverBoard))return false;
+  if(pieceRecords&&plan.locked&&value.shootingSight&&(plan.rows.some(r=>r.plunging)||layout!==undefined&&coverByTarget.size)){
     const pieces=savedPieces();
+    if(layout!==undefined)for(const [target,expected] of coverByTarget){
+      const members=pieces.filter(p=>model(p.id)&&modelGroup(p.id)===target);
+      if(expected!==patrolAreaCover({rules:value,pieces,layout},members).automatic)return false;
+    }
     for(const r of plan.rows.filter(r=>r.plunging)){
       const actor=pieces.find(p=>p.id===r.actor),weapon=getProfile(actor)?.weapons[r.weapon];
       const targets=pieces.filter(p=>model(p.id)&&modelGroup(p.id)===r.target);

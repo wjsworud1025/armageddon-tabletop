@@ -2,8 +2,9 @@ import {getProfile} from './profiles.mjs';
 import {attackSkill,character,currentHP,groupId,weaponSlot,diceValue,resolveAttack,queueHazard} from './battle.mjs';
 import {effectWeapon} from './patrol.mjs';
 import {openCounteroffensive} from '../fight-sequence.mjs';
-import {forgetPatrolSightUnit,patrolSightTarget} from './patrol-sight.mjs';
+import {captureSightBoard,forgetPatrolSightUnit,patrolSightTarget,sightBoardMatches} from './patrol-sight.mjs';
 import {patrolHighGround,patrolGroundLevel} from './patrol-terrain-placement.mjs';
+import {patrolAreaCover} from './patrol-area-cover.mjs';
 
 const unitOrder=(s,id)=>s.units[id]||{};
 export const weaponFor=(state,p,i)=>effectWeapon(state,p,getProfile(p).weapons[i],groupId(state,p));
@@ -72,9 +73,10 @@ export function plungingFireAtDeclaration(state,pieces,actor,weapon,targets,visi
     patrolHighGround(actor,pieces);
 }
 
-function sightedRows(state,pieces,rows,distance){
+function sightedRows(state,pieces,rows,distance,layout){
   if(state.step!==2)return rows;
   const checked=[];
+  const coverByTarget=new Map();
   for(const row of rows){
     const actor=item(pieces,row.actor),profile=getProfile(actor);
     if(!profile?.weapons[row.weapon])return null;
@@ -83,7 +85,12 @@ function sightedRows(state,pieces,rows,distance){
     const target=patrolSightTarget(state,pieces,row.actor,targets.map(p=>p.id),weapon.range,distance);
     if(!target.visible.length)return null;
     const plunging=plungingFireAtDeclaration(state,pieces,actor,weapon,targets,true);
-    const updated={...row,distance:target.distance,plunging};
+    // 13.08 applies against each attack after targets are selected (04.02.02).
+    // Only the area condition is shared by all shooters targeting this unit.
+    if(!coverByTarget.has(row.target))coverByTarget.set(row.target,patrolAreaCover({rules:state,pieces,layout},targets).automatic);
+    const areaCover=coverByTarget.get(row.target),manualCover=row.manualCover??row.cover;
+    if(typeof manualCover!=='boolean')return null;
+    const updated={...row,distance:target.distance,plunging,manualCover,areaCover,cover:manualCover||areaCover};
     if(plunging)updated.plungingVisible=target.visible;
     else delete updated.plungingVisible;
     checked.push(updated);
@@ -93,14 +100,51 @@ function sightedRows(state,pieces,rows,distance){
 
 // The table uses these entry points both when drafting and when confirming.
 // Older, already locked declarations resolve from their original rows.
-export function appendSightedDeclaration(state,pieces,rows,distance){
-  const checked=sightedRows(state,pieces,rows,distance);
-  return checked&&appendDeclaration(state,pieces,checked);
-}
-export function lockSightedDeclaration(state,pieces,eligibleMelee=[],distance){
+export function pendingManualCover(state,pieces){
   const plan=state.declaration;
-  if(!plan||plan.locked)return null;
-  const checked=sightedRows(state,pieces,plan.rows,distance);
+  if(state.status!=='playing'||state.step!==2||!plan||plan.locked)return [];
+  const same=plan.coverBoard&&sightBoardMatches(state,pieces,plan.coverBoard);
+  return plan.rows.flatMap((row,i)=>row.coverReview||(!same&&(row.manualCover??row.cover))?[i]:[]);
+}
+
+// A single snapshot backs the current manual decisions. Mark each stale row
+// before recording a new decision so it cannot renew any earlier checkbox.
+function rebaseDraftCover(state,pieces){
+  const plan=state.declaration;
+  if(!plan||plan.locked||plan.coverBoard&&sightBoardMatches(state,pieces,plan.coverBoard))return state;
+  const pending=new Set(pendingManualCover(state,pieces));
+  if(!pending.size)return state;
+  const rows=plan.rows.map((r,i)=>pending.has(i)?{...r,manualCover:false,areaCover:r.areaCover??false,cover:r.areaCover??false,coverReview:true}:r);
+  const draft={...plan,rows};delete draft.coverBoard;
+  return {...state,declaration:draft};
+}
+
+export function confirmDraftCover(state,pieces,index,manual){
+  if(typeof manual!=='boolean'||!pendingManualCover(state,pieces).includes(index))return null;
+  const next=rebaseDraftCover(state,pieces),plan=next.declaration;
+  const rows=plan.rows.map((r,i)=>{
+    if(i!==index)return r;
+    const row={...r,manualCover:manual,areaCover:r.areaCover??false,cover:manual||!!r.areaCover};
+    delete row.coverReview;
+    return row;
+  });
+  const draft={...plan,rows};
+  if(manual)draft.coverBoard=plan.coverBoard??captureSightBoard(state,pieces);
+  return {...next,declaration:draft};
+}
+
+export function appendSightedDeclaration(state,pieces,rows,distance,layout=null){
+  const checked=sightedRows(state,pieces,rows,distance,layout);
+  if(!checked)return null;
+  const manual=state.step===2&&checked.some(r=>r.manualCover);
+  const next=appendDeclaration(manual?rebaseDraftCover(state,pieces):state,pieces,checked);
+  if(!next||!manual)return next;
+  return {...next,declaration:{...next.declaration,coverBoard:state.shootingSight.board}};
+}
+export function lockSightedDeclaration(state,pieces,eligibleMelee=[],distance,layout=null){
+  const plan=state.declaration;
+  if(!plan||plan.locked||pendingManualCover(state,pieces).length)return null;
+  const checked=sightedRows(state,pieces,plan.rows,distance,layout);
   return checked&&lockDeclaration({...state,declaration:{...plan,rows:checked}},pieces,eligibleMelee);
 }
 
@@ -144,7 +188,7 @@ export function attackPackets(state,pieces) {
     const plunging=r.plunging===true&&actor.elevation>=3&&grounded.has(r.target)&&r.plungingVisible.some(id=>liveIds.has(id))&&
       (!hasTerrain||patrolHighGround(actor,pieces));
     const key=packetKey(w,r,plunging);
-    if(!packets.has(key))packets.set(key,{index:i,target:r.target,indices:[],names:new Set(),plunging,
+    if(!packets.has(key))packets.set(key,{index:i,target:r.target,indices:[],names:new Set(),plunging,cover:r.cover,
       skill:attackSkill(w,{cover:r.cover,plunging,ignorePenalties:r.ignore})});
     const packet=packets.get(key);
     packet.indices.push(i);packet.names.add(w.name);
@@ -177,7 +221,7 @@ export function resolvePacket(state,pieces,index,preferred=null,random=Math.rand
     }
   }
   const result=count&&defenders.length?resolveAttack({weapon:w,targets:defenders,state,preferred:preferred||first.preferred,precisionTarget,awaitAllocation,rolled,distance:first.distance,
-    attackCount:count,hitMod:first.hit-(first.vehiclePenalty||0),woundMod:first.wound,cover:first.cover,plunging:packet.plunging,lethal:first.lethal,
+    attackCount:count,hitMod:first.hit-(first.vehiclePenalty||0),woundMod:first.wound,cover:packet.cover,plunging:packet.plunging,lethal:first.lethal,
     sustained:first.sustained,ignorePenalties:first.ignore,random}):null;
   if(awaitAllocation&&result?.wounds){
     const precisionRoll={index,...result};

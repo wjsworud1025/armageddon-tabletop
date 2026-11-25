@@ -13,7 +13,7 @@ const yawOf=p=>(p.yaw??0)%(Math.PI*2);
 const startingWounds=new Map(createTable().pieces.map(p=>[p.id,getProfile(p)?.wounds??null]));
 export const sightHP=(state,id)=>state.hp?.[id]??startingWounds.get(id);
 const pose=(state,p)=>[p.x,p.z,p.elevation??0,yawOf(p),!!p.removed,sightHP(state,p.id)];
-const world=(state,pieces)=>Object.fromEntries(pieces.map(p=>[p.id,pose(state,p)]));
+export const captureSightBoard=(state,pieces)=>Object.fromEntries(pieces.map(p=>[p.id,pose(state,p)]));
 export function sightBoardMatches(state,pieces,board){
   return Object.keys(board).length===pieces.length&&pieces.every(p=>{
     const saved=board[p.id];
@@ -69,7 +69,7 @@ export function setPatrolSight(state,pieces,shooterId,targetId,status){
   if(Object.keys(row).length)pairs[shooterId]=row;
   else delete pairs[shooterId];
   const next={...before};
-  if(Object.keys(pairs).length)next.shootingSight={round:state.round,active:state.active,board:previous?.board??world(state,pieces),pairs};
+  if(Object.keys(pairs).length)next.shootingSight={round:state.round,active:state.active,board:previous?.board??captureSightBoard(state,pieces),pairs};
   else delete next.shootingSight;
   return next;
 }

@@ -110,7 +110,7 @@ export async function checkPlungingFire({save,upload,state,js,click,reload,scree
   await selectRifleAndSight(false);
   await click('[data-field=cover]');
   assert.equal(await shownSkill(upper),3,'Cover takes the upper shooter from BS 2+ to 3+');
-  assert.equal(await shownSkill(ground),4);
+  assert.equal(await shownSkill(ground),3,'Manual cover against the upper shooter does not alter the ground shooter');
   await click('[data-field=cover]');
   assert.equal(await shownSkill(upper),2);assert.equal(await shownSkill(ground),3);
   await capture('[data-sight-row="'+upper+'"]','06-plunging-fire-shooters.png');

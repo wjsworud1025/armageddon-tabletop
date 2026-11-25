@@ -58,7 +58,7 @@ export function snapshot(game) {
 export function restore(template, save) {
   if (save?.version !== 1 || !Array.isArray(save.pieces) || save.pieces.length !== template.pieces.length)
     throw new Error('이 스타터 세트의 저장 파일이 아닙니다.');
-  if(!validateRulesState(save.rules,save.pieces))throw new Error('저장 파일의 대전 규칙 데이터가 올바르지 않습니다.');
+  if(!validateRulesState(save.rules,save.pieces,save.layout??null))throw new Error('저장 파일의 대전 규칙 데이터가 올바르지 않습니다.');
   if(save.training!=null){
     const validators={1:validateTrainingOne,2:validateTrainingTwo,
       3:save.training.phase==='deployment'?validateTrainingThreeDeployment:validateTrainingThreeBattle,
