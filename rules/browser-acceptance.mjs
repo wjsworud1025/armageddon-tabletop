@@ -21,6 +21,7 @@ import {checkTrainingThree} from './browser-training-three.mjs';
 import {checkTrainingFour} from './browser-training-four.mjs';
 import {checkPatrolSetup} from './browser-patrol-setup.mjs';
 import {checkRuinSight} from '../tests/browser-ruin-sight.mjs';
+import {checkShooterSight,sightButton,inspectButton} from '../tests/browser-shooter-sight.mjs';
 
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const server=createServer(async(req,res)=>{
@@ -87,6 +88,8 @@ try {
   }};
   await checkRuinSight(trainingTools);
   console.log('Passed both surface picks through the ruin window and into its crossbar');
+  await checkShooterSight(trainingTools);
+  console.log('Passed individual sight records, unit range, declaration locks and persistence');
   await checkPatrolSetup(trainingTools);
   console.log('Passed the official mission sequence, private formations, deployment and separate roll-offs');
   await checkTraining(trainingTools);
@@ -128,6 +131,8 @@ try {
   assert.equal(await disabled('shock'),true);
   await click(button('next'));await click(button('next'));
   await choose('target',victim.id);
+  assert.equal(await disabled('attack'),true);
+  await click(sightButton(actor.id,victim.id));
   assert.equal(await disabled('attack'),false);
   // Real attack pipeline with 6 to hit, 6 to wound, natural 1 to save.
   await js('window.acceptanceRandom=Math.random;{const samples=[.95,.95,.01];Math.random=()=>samples.shift()??.5;}');
@@ -155,7 +160,7 @@ try {
   const otherGrot=template.pieces.find(p=>p.kind==='gretchin' && p.id!==victim.id);
   await choose('target',otherGrot.id);
   const beforeSight=await state();
-  await click(button('inspect-sight'));
+  await click(inspectButton(rifles[0].id,otherGrot.id));
   const visible=id=>js('tabletopView.pose('+JSON.stringify(id)+') !== null');
   for(const id of [rifles[0].id,rifles[1].id,'gretchin-3'])assert.equal(await visible(id),false,id);
   for(const id of [otherGrot.id,actor.id,'generatorShrine-1'])assert.equal(await visible(id),true,id);
@@ -163,10 +168,11 @@ try {
   await choose('target','gretchin-3');
   assert.equal(await visible(rifles[1].id),true,'Changing target restores the shared table');
   await choose('target',otherGrot.id);
+  for(const p of rifles)await click(sightButton(p.id,otherGrot.id));
   await click(button('volley'));
   await choose('fighter',rifles[1].id);await choose('weapon','3');
   const secondUnit=template.pieces.find(p=>p.kind==='boy');
-  await choose('target',secondUnit.id);await click(button('attack'));
+  await choose('target',secondUnit.id);await click(sightButton(rifles[1].id,secondUnit.id));await click(button('attack'));
   await click(button('lock'));
   const declared=(await state()).rules.declaration;
   assert.equal(declared.locked,true);assert.ok(declared.rows.some(r=>r.target==='boy-0'));
@@ -224,6 +230,7 @@ try {
   await choose('fighter',bombers[0].id);
   await choose('weapon','1');
   await choose('target',actor.id);
+  for(const p of bombers)await click(sightButton(p.id,actor.id));
   await js('window.acceptanceRandom=Math.random;Math.random=()=>.01');
   await click(button('volley'));
   assert.ok(!(await state()).rules.hazard);

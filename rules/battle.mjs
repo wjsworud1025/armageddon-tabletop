@@ -16,7 +16,11 @@ export function startBattle(state,first,rounds) {
 }
 export function advance(state) {
   if (state.status !== 'playing' || state.hazard || state.declaration || state.movePlan || state.reinforcePlan || state.chargePlan || state.fightPlan || state.fightSequence?.counterAfter || state.shootingReaction || state.reactionPlan || state.units?.wartrakk?.suppressionTargets?.length) return state;
-  if (state.step < steps.length - 1) return {...state,step:state.step+1,...(state.step===3?{chargeWindow:false}:state.step===4?{fightSequence:null}:{})};
+  if (state.step < steps.length - 1) {
+    const next={...state,step:state.step+1,...(state.step===3?{chargeWindow:false}:state.step===4?{fightSequence:null}:{})};
+    delete next.shootingSight;
+    return next;
+  }
   const next = opposite(state.active);
   const endRound = next === state.first;
   if (endRound && state.round === state.rounds) return {...state,status:'finished'};
@@ -86,7 +90,9 @@ export function shockTest(state,members,random=Math.random) {
 }
 export function adjustHP(state,piece,delta) {
   const hp = clamp(currentHP(state,piece)+delta,0,getProfile(piece).wounds);
-  return {...state,hp:{...state.hp,[piece.id]:hp}};
+  const next={...state,hp:{...state.hp,[piece.id]:hp}};
+  if(state.shootingSight&&hp!==currentHP(state,piece))delete next.shootingSight;
+  return next;
 }
 
 export const character = p=>['captain','librarian','weirdboy','warboss'].includes(p.kind);

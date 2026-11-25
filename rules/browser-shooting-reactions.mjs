@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {sightButton} from '../tests/browser-shooter-sight.mjs';
 
 // Invoked by browser-acceptance.mjs in both the public and local-art editions.
 // Build each firing opportunity through the ordinary declarations and dice UI.
@@ -21,7 +22,8 @@ export async function checkShootingReactions({movementFixture,upload,choose,clic
     try{await click(button(key));}finally{await js('Math.random=window.savedReactionRandom');}
   }
   async function row(shooter,index,target){
-    await choose('fighter',shooter);await choose('weapon',String(index));await choose('target',target);await act('attack');
+    await choose('fighter',shooter);await choose('weapon',String(index));await choose('target',target);
+    await click(sightButton(shooter,target));await act('attack');
   }
   async function shoot(shooter,index,target){
     await row(shooter,index,target);await act('lock');await act('resolve-0',.01);

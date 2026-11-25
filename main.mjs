@@ -9,6 +9,7 @@ import {trainingFourDeploymentArea} from './data/training-four-layout.mjs';
 import {officialPreparing,pendingPatrolPiece,visiblePatrolPiece,advanceOfficialSetup} from './rules/official-deployment.mjs';
 import {newPatrolSetup} from './rules/patrol-setup.mjs';
 import {patrolTerrainLevels} from './rules/patrol-terrain-placement.mjs';
+import {canSetPatrolSight,patrolSightStatus,reconcilePatrolSight,setPatrolSight} from './rules/patrol-sight.mjs';
 import {mountRules} from './rules/panel.mjs';
 import {baseDistance,place,restore,snapshot,translateFormation} from './state.mjs';
 import {buildScene} from './scene.mjs';
@@ -102,8 +103,12 @@ function redraw(){scene?.sync();roster();selection();history();$('undo').disable
   renderTraining();
   for(const side of ['left','right'])$('flip-'+side).setAttribute('aria-pressed',String(game.surface===side||game.surface==='reverse'));
   $('apply-map').disabled=game.rules?.status==='playing';$('map-status').textContent=game.layout?'배치 '+game.layout.map+' · 청색 '+factionNames[game.layout.blue]:'제품 사진 배치';notify()}
-function changed(){scene?.cancelSurface();persist();redraw()}
-function mutate(fn,message){checkpoint();fn();log(message);changed()}
+function changed(preserveSight=false){
+  if(game.rules)game.rules=reconcilePatrolSight(game.rules,game.pieces);
+  if(!preserveSight)scene?.cancelSurface();
+  persist();redraw();
+}
+function mutate(fn,message,preserveSight=false){checkpoint();fn();log(message);changed(preserveSight)}
 function select(id){active=piece(id)?.id??null;scene?.select(active);roster();selection();
   if(game.training?.scenario===2)renderFieldBattle(game.training);
   if(game.training?.scenario>=3)renderFieldMission(game.training);
@@ -469,6 +474,22 @@ function inspectSight(from,to){reference(false);setMode('pick');scene?.lookFrom(
 function exitSight(){if(mode==='sight'||scene?.inSight())setMode('pick')}
 $('surface-start').onclick=()=>scene?.startSurface();
 $('surface-cancel').onclick=()=>scene?.cancelSurface();
+let inspectedPatrolPair=null;
+const verdictNames={unknown:'미확인',visible:'보임',blocked:'가림'};
+function showSightRecord(pair,stage){
+  inspectedPatrolPair=pair&&stage!=='pick'&&!game.training&&game.rules&&canSetPatrolSight(game.rules,game.pieces,...pair)?pair:null;
+  $('sight-record').hidden=!inspectedPatrolPair;
+  if(!inspectedPatrolPair)return;
+  const verdict=patrolSightStatus(game.rules,game.pieces,...pair);
+  $('sight-verdict').textContent=piece(pair[0]).name+' → '+piece(pair[1]).name+' · '+verdictNames[verdict];
+  for(const value of ['visible','blocked'])$('sight-'+value).setAttribute('aria-pressed',String(verdict===value));
+}
+for(const value of ['visible','blocked'])$('sight-'+value).onclick=()=>{
+  const pair=inspectedPatrolPair;
+  if(!pair||game.training||patrolSightStatus(game.rules,game.pieces,...pair)===value)return;
+  const next=setPatrolSight(game.rules,game.pieces,...pair,value);
+  if(next)mutate(()=>{game.rules=next},piece(pair[0]).name+' → '+piece(pair[1]).name+' · '+verdictNames[value],true);
+};
 const api={
   inspectSight,exitSight,
   getTable:()=>game,
@@ -580,8 +601,9 @@ async function start(){
   redraw();mountRules($('rules'),api);
   scene=await buildScene($('view'),{game:shownTable,template,localArt:!!original,select,checkpoint,zones:()=>game.training?.scenario>=3?$('training-'+fieldMissions[game.training.scenario].id+'-zones').checked:$('zones').checked,
     sightInfo:text=>{$('hint').textContent=text},
-    surfaceTools(active,stage,message){
-      $('surface-tools').hidden=!active;
+    surfaceTools(pair,stage,message){
+      $('surface-tools').hidden=!pair;
+      showSightRecord(pair,stage);
       $('stage').classList.toggle('surface-result',stage==='result');
       $('surface-start').hidden=stage==='pick';
       $('surface-start').textContent=stage==='result'?'다른 두 점 검사':'두 표면점으로 시선 확인';

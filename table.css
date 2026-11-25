@@ -28,4 +28,10 @@ body.training-active :is(#deployment,.faction-books,#rules,[data-tab="roster"],#
 #surface-tools{position:absolute;top:60px;left:20px;z-index:2;max-width:calc(100% - 40px);padding:6px 8px;background:#202521ed;border:1px solid #55594d;border-radius:5px}
 #surface-status{font-size:12px;color:var(--ink);max-width:44em}
 #surface-status:not(:empty){padding-top:4px}
+#sight-record{display:flex;align-items:center;flex-wrap:wrap;gap:5px;margin-top:6px;padding-top:6px;border-top:1px solid var(--line)}
+#sight-verdict{font-size:12px;margin-right:3px}
+.br-sight-pair{display:grid;grid-template-columns:1fr auto;gap:4px 8px;align-items:center;padding:6px 0}
+.br-sight-pair+.br-sight-pair{border-top:1px solid var(--line)}
+.br-sight-pair p,.br-sight-pair .br-row{grid-column:1/-1}
+.br-sight-pair [aria-pressed="true"]{outline:1px solid var(--ink);outline-offset:-2px;font-weight:700}
 #stage.surface-result::after{content:"";position:absolute;left:50%;top:50%;width:7px;height:7px;transform:translate(-50%,-50%);border:1px solid #fff1be;border-radius:50%;box-shadow:0 0 0 1px #232323;pointer-events:none}

@@ -147,7 +147,7 @@ export async function buildScene(canvas,api) {
       const names=surface.blocked.map(id=>lookup(id).name);
       message='선택한 두 점 · 폭 1 mm · '+(names.length?'교차한 조형: '+names.join(', '):'교차한 조형 표면 없음')+' · 지형 구역 효과는 별도 판정';
     }
-    api.surfaceTools(active,surface?(surface.picking?'pick':'result'):'',message);
+    api.surfaceTools(active?sightPair:null,surface?(surface.picking?'pick':'result'):'',message);
   }
   function showEndpoint(){
     const i=surface.points.length,p=lookup(sightPair[i]),other=lookup(sightPair[1-i]);
@@ -212,12 +212,12 @@ export async function buildScene(canvas,api) {
     const p=lookup(selected);
     ringRoot.visible=!!p&&!p.removed&&!sightPair;
     if(p){ringRoot.position.set(p.x,(p.elevation||0)+.05,p.z);ringRoot.rotation.y=p.yaw;halo.scale.set(p.baseWidth*.52,p.baseDepth*.52,1)}
+    surfaceUI();
     dirty();
   }
   function projection(){
     const w=canvas.clientWidth,h=canvas.clientHeight;if(w<=0||h<=0)return;
     if(!sightPair&&surface)clearSurface();
-    surfaceUI();
     sync();api.appearance(usePaint&&!sightPair&&(photo||pitch<65*Math.PI/180),photo);
     if(sightPair){
       const [a,b]=sightPair.map(lookup);

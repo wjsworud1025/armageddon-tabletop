@@ -5,6 +5,8 @@ import {doctrines,enhancements,tactics,effectWeapon} from './patrol.mjs';
 import {canCommandReroll} from './command-reroll.mjs';
 import {validatePatrolSetup,patrolSetupView} from './patrol-setup.mjs';
 import {validPatrolFormations} from './patrol-formations.mjs';
+import {createTable} from '../data/catalog.mjs';
+import {sightBoardMatches,sightHP} from './patrol-sight.mjs';
 
 const boolean = value => typeof value === 'boolean';
 const string = value => typeof value === 'string';
@@ -26,6 +28,12 @@ for (const kind of Object.keys(profiles)) for(let i=0;i<(count[kind]||1);i++) {
 }
 const model = value => models.has(value);
 const group = value => groups.has(value);
+const sightIds=new Set(createTable().pieces.map(p=>p.id));
+const sightPose=value=>Array.isArray(value)&&value.length===6&&value.slice(0,4).every(Number.isFinite)&&
+  value[2]>=0&&value[2]<=20&&boolean(value[4])&&(value[5]===null||int(0,100)(value[5]));
+const sightPairs=map(model,map(model,oneOf(['visible','blocked'])));
+const shootingSight=fields({round:int(1,20),active:team,board:map(id=>sightIds.has(id),sightPose),pairs:sightPairs},
+  ['round','active','board','pairs']);
 const groupTeam=key=>['captain','librarian','intercessor','vanguard','landSpeeder'].includes(key)?'marines':'orks';
 const faction=id=>groupTeam(models.get(id).kind);
 const identifier = value => string(value) && /^[a-zA-Z][a-zA-Z0-9-]{0,59}$/.test(value) && !['constructor','prototype'].includes(value);
@@ -85,7 +93,7 @@ const battle=fields({
   version:oneOf([1]),status:oneOf(['setup','playing','finished']),first:team,active:team,
   round:int(1,20),rounds:int(1,20),step:int(0,5),cp:totals,vp:totals,hp,
   units:map(group,unit),attachments:map(model,group),objectives:map(identifier,objective),hazard:nullable(hazard),declaration:nullable(declaration),movePlan:nullable(movePlan),chargePlan:nullable(chargePlan),chargeWindow:boolean,
-  fightSequence:validFightSequence,fightPlan:nullable(fightPlan),
+  fightSequence:validFightSequence,fightPlan:nullable(fightPlan),shootingSight,
   shootingReaction:nullable(reactionWindow),reactionPlan:nullable(fields(reactionFields,Object.keys(reactionFields))),
   reinforcePlan:nullable(fields({unit:group,mode:oneOf(['edge','deep-strike']),origins:map(model,pose)},['unit','mode','origins'])),
   reserves:map(group,list(model,46)),patrol,notes:string,mission:string,last:string,
@@ -147,6 +155,16 @@ export function validateRulesState(value,pieceRecords=null) {
   if(!battle(value) || value.round>value.rounds||!officialStateOK(value,pieceRecords))return false;
   if(value.hazard?.commandDice&&!canCommandReroll(value,value.hazard.unit,groupTeam(value.hazard.unit)))return false;
   const modelGroup=id=>value.attachments?.[id]||unitId(models.get(id));
+  if(value.shootingSight){
+    const s=value.shootingSight,rows=Object.entries(s.pairs);
+    if(value.status!=='playing'||value.step!==2||value.round!==s.round||value.active!==s.active||
+      Object.keys(s.board).length!==sightIds.size||!rows.length||
+      Object.entries(s.board).some(([id,p])=>p[5]!==sightHP(value,id))||
+      pieceRecords&&!sightBoardMatches(value,pieceRecords,s.board))return false;
+    const live=id=>!s.board[id][4]&&s.board[id][5]!==0;
+    if(rows.some(([id,targets])=>!live(id)||faction(id)!==s.active||value.units?.[modelGroup(id)]?.finishedAttack===2||!Object.keys(targets).length||
+      Object.keys(targets).some(target=>!live(target)||faction(target)===s.active)))return false;
+  }
   const stamp=value.patrol?.spent?.counteroffensive,target=value.patrol?.tactics?.counteroffensive;
   if(stamp!==undefined||target!==undefined){
     const m=/^([1-9]\d*)-(marines|orks)-4$/.exec(stamp??''),key=target?.split('/')[1];

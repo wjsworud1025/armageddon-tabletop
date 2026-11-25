@@ -2,6 +2,7 @@ import {getProfile} from './profiles.mjs';
 import {character,currentHP,groupId,weaponSlot,diceValue,resolveAttack,queueHazard} from './battle.mjs';
 import {effectWeapon} from './patrol.mjs';
 import {openCounteroffensive} from '../fight-sequence.mjs';
+import {forgetPatrolSightUnit,patrolSightTarget} from './patrol-sight.mjs';
 
 const unitOrder=(s,id)=>s.units[id]||{};
 export const weaponFor=(state,p,i)=>effectWeapon(state,p,getProfile(p).weapons[i],groupId(state,p));
@@ -61,6 +62,33 @@ export function lockDeclaration(state,pieces,eligibleMelee=[]) {
     }
   }
   return {...state,declaration:{...plan,locked:true}};
+}
+
+function sightedRows(state,pieces,rows,distance){
+  if(state.step!==2)return rows;
+  const checked=[];
+  for(const row of rows){
+    const actor=item(pieces,row.actor),profile=getProfile(actor);
+    if(!profile?.weapons[row.weapon])return null;
+    const targets=pieces.filter(p=>getProfile(p)&&groupId(state,p)===row.target).map(p=>p.id);
+    const target=patrolSightTarget(state,pieces,row.actor,targets,weaponFor(state,actor,row.weapon).range,distance);
+    if(!target.visible.length)return null;
+    checked.push({...row,distance:target.distance});
+  }
+  return checked;
+}
+
+// The table uses these entry points both when drafting and when confirming.
+// Older, already locked declarations resolve from their original rows.
+export function appendSightedDeclaration(state,pieces,rows,distance){
+  const checked=sightedRows(state,pieces,rows,distance);
+  return checked&&appendDeclaration(state,pieces,checked);
+}
+export function lockSightedDeclaration(state,pieces,eligibleMelee=[],distance){
+  const plan=state.declaration;
+  if(!plan||plan.locked)return null;
+  const checked=sightedRows(state,pieces,plan.rows,distance);
+  return checked&&lockDeclaration({...state,declaration:{...plan,rows:checked}},pieces,eligibleMelee);
 }
 
 function packetKey(w,r) {
@@ -129,12 +157,14 @@ export function closePacket(state,pieces,packet,result) {
   const hitTargets=[...new Set([...(order.hitTargets||[]),...(result?.hits?[first.target]:[])])];
   const updated={...order,attacks,hitTargets};
   let next={...state,hp:{...state.hp,...result?.hp},units:{...state.units,[plan.unit]:updated}};
+  if(next.shootingSight&&Object.entries(result?.hp??{}).some(([id,hp])=>hp!==currentHP(state,item(pieces,id))))delete next.shootingSight;
   const finished=rows.every(r=>r.done);
   const didShoot=state.step===2&&(count>0||(plan.didShoot??plan.rows.some(r=>r.done)));
   const didFight=state.step===4&&(count>0||plan.didFight===true);
   next.declaration=finished?null:{...plan,rows,...(state.step===2?{didShoot}:{didFight}),focus:rows.some(r=>!r.done&&r.target===first.target)?first.target:null};
   if(next.declaration){delete next.declaration.precisionRoll;delete next.declaration.attackRoll;}
   if(finished){
+    next=forgetPatrolSightUnit(next,pieces,plan.unit);
     const dangerous=new Set();
     for(const r of rows){
       const weapon=weaponFor(state,item(pieces,r.actor),r.weapon);

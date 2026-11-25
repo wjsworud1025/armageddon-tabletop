@@ -1,4 +1,5 @@
 import {validateRulesState} from './rules/validate.mjs';
+import {reconcilePatrolSight} from './rules/patrol-sight.mjs';
 import {measureFootprints} from './ruler.mjs';
 import {validateTrainingOne} from './rules/training-one.mjs';
 import {validateTrainingTwo} from './rules/training-two.mjs';
@@ -48,7 +49,7 @@ export function translateFormation(records, dx, dz, board) {
 
 export function snapshot(game) {
   return {version:1, pieces:game.pieces.map(({id,x,z,yaw,removed,elevation}) =>
-    ({id,x,z,yaw,removed:!!removed,elevation:elevation||0})), rules:structuredClone(game.rules),
+    ({id,x,z,yaw,removed:!!removed,elevation:elevation||0})), rules:structuredClone(reconcilePatrolSight(game.rules,game.pieces)),
     logs:[...game.logs], layout:game.layout?{...game.layout}:null,surface:game.surface||'front',
     ...(game.rules?.officialSetup&&game.rules.status==='setup'?{terrainRevision:2}:{}),
     ...(game.training?{training:structuredClone(game.training)}:{})};
@@ -90,6 +91,7 @@ export function restore(template, save) {
       throw Error('정식 패트롤 기물이 전장 밖에 있습니다.');
   }
   game.rules = save.rules && typeof save.rules === 'object' ? structuredClone(save.rules) : null;
+  game.rules = reconcilePatrolSight(game.rules,game.pieces);
   if(save.training)game.training=structuredClone(save.training);
   game.logs = Array.isArray(save.logs) ? save.logs.filter(s=>typeof s==='string').slice(-100) : [];
   game.surface = ['left','right','reverse'].includes(save.surface) ? save.surface : 'front';

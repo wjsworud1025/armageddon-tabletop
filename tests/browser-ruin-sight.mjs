@@ -4,6 +4,7 @@ import {createTable} from '../data/catalog.mjs';
 import {createPiece} from '../assets/pieces.mjs';
 import {createSightPicker} from '../assets/sight-picker.mjs';
 import {newBattle,startBattle} from '../rules/battle.mjs';
+import {inspectButton,sightButton} from './browser-shooter-sight.mjs';
 
 // The same two procedural figures are available in both distributions.
 const observer='intercessor-2',target='boy-2',wall='largeRuin-2';
@@ -46,16 +47,30 @@ export async function checkRuinSight({save,upload,state,js,click,send,screenshot
   for(const [label,x,y,blocked] of samples){
     await upload(aimFixture(save,x,y));await click('[data-tab=battle]');
     await select('fighter',observer);await select('target',target);
-    await click('[data-act="inspect-sight"]');await click('#surface-start');
+    await click(inspectButton(observer,target));await click('#surface-start');
     assert.match(await js('document.querySelector("#surface-status").textContent'),/시선을 시작할 점/);
     const before=await state();
     await centre();assert.match(await js('document.querySelector("#surface-status").textContent'),/시선이 닿을 점/);
     await centre();
     const result=await js('document.querySelector("#surface-status").textContent');
     assert.match(result,blocked?/교차한 조형: 대형 제조공장 폐허 2/:/교차한 조형 표면 없음/,label);
+    assert.deepEqual(await state(),before,'Checking either ray cannot decide a whole-model sight line');
+    assert.match(await js('document.querySelector("#sight-verdict").textContent'),/미확인/);
+    assert.equal(await js('document.querySelector("[data-act=attack]").disabled'),true);
     if(screenshot)await screenshot(label+'.png');
+    const status=blocked?'blocked':'visible';
+    await click('#sight-'+status);
+    assert.equal((await state()).rules.shootingSight.pairs[observer][target],status);
+    assert.equal(await js('document.querySelector("#surface-tools").hidden'),false,'Keep the camera on the shooter');
+    assert.equal(await js('document.querySelector("#surface-status").textContent'),result,'Keep the measured ray');
+    assert.match(await js('document.querySelector("#sight-verdict").textContent'),blocked?/가림/:/보임/);
+    const confirmed=await state();
+    await click('#sight-'+status);
+    assert.deepEqual(await state(),confirmed,'Reconfirming the same sight line has no side effects');
     await click('#surface-cancel');await click('#home');
-    assert.deepEqual(await state(),before,'Picking points must preserve all model positions and rules');
+    assert.deepEqual(await state(),confirmed,'Leaving the camera preserves the explicit verdict');
+    assert.equal(await js('document.querySelector('+JSON.stringify(sightButton(observer,target,status))+').getAttribute("aria-pressed")'),'true');
+    assert.equal(await js('document.querySelector("[data-act=attack]").disabled'),blocked);
   }
   await upload(save);await click('[data-tab=roster]');
 }

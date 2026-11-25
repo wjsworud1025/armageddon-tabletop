@@ -15,7 +15,8 @@ import {coherency,travelCost,moveLimit} from '../movement.mjs';
 import {newBattle,startBattle,advance,opposite,steps,teams,roll,currentHP,unitMembers,
   groupId,changeUnit,needsShock,shockTest,adjustHP,controlObjective,engaged,modelProfile,
   character,hazardCandidates,resolveHazard} from './battle.mjs';
-import {draftRestriction,appendDeclaration,lockDeclaration,attackPackets,resolvePacket,chooseSuppression} from './declarations.mjs';
+import {draftRestriction,appendSightedDeclaration,lockSightedDeclaration,attackPackets,resolvePacket,chooseSuppression} from './declarations.mjs';
+import {canSetPatrolSight,patrolSightStatus,setPatrolSight,visibleInRange} from './patrol-sight.mjs';
 import {doctrines,enhancements,tactics,selectOrder,useTactic,inDoctrine,hasWaaagh,effectWeapon} from './patrol.mjs';
 import {patrolMissions,recordLosses,objectiveSnapshot,missionAward} from './missions.mjs';
 import {officialPreparing,remainingPatrolUnits,patrolPlacementError} from './official-deployment.mjs';
@@ -45,6 +46,7 @@ const findKey=(state,p)=>state.units[groupId(state,p)]||{};
 const unitLabel=(p)=>p.kind==='boy' ? '보이즈 '+(Math.floor(p.variant/10)+1)+'분대' : p.name;
 const pieceLabel=p=>p.name+' · '+p.id;
 const chunk=(title,body)=>'<section class="br-card"><h3>'+title+'</h3>'+body+'</section>';
+const sightLabels={unknown:'미확인',visible:'보임',blocked:'가림'};
 
 export function mountRules(container,api) {
   const root=document.createElement('div');
@@ -116,7 +118,7 @@ export function mountRules(container,api) {
     const dist=members.length ? Math.min(...members.map(p=>api.getDistance(actor.id,p.id))) : Infinity;
     return {options,selected,candidates,target,members,dist};
   }
-  function attackRestriction(state,actor,weapon,targets,dist) {
+  function attackRestriction(state,actor,weapon,targets,dist,visible) {
     if(state.step===4&&(state.fightPlan||fightView?.attackUnit!==groupId(state,actor)))return '근접전 순서에서 전투할 분대를 먼저 선택하세요';
     if (!currentHP(state,actor)) return '제거된 모델';
     const order=findKey(state,actor);
@@ -127,7 +129,9 @@ export function mountRules(container,api) {
     if (order.finishedAttack===state.step) return '이번 페이즈의 분대 공격을 마쳤습니다';
     const inContact=(a,b)=>engaged(a,b,api.getDistance(a.id,b.id));
     if (!weapon.range) return targets.some(t=>inContact(actor,t))?'':'교전 거리 밖';
-    if (dist>weapon.range) return '사거리 밖';
+    if (dist>weapon.range+1e-7) return '사거리 밖';
+    if (!(visible??visibleInRange(state,api.getPieces(),actor.id,targets.map(t=>t.id),weapon.range,api.getDistance)).length)
+      return '이 사수에게 보이는 표적 모델을 기록하세요';
     if (order.movement==='fallback' && !inDoctrine(state,actor,'tactical')) return '후퇴한 분대';
     if (order.movement==='advance' && !weapon.assault && !inDoctrine(state,actor,'devastator') && !hasWaaagh(state,actor)) return '전력 이동 후 사용 불가';
     const current=living(state),own=unitMembers(state,current,actor);
@@ -140,15 +144,34 @@ export function mountRules(container,api) {
     if (targetTied && !contact && !targets.some(t=>t.kind==='landSpeeder')) return '다른 분대와 교전 중인 표적';
     return '';
   }
-  function matchingShooters(state,actor,weapon,targets,dist) {
-    const signature=JSON.stringify(weapon),short=dist<=weapon.range/2;
-    return unitMembers(state,living(state),actor).filter(p=>{
-      const same=getProfile(p).weapons.map(w=>effectWeapon(state,p,w,groupId(state,p))).find(w=>JSON.stringify(w)===signature);
-      if (!same) return false;
-      const d=Math.min(...targets.map(t=>api.getDistance(p.id,t.id)));
-      if ((weapon.rapid || weapon.melta) && short!==(d<=weapon.range/2)) return false;
-      return !attackRestriction(state,p,weapon,targets,d);
+  function shooterOptions(state,actor,weapon,targets){
+    const signature=JSON.stringify(weapon);
+    const friends=unitMembers(state,living(state),actor);
+    const targetIds=targets.map(t=>t.id),pieces=api.getPieces();
+    return [actor,...friends.filter(p=>p.id!==actor.id)].filter(p=>getProfile(p).weapons
+      .some(w=>JSON.stringify(effectWeapon(state,p,w,groupId(state,p)))===signature)).map(p=>{
+      const distance=Math.min(...targets.map(t=>api.getDistance(p.id,t.id)));
+      const visible=weapon.range?visibleInRange(state,pieces,p.id,targetIds,weapon.range,api.getDistance):[];
+      return {p,distance,visible,problem:attackRestriction(state,p,weapon,targets,distance,visible)};
     });
+  }
+  function renderShooterSight(state,shooters,target){
+    const pieces=api.getPieces();
+    const rows=shooters.map(({p,distance,visible,problem})=>{
+      const attrs=' data-shooter="'+esc(p.id)+'" data-target="'+esc(target.id)+'"';
+      const status=patrolSightStatus(state,pieces,p.id,target.id);
+      const enabled=canSetPatrolSight(state,pieces,p.id,target.id);
+      const choices=Object.entries(sightLabels).map(([value,label])=>
+        '<button type="button" data-act="shot-sight"'+attrs+' data-status="'+value+'" aria-pressed="'+
+        (status===value)+'"'+(enabled?'':' disabled')+'>'+label+'</button>').join('');
+      const view=api.inspectSight?'<button type="button" data-act="inspect-sight"'+attrs+'>사수 시점</button>':'';
+      const witness=status!=='visible'&&visible.length?' · '+getPiece(visible[0]).name+' 보임':'';
+      return '<div class="br-sight-pair" data-sight-row="'+esc(p.id)+'"><strong>'+esc(p.name)+'</strong>'+view+
+        '<p class="br-sub">분대까지 '+distance.toFixed(1)+'″ · '+esc((problem||'선언 가능')+witness)+'</p>'+
+        '<div class="br-row" role="group" aria-label="'+esc(p.name+' → '+target.name+' 시야')+'">'+choices+'</div></div>';
+    }).join('');
+    return '<section class="br-card br-sight"><h3>'+esc(target.name)+'의 시야</h3>'+
+      '<p class="br-sub">사수마다 이 모델이 보이는지 기록하세요. 분대원 한 명이 보이고, 분대가 사거리 안에 있으면 사격할 수 있습니다.</p>'+rows+'</section>';
   }
   function renderAttack(state,actor) {
     if(state.declaration?.locked)return '';
@@ -156,22 +179,23 @@ export function mountRules(container,api) {
     if (!target || !selected) return '<p>전장에 공격할 적이 없습니다.</p>';
     const weapon=selected.w;
     const range=weapon.range ? weapon.range+'″' : '근접';
-    const blocked=attackRestriction(state,actor,weapon,members,dist);
-    const matching=blocked?[]:matchingShooters(state,actor,weapon,members,dist);
+    const shooters=shooterOptions(state,actor,weapon,members);
+    const blocked=shooters[0].problem;
+    const matching=weapon.range||!blocked?shooters.filter(s=>!s.problem):[];
     const allocated=(state.declaration?.rows||[]).filter(r=>r.actor===actor.id).reduce((n,r)=>n+r.assigned,0);
     const availableAttacks=weapon.range?0:Math.max(1,weapon.attacks+Number(choices.extra)-allocated);
     return chunk('무기 공격',select('weapon','선택한 모델의 무기',options.map(({w,i})=>opt(String(i),w.name,choices.weapon)).join(''))+
       select('target','공격할 분대의 모델',candidates.map(p=>opt(p.id,pieceLabel(p),choices.target)).join(''))+
       '<p class="br-sub">분대까지 최단 거리 '+dist.toFixed(1)+'″ · 사거리 '+range+' · A '+weapon.attacks+' · S '+weapon.strength+
       ' · AP '+weapon.ap+' · D '+weapon.damage+'</p>'+
-      (weapon.range&&api.inspectSight?btn('inspect-sight','사수 시점에서 선택한 모델 보기'):'')+
+      (weapon.range?renderShooterSight(state,shooters,target):'')+
       (weapon.range?'<label><input data-field="cover" type="checkbox"'+(choices.cover?' checked':'')+'> 표적 분대에 엄폐 적용</label>':'')+
       detail('mods','무기 및 분대 보정',row(number('hitMod','명중 보정',-1,1,choices.hitMod)+number('woundMod','상처 보정',-1,1,choices.woundMod)+number('extra','추가 공격',0,30,choices.extra))+
         '<label><input type="checkbox" data-field="lethal"'+(choices.lethal?' checked':'')+'>치명적 명중 (Lethal Hits)</label>')+
       (!weapon.range?number('allocation','이 표적에 배정할 근접 공격',1,availableAttacks,choices.allocation||availableAttacks):'')+
-      row(btn('attack',blocked || (weapon.range?'사선 확인 · 이 무기 선언':'이 근접 무기 선언'),Boolean(blocked))+
-        (matching.length>1?btn('volley',(weapon.range?'사선 확인 · ':'')+'동일 무기 '+matching.length+'개 선언'):''))+
-      '<p class="br-sub">각 사수에서 적 분대가 보이는지 확인하세요. 일부 모델만 보이면 해당 모델의 무기를 개별 지정하세요.</p>');
+      row(btn('attack',blocked || (weapon.range?'이 사수의 무기 선언':'이 근접 무기 선언'),Boolean(blocked))+
+        (weapon.range&&shooters.length>1?btn('volley','사격 가능한 '+matching.length+'명 일제사격 선언',!matching.length):
+          matching.length>1?btn('volley','동일 무기 '+matching.length+'개 선언'):'')));
   }
   function renderDeclaration(state,all) {
     const plan=state.declaration;
@@ -180,10 +204,22 @@ export function mountRules(container,api) {
     if(!actor)return '';
     const header=esc(unitLabel(actor))+' · '+(plan.locked?'공격 판정':'분대 공격 선언');
     if(!plan.locked){
-      const list=plan.rows.map((r,i)=>'<div>'+esc(pieceLabel(getPiece(r.actor)))+' · '+esc(getProfile(getPiece(r.actor)).weapons[r.weapon].name)+
-        ' → '+esc(unitLabel(getPiece(r.preferred)))+(r.assigned?' × '+r.assigned:'')+' '+btn('drop-'+i,'삭제')+'</div>').join('');
+      let cannotLock=false;
+      const list=plan.rows.map((r,i)=>{
+        const shooter=getPiece(r.actor),weapon=getProfile(shooter).weapons[r.weapon];
+        let problem='';
+        if(weapon.range){
+          const targets=living(state).filter(t=>groupId(state,t)===r.target);
+          const distance=Math.min(...targets.map(t=>api.getDistance(shooter.id,t.id)));
+          problem=attackRestriction({...state,declaration:null},shooter,effectWeapon(state,shooter,weapon,plan.unit),targets,distance);
+          if(problem)cannotLock=true;
+        }
+        return '<div>'+esc(pieceLabel(shooter))+' · '+esc(weapon.name)+' → '+esc(unitLabel(getPiece(r.preferred)))+
+          (r.assigned?' × '+r.assigned:'')+' '+btn('drop-'+i,'삭제')+
+          (problem?'<p class="br-sub">'+esc(problem)+'</p>':'')+'</div>';
+      }).join('');
       return chunk(header,list+'<p>같은 분대에서 다른 모델·무기를 더 지정할 수 있습니다. 확정하면 미지정 사격 무기는 이번에 발사하지 않습니다.</p>'+
-        row(btn('lock','분대 전체 선언 확정')+btn('cancel-plan','선언 취소')));
+        row(btn('lock','분대 전체 선언 확정',cannotLock)+btn('cancel-plan','선언 취소')));
     }
     if(plan.attackRoll){
       const event=inspectAttackRoll(state,all);
@@ -284,7 +320,7 @@ export function mountRules(container,api) {
       unit.epicChallengeModel===actor.id&&state.step===4?'영웅적 도전 · 근접 정밀':'',
       state.patrol.suppressed===groupId(state,actor)?'제압됨':''].filter(Boolean);
     let attack='';
-    if (state.status==='playing' && ((state.step===2 && mine) || state.step===4)) attack=renderAttack(state,actor);
+    if (state.status==='playing' && currentHP(state,actor)>0 && ((state.step===2 && mine) || state.step===4)) attack=renderAttack(state,actor);
     const available=Object.entries(tactics).filter(([key])=>selectedTactic(state,key,actor));
     if(state.step===0&&mine&&useInsaneBravery(state,contents(),groupId(state,actor)))
       action+=btn('insane-bravery','불굴의 용기 · 1 CP · 전장 충격 자동 통과');
@@ -547,7 +583,7 @@ export function mountRules(container,api) {
     return chunk('정식 컴뱃 패트롤 준비',(record?'<p class="br-sub">'+record+'</p>':'')+body);
   }
   function click(event) {
-    const action=event.target.closest('button')?.dataset.act;
+    const button=event.target.closest('button'),action=button?.dataset.act;
     if (!action) return;
     const state=read();
     if(action==='official-new'||officialPreparing(state)){
@@ -559,9 +595,16 @@ export function mountRules(container,api) {
       return;
     }
     const actor=getPiece(choices.fighter);
-    if(action==='inspect-sight'){
-      const target=getPiece(choices.target);
-      if(actor&&target&&!actor.removed&&!target.removed)api.inspectSight(actor.id,target.id);
+    if(action==='inspect-sight'||action==='shot-sight'){
+      if(state.step!==2||state.status!=='playing'||!actor||state.declaration?.locked)return;
+      const {shooter,target,status}=button.dataset,from=getPiece(shooter),to=getPiece(target);
+      if(!from||!to||from.faction!==state.active||to.faction===from.faction||!currentHP(state,from)||!currentHP(state,to)||
+        groupId(state,from)!==groupId(state,actor)||target!==choices.target)return;
+      if(action==='inspect-sight'){api.inspectSight?.(shooter,target);return;}
+      if(!Object.hasOwn(sightLabels,status)||patrolSightStatus(state,api.getPieces(),shooter,target)===status)return;
+      const next=setPatrolSight(state,api.getPieces(),shooter,target,status);
+      if(next)return commit(next,from.name+' → '+to.name+' · '+sightLabels[status]);
+      feedback='지금은 이 사수의 시야를 기록할 수 없습니다.';refresh();
       return;
     }
     if(state.declaration?.attackRoll&&!action.startsWith('packet-'))return;
@@ -685,7 +728,7 @@ export function mountRules(container,api) {
       const clear={...state,declaration:null};
       const rows=[];
       for(const r of plan.rows){
-        const p=getPiece(r.actor),weapon=getProfile(p).weapons[r.weapon];
+        const p=getPiece(r.actor),weapon=effectWeapon(state,p,getProfile(p).weapons[r.weapon],groupId(state,p));
         const targets=live.filter(t=>groupId(state,t)===r.target);
         const distance=Math.min(...targets.map(t=>api.getDistance(p.id,t.id)));
         const problem=attackRestriction(clear,p,weapon,targets,distance);
@@ -701,8 +744,8 @@ export function mountRules(container,api) {
         }
         rows.push({...r,distance,size:targets.length,guard,vehiclePenalty});
       }
-      const next=lockDeclaration({...state,declaration:{...plan,rows}},all,eligible);
-      if(!next){feedback='교전 중인 각 모델의 근접 공격을 모두 배정하세요.';return refresh();}
+      const next=lockSightedDeclaration({...state,declaration:{...plan,rows}},api.getPieces(),eligible,api.getDistance);
+      if(!next){feedback=state.step===2?'사수별 시야와 표적 분대까지의 사거리를 다시 확인하세요.':'교전 중인 각 모델의 근접 공격을 모두 배정하세요.';return refresh();}
       return commit(next,'분대 공격 선언 확정 · 무기·표적 배정 '+rows.length+'건');
     }
     if(action.startsWith('resolve-')||action.startsWith('staged-')||action.startsWith('packet-')){
@@ -856,21 +899,22 @@ export function mountRules(container,api) {
       feedback=api.moveCommand(action==='desperate'?'fallback':action,actor,{fallbackMode:action==='desperate'?'desperate':'ordered',takeToSkies:action!=='remain'&&!!field('takeToSkies')?.checked});return refresh();
     }
     if (action==='attack' || action==='volley') {
-      const {selected,target,members:targets,dist}=attackContext(state,actor);
+      const {selected,target,members:targets}=attackContext(state,actor);
       if (!selected||!target) return;
-      const restriction=attackRestriction(state,actor,selected.w,targets,dist);
-      if (restriction) {feedback=restriction;return refresh();}
-      const shooters=action==='volley'?matchingShooters(state,actor,selected.w,targets,dist):[actor];
+      const candidates=shooterOptions(state,actor,selected.w,targets);
+      if(!selected.w.range&&candidates[0].problem){feedback=candidates[0].problem;return refresh();}
+      const shooters=(action==='volley'?candidates:candidates.slice(0,1)).filter(s=>!s.problem);
+      if(!shooters.length){feedback=candidates[0].problem;return refresh();}
       const blades=state.patrol.enhanced.blades && targets.some(t=>t.kind==='vanguard') && unit.charged && !selected.w.range;
       const withWarboss=!selected.w.range && members.some(p=>p.kind==='warboss' && currentHP(state,p)>0);
       const withLibrarian=!!selected.w.range && members.some(p=>p.kind==='librarian' && currentHP(state,p)>0);
-      const rows=shooters.map(p=>({actor:p.id,weapon:getProfile(p).weapons.findIndex(w=>w.name===selected.w.name),
-        target:groupId(state,target),preferred:target.id,distance:Math.min(...targets.map(t=>api.getDistance(p.id,t.id))),size:targets.length,
+      const rows=shooters.map(({p,distance})=>({actor:p.id,weapon:getProfile(p).weapons.findIndex(w=>w.name===selected.w.name),
+        target:groupId(state,target),preferred:target.id,distance,size:targets.length,
         assigned:selected.w.range?0:integer('allocation',1,selected.w.attacks+integer('extra',0,30)),
         hit:integer('hitMod',-1,1)-Number(state.patrol.suppressed===groupId(state,actor)),wound:integer('woundMod',-1,1)-Number(Boolean(blades)),
         extra:integer('extra',0,30),cover:!!(selected.w.range&&choices.cover),lethal:!!(choices.lethal || (withWarboss&&choices.bossStyle!=='sustained')),
         sustained:!!(withWarboss&&choices.bossStyle==='sustained'),ignore:withLibrarian,guard:false}));
-      const next=appendDeclaration(state,contents(),rows);
+      const next=appendSightedDeclaration(state,api.getPieces(),rows,api.getDistance);
       if(!next){feedback='선언할 수 없는 배정입니다. 모델별 근접 공격 수와 이미 선택한 무기를 확인하세요.';return refresh();}
       return commit(next,unitLabel(actor)+' · '+selected.w.name+' × '+rows.length+' → '+unitLabel(target)+' 선언');
     }

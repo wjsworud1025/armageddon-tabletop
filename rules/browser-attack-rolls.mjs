@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {createTable} from '../data/catalog.mjs';
 import {newBattle,startBattle} from './battle.mjs';
+import {sightButton} from '../tests/browser-shooter-sight.mjs';
 
 export async function checkAttackRerolls({save,upload,choose,click,button,state,js,reload}){
   const has=action=>js('!!document.querySelector('+JSON.stringify(button(action))+')');
@@ -18,6 +19,7 @@ export async function checkAttackRerolls({save,upload,choose,click,button,state,
     }
     await upload(game);await click('[data-tab=battle]');await choose('fighter',actor);
     await choose('weapon',String(weapon));await choose('target',target);
+    await click(sightButton(actor,target));
     await click(button('attack'));await click(button('lock'));
   }
   async function stage(kind,raw){
