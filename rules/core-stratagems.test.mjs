@@ -14,7 +14,8 @@ const squad=Array.from({length:5},(_,i)=>piece('intercessor','marines',i));
 const pieces=[captain,librarian,...squad,boss,weirdboy];
 const battle=(overrides={})=>({...newBattle(),status:'playing',cp:{marines:2,orks:2},...overrides});
 const activate=(state,key,kind='normal')=>({...state,step:4,fightSequence:{
-  stage:'remaining',active:{unit:key,kind,extraPile:kind==='overrun',reaction:false}
+  stage:'remaining',team:state.active,piled:[],fought:[key],consolidated:[],engagedAtFightStart:[key],
+  eligibleDuringFight:[key],reactions:[],passes:0,active:{unit:key,kind,extraPile:kind==='overrun',reaction:false}
 }});
 const melee={range:0},gun={range:12};
 

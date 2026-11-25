@@ -1,5 +1,5 @@
-import {beginFightSequence,fightOptions,fightMoveOptions,transitionFight} from '../fight-sequence.mjs';
-import {teams,groupId} from './battle.mjs';
+import {beginFightSequence,fightOptions,fightMoveOptions,transitionFight,resolveCounteroffensive} from '../fight-sequence.mjs';
+import {teams,groupId,opposite} from './battle.mjs';
 
 const stages={pile:'밀착 이동',first:'선제 공격',remaining:'일반 근접전',consolidate:'재정비',done:'근접전 완료'};
 const modes={'pile-in':'밀착 이동',ongoing:'교전 유지 재정비',engaging:'교전 진입 재정비',objective:'거점 재정비'};
@@ -40,6 +40,13 @@ export function createFightControls({getGame,getObjectives=()=>[],commit,startMo
   function render(){
     const v=view();if(!v.options)return '';
     const {game,objectives,options}=v,{unit,move}=input(v);
+    if(v.sequence.counterAfter&&!game.rules.hazard){
+      const defender=teams[opposite(game.rules.active)];
+      const choices=options.counters.map(key=>button('counter-'+key,label(game,key)+' · 2 CP')).join('');
+      return '<section class="br-card"><h3>'+defender+' · 반격 전술</h3><p>'+
+        escape(label(game,v.sequence.counterAfter))+' 분대의 공격이 끝났습니다. 아군 분대 하나에 선제 공격을 부여하면 그 분대를 다음으로 선택합니다.</p>'+
+        choices+button('counter-decline','반격 전술 생략')+'</section>';
+    }
     const busy=!!(game.rules.declaration||game.rules.hazard||game.rules.fightPlan);
     const title=options.stage==='done'?stages.done:teams[options.team]+' · '+(options.reactions.length?'재정비 반격':stages[options.stage]);
     let body='';
@@ -84,6 +91,13 @@ export function createFightControls({getGame,getObjectives=()=>[],commit,startMo
     refresh?.();return true;
   }
   function dispatch(action){
+    if(action.startsWith('fight-counter-')){
+      const game=getGame(),key=action.slice('fight-counter-'.length);
+      const next=resolveCounteroffensive(game,key==='decline'?null:key);
+      if(!next)throw Error('이번 전투에서는 그 분대에 반격 전술을 사용할 수 없습니다.');
+      commit(next,key==='decline'?'반격 전술 생략':label(game,key)+' · 반격 전술 (2 CP) · 다음 전투 선택');
+      return true;
+    }
     if(!['fight-normal','fight-overrun','fight-finish','fight-skip','fight-pass','fight-move'].includes(action))return false;
     const v=view();if(!v.options)throw Error('근접전 페이즈에서 선택하세요.');
     const {game,objectives,sequence}=v,{unit,move}=input(v);

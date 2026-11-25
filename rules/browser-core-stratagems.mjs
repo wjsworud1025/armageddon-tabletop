@@ -55,5 +55,32 @@ export async function checkCoreStratagems({save,upload,choose,click,button,state
   assert.equal(result.rules.hp['boy-1'],2);
   assert.equal(result.rules.declaration.precisionRoll,undefined);
   await click(button('resolve-1'));assert.equal((await state()).rules.declaration,null);
+
+  const counter=structuredClone(save);
+  const pairs={'warboss-1':[0,0],'captain-1':[2.1,0],'weirdboy-1':[0,8],'librarian-1':[2.1,8]};
+  for(const p of counter.pieces){p.removed=!pairs[p.id];if(!p.removed)[p.x,p.z]=pairs[p.id];}
+  counter.rules={...startBattle(newBattle(),'orks',5),step:4,cp:{marines:3,orks:3},
+    units:{warboss:{charged:true},weirdboy:{charged:true},captain:{fightsFirst:true}}};
+  await upload(counter);await click('[data-tab=battle]');
+  await click(button('fight-pass'));await click(button('fight-pass'));
+  await choose('fight-unit','warboss');await click(button('fight-normal'));
+  await choose('fighter','warboss-1');await choose('target','captain-1');await click(button('attack'));await click(button('lock'));
+  assert.equal(await has('fight-counter-librarian'),false);
+  await js('window.coreRandom=Math.random;Math.random=()=>0');
+  try{await click(button('resolve-0'));}finally{await js('Math.random=window.coreRandom');}
+  assert.equal((await state()).rules.fightSequence.counterAfter,'warboss');
+  assert.equal(await has('fight-counter-captain'),true);
+  assert.equal(await has('fight-finish'),false);
+  await reload();await click(button('fight-counter-decline'));
+  assert.equal((await state()).rules.cp.marines,3);
+  assert.equal(await has('fight-counter-librarian'),false);
+  await click('#undo');await click(button('fight-counter-librarian'));
+  assert.equal((await state()).rules.cp.marines,1);
+  assert.equal((await state()).rules.units.librarian.fightsFirst,true);
+  await click('#undo');assert.equal((await state()).rules.cp.marines,3);
+  await click('#redo');await reload();await click(button('fight-finish'));
+  assert.deepEqual(await js('Array.from(document.querySelector("[data-field=fight-unit]").options,o=>o.value)'),['librarian']);
+  await click(button('fight-normal'));
+  assert.equal((await state()).rules.fightSequence.active.unit,'librarian');
   await upload(save);await click('[data-tab=battle]');
 }

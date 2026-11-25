@@ -15,7 +15,7 @@ export function startBattle(state,first,rounds) {
   return {...state,status:'playing',first,active:first,rounds,cp:{marines:1,orks:1}};
 }
 export function advance(state) {
-  if (state.status !== 'playing' || state.hazard || state.declaration || state.movePlan || state.reinforcePlan || state.chargePlan || state.fightPlan || state.shootingReaction || state.reactionPlan || state.units?.wartrakk?.suppressionTargets?.length) return state;
+  if (state.status !== 'playing' || state.hazard || state.declaration || state.movePlan || state.reinforcePlan || state.chargePlan || state.fightPlan || state.fightSequence?.counterAfter || state.shootingReaction || state.reactionPlan || state.units?.wartrakk?.suppressionTargets?.length) return state;
   if (state.step < steps.length - 1) return {...state,step:state.step+1,...(state.step===3?{chargeWindow:false}:state.step===4?{fightSequence:null}:{})};
   const next = opposite(state.active);
   const endRound = next === state.first;

@@ -405,6 +405,7 @@ export function mountRules(container,api) {
             btn('hazard-end','분대 전멸 · 판정 종료')));
       }
     }
+    if(state.fightSequence?.counterAfter){root.innerHTML=state.hazard?top:fights.render();return;}
     const suppressible=state.units.wartrakk?.suppressionTargets;
     if(suppressible?.length){
       const options=suppressible.map(k=>opt(k,unitLabel(all.find(p=>groupId(state,p)===k)),choices.suppressTarget)).join('');
@@ -450,6 +451,7 @@ export function mountRules(container,api) {
     const state=read();
     const actor=getPiece(choices.fighter);
     if(state.declaration?.precisionRoll&&action!=='resolve-'+state.declaration.precisionRoll.index)return;
+    if(state.fightSequence?.counterAfter&&!(state.hazard?action.startsWith('hazard-'):action.startsWith('fight-counter-')))return;
     const val=id=>field(id)?.value??choices[id];
     const integer=(id,min,max)=>Math.max(min,Math.min(max,Math.trunc(Number(val(id)))||0));
     if(state.units.wartrakk?.suppressionTargets?.length){

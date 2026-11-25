@@ -1,6 +1,7 @@
 import {getProfile} from './profiles.mjs';
 import {character,currentHP,groupId,weaponSlot,diceValue,resolveAttack,queueHazard} from './battle.mjs';
 import {effectWeapon} from './patrol.mjs';
+import {openCounteroffensive} from '../fight-sequence.mjs';
 
 const unitOrder=(s,id)=>s.units[id]||{};
 const weaponFor=(state,p,i)=>effectWeapon(state,p,getProfile(p).weapons[i],groupId(state,p));
@@ -121,7 +122,8 @@ export function resolvePacket(state,pieces,index,preferred=null,random=Math.rand
   let next={...state,hp:{...state.hp,...result?.hp},units:{...state.units,[plan.unit]:updated}};
   const finished=rows.every(r=>r.done);
   const didShoot=state.step===2&&(count>0||(plan.didShoot??plan.rows.some(r=>r.done)));
-  next.declaration=finished?null:{...plan,rows,...(state.step===2?{didShoot}:{}),focus:rows.some(r=>!r.done&&r.target===first.target)?first.target:null};
+  const didFight=state.step===4&&(count>0||plan.didFight===true);
+  next.declaration=finished?null:{...plan,rows,...(state.step===2?{didShoot}:{didFight}),focus:rows.some(r=>!r.done&&r.target===first.target)?first.target:null};
   if(next.declaration)delete next.declaration.precisionRoll;
   if(finished){
     const dangerous=new Set();
@@ -132,6 +134,7 @@ export function resolvePacket(state,pieces,index,preferred=null,random=Math.rand
     }
     if(dangerous.size)next=queueHazard(next,actor,dangerous.size);
     next.units[plan.unit]={...updated,finishedAttack:state.step};
+    if(didFight&&next.fightSequence)next.fightSequence=openCounteroffensive({rules:next,pieces},plan.unit);
     if(state.step===2&&plan.unit==='wartrakk'){
       const liveTargets=hitTargets.filter(key=>pieces.some(p=>getProfile(p)&&groupId(next,p)===key&&currentHP(next,p)>0));
       next.units.wartrakk.suppressionTargets=liveTargets;

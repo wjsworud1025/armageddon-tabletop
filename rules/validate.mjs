@@ -42,7 +42,7 @@ const validRow=fields({...rowFields,vehiclePenalty:int(0,2)},Object.keys(rowFiel
 const diceArray=list(int(1,6),40000);
 const precisionRoll=fields({index:int(0,275),count:int(1,20000),hits:int(1,40000),wounds:int(1,40000),
   hitDice:diceArray,woundDice:diceArray,devastating:int(0,40000)},['index','count','hits','wounds','hitDice','woundDice','devastating']);
-const declaration=fields({unit:group,locked:boolean,didShoot:boolean,focus:nullable(group),rows:list(validRow,276),precisionRoll},['unit','locked','focus','rows']);
+const declaration=fields({unit:group,locked:boolean,didShoot:boolean,didFight:boolean,focus:nullable(group),rows:list(validRow,276),precisionRoll},['unit','locked','focus','rows']);
 const characterId=oneOf(['captain-1','librarian-1','warboss-1','weirdboy-1']);
 const unit = fields({
   shocked:boolean,shockChecked:boolean,epicChallengeModel:characterId,reinforcing:boolean,movementTracked:boolean,movement:oneOf(['normal','advance','fallback','remain']),
@@ -51,7 +51,7 @@ const unit = fields({
 });
 const doctrine=oneOf(Object.keys(doctrines)),tactic=oneOf(Object.keys(tactics));
 const coreKeys=['marines','orks'].flatMap(team=>['insaneBravery-'+team,'epicChallenge-'+team]);
-const tacticKey=oneOf([...Object.keys(tactics),'heroicIntervention',...coreKeys]);
+const tacticKey=oneOf([...Object.keys(tactics),'heroicIntervention','counteroffensive',...coreKeys]);
 const patrol=fields({
   doctrine:nullable(doctrine),usedDoctrines:list(doctrine,3),waaagh:int(0,2),waaaghUsed:boolean,
   enhanced:map(oneOf(Object.keys(enhancements)),boolean),tactics:map(tacticKey,string),spent:map(tacticKey,string),
@@ -89,6 +89,19 @@ export function validateRulesState(value) {
   if (fields({hp},['hp'])(value)) return true;
   if(!battle(value) || value.round>value.rounds)return false;
   const modelGroup=id=>value.attachments?.[id]||unitId(models.get(id));
+  const stamp=value.patrol?.spent?.counteroffensive,target=value.patrol?.tactics?.counteroffensive;
+  if(stamp!==undefined||target!==undefined){
+    const m=/^([1-9]\d*)-(marines|orks)-4$/.exec(stamp??''),key=target?.split('/')[1];
+    if(!m||Number(m[1])>value.round||!group(key)||groupTeam(key)===m[2]||target!==stamp+'/'+key)return false;
+    if(stamp===[value.round,value.active,value.step].join('-')&&!value.units?.[key]?.fightsFirst)return false;
+  }
+  if(value.fightSequence?.counterAfter){
+    const source=value.fightSequence.counterAfter;
+    const defender=value.active==='marines'?'orks':'marines';
+    if(value.status!=='playing'||value.step!==4||groupTeam(source)!==value.active||(value.cp?.[defender]??0)<2||value.units?.[source]?.finishedAttack!==4||
+      value.declaration||value.fightPlan||(value.hazard&&value.hazard.unit!==source)||
+      stamp===[value.round,value.active,4].join('-'))return false;
+  }
   for(const key of coreKeys){
     const stamp=value.patrol?.spent?.[key],target=value.patrol?.tactics?.[key];
     if(stamp===undefined&&target===undefined)continue;
@@ -160,6 +173,7 @@ export function validateRulesState(value) {
   if(value.status!=='playing'||!attackStep(value.step))return false;
   const plan=value.declaration;
   if(!plan)return true;
+  if(plan.didFight!==undefined&&value.step!==4)return false;
   if(value.hazard||!plan.rows.length||!plan.rows.some(r=>!r.done)||(!plan.locked&&plan.rows.some(r=>r.done)))return false;
   if(plan.focus && (!plan.locked||!plan.rows.some(r=>r.target===plan.focus&&!r.done)))return false;
   if(plan.precisionRoll){

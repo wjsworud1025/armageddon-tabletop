@@ -3,7 +3,7 @@ import {assessMove} from './movement.mjs';
 import {overlapsArea} from './layouts.mjs';
 import {currentHP,groupId,opposite} from './rules/battle.mjs';
 import {getProfile,profiles} from './rules/profiles.mjs';
-import {tacticActive} from './rules/patrol.mjs';
+import {tacticActive,unitTargetedByStratagem} from './rules/patrol.mjs';
 
 // 11th ed. Core Rules 03, 12.01–12.09 and Appendix 12.04.01.
 // https://assets.warhammer-community.com/eng_01-06_warhammer40k_new40k_core_rules-was6fbu1ix-hfewhmxyiy.pdf
@@ -46,6 +46,36 @@ const priority=(game,key)=>charged(game,key)||!!game.rules.units?.[key]?.fightsF
 const eligible=(game,seq,all,key)=>!seq.fought.includes(key)&&(seq.engagedAtFightStart.includes(key)||charged(game,key)||contacts(all,key).length>0);
 function inCombat(game,seq,all){
   return [...all.keys()].filter(key=>eligible(game,seq,all,key));
+}
+
+// 15.12 is available to the non-turn player during the Fight step only.
+function counterTargets(game,seq,source){
+  const {rules}=game,team=opposite(rules.active);
+  const stamp=[rules.round,rules.active,4].join('-');
+  if(rules.status!=='playing'||rules.step!==4||rules.units?.[source]?.finishedAttack!==4||rules.declaration||!['first','remaining'].includes(seq?.stage)||
+    seq.active?.unit!==source||seq.active.extraPile||seq.active.reaction||(rules.cp?.[team]??0)<2||
+    rules.patrol?.spent?.counteroffensive===stamp)return [];
+  const attacker=game.pieces.find(p=>getProfile(p)&&groupId(rules,p)===source);
+  if(attacker?.faction!==rules.active)return [];
+  const all=forces(game);
+  return inCombat(game,seq,all).filter(key=>all.get(key)[0].faction===team&&
+    !rules.units?.[key]?.shocked&&!unitTargetedByStratagem(rules,key));
+}
+export function openCounteroffensive(game,source){
+  const seq=game.rules.fightSequence;
+  return counterTargets(game,seq,source).length?{...seq,counterAfter:source}:seq;
+}
+export function resolveCounteroffensive(game,unit){
+  const {rules}=game,seq=rules.fightSequence;
+  if(!seq?.counterAfter||rules.hazard||rules.declaration||rules.fightPlan)return null;
+  const {counterAfter,...fightSequence}=seq;
+  if(unit===null)return {...rules,fightSequence};
+  if(!counterTargets(game,seq,counterAfter).includes(unit))return null;
+  const team=opposite(rules.active),stamp=[rules.round,rules.active,4].join('-'),patrol=rules.patrol;
+  return {...rules,fightSequence,cp:{...rules.cp,[team]:rules.cp[team]-2},
+    units:{...rules.units,[unit]:{...rules.units[unit],fightsFirst:true}},
+    patrol:{...patrol,spent:{...patrol.spent,counteroffensive:stamp},
+      tactics:{...patrol.tactics,counteroffensive:stamp+'/'+unit}}};
 }
 function kinds(seq,all,key){
   const tied=contacts(all,key).length>0;
@@ -195,12 +225,17 @@ export function fightOptions(game,sequence,objectives=[]){
     // Appendix 12.04.01 allows a pass only when ALL of this player's eligible units are >5" away.
     canPass=pool.filter(k=>all.get(k)[0].faction===team).every(k=>enemies(all,k).every(([,u])=>!near(all.get(k),u,5)));
   }
+  // 15.12 constrains this player's next selection, including when another
+  // friendly unit already has Fights First. A legal 12.04.01 pass selects no unit.
+  const forced=units.find(k=>tacticActive(game.rules,'counteroffensive',k));
+  if(forced&&(seq.reactions.length||['first','remaining'].includes(seq.stage)))units=[forced];
   const choices=seq.reactions.length||['first','remaining'].includes(seq.stage)?
     Object.fromEntries(units.map(k=>[k,kinds(seq,all,k)])):{};
   const canAttack=!!seq.active&&!seq.active.extraPile&&all.has(seq.active.unit)&&
     contacts(all,seq.active.unit).length>0&&game.rules.units?.[seq.active.unit]?.finishedAttack!==4;
-  const canFinish=!!seq.active&&!seq.active.extraPile&&!canAttack&&!game.rules.declaration&&!game.rules.hazard;
-  return {sequence:seq,stage:seq.stage,team,units,kinds:choices,canPass,canAttack,canFinish,active:seq.active,reactions:seq.reactions};
+  const canFinish=!!seq.active&&!seq.active.extraPile&&!canAttack&&!seq.counterAfter&&!game.rules.declaration&&!game.rules.hazard;
+  const counters=seq.counterAfter&&!game.rules.hazard?counterTargets(game,seq,seq.counterAfter):[];
+  return {sequence:seq,stage:seq.stage,team,units,kinds:choices,canPass,canAttack,canFinish,active:seq.active,reactions:seq.reactions,counters};
 }
 const issue=(code,modelIds,message)=>({code,modelIds,message});
 const pos=p=>({x:p.x,z:p.z,elevation:elevation(p),yaw:p.yaw??0});
@@ -282,7 +317,7 @@ export function transitionFight(game,sequence,action,objectives=[]){
   let seq=normalize(game,sequence,all,objectives);
   const options=fightOptions(game,seq,objectives);
   const invalid=()=>{throw Error('현재 근접전 순서에서 사용할 수 없는 행동입니다.');};
-  if(game.rules.step!==4||game.rules.status!=='playing'||!action||game.rules.declaration||game.rules.hazard||
+  if(game.rules.step!==4||game.rules.status!=='playing'||!action||seq.counterAfter||game.rules.declaration||game.rules.hazard||
     (game.rules.fightPlan&&action.type!=='move'))return invalid();
   if(action.type==='pass'){
     if(!options.canPass)return invalid();
@@ -328,8 +363,10 @@ export function validFightSequence(value){
   const list=a=>Array.isArray(a)&&a.length<=ids.length&&a.every(unit)&&new Set(a).size===a.length;
   const lists=['piled','fought','consolidated','engagedAtFightStart','eligibleDuringFight','reactions'];
   if(typeof value!=='object'||Array.isArray(value)||!phases.includes(value.stage)||!team(value.team)||![0,1].includes(value.passes))return false;
-  if(Object.keys(value).some(k=>!['stage','team','passes','active',...lists].includes(k))||!lists.every(k=>list(value[k])))return false;
+  if(Object.keys(value).some(k=>!['stage','team','passes','active','counterAfter',...lists].includes(k))||!lists.every(k=>list(value[k])))return false;
   const combat=['first','remaining'].includes(value.stage);
+  if(Object.hasOwn(value,'counterAfter')&&(!unit(value.counterAfter)||!combat||value.active?.unit!==value.counterAfter||
+    value.active.extraPile||value.active.reaction))return false;
   if(value.passes&&(!combat||value.active))return false;
   if(value.stage!=='consolidate'&&value.reactions.length)return false;
   if(value.fought.some(k=>!value.eligibleDuringFight.includes(k))||value.consolidated.some(k=>!value.eligibleDuringFight.includes(k)))return false;
