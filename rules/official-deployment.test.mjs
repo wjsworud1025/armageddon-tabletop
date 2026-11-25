@@ -6,6 +6,7 @@ import {restore,snapshot} from '../state.mjs';
 import {groupId,newBattle} from './battle.mjs';
 import {advanceOfficialSetup,officialPreparing,patrolPlacementError,remainingPatrolUnits,visiblePatrolPiece} from './official-deployment.mjs';
 import {newPatrolSetup,patrolSetupView} from './patrol-setup.mjs';
+import {patrolTerrainPlacement} from './patrol-terrain-placement.mjs';
 
 const fresh=()=>({...createTable(),logs:[],layout:null,surface:'front',rules:{...newBattle(),officialSetup:newPatrolSetup()}});
 const stage=game=>patrolSetupView(game.rules.officialSetup).stage;
@@ -24,8 +25,9 @@ function step(game,act,args={},dice=[]){
 
 // Cache costly automatic layouts. Transitions and reloads operate on detached tables.
 const deployments=new Map();
-function reveal(map){
-  if(deployments.has(map))return structuredClone(deployments.get(map));
+function reveal(map,defender=map==='B'?'orks':'marines'){
+  const key=map+'-'+defender;
+  if(deployments.has(key))return structuredClone(deployments.get(key));
   let game=step(fresh(),'official-roll-layout',{},[{A:2,B:4,C:6}[map]]);
   assert.equal(stage(game),'role-roll');
   assert.equal(game.layout,null);
@@ -33,8 +35,7 @@ function reveal(map){
   assert.equal(stage(game),'role-roll');
   assert.throws(()=>step(game,'official-defend'));
   game=step(game,'official-roll-role',{},[6,2]);
-  game=step(game,map==='B'?'official-attack':'official-defend');
-  const defender=map==='B'?'orks':'marines';
+  game=step(game,defender==='orks'?'official-attack':'official-defend');
   assert.deepEqual(game.layout,{map,blue:defender});
   game=step(game,'form-attach',{team:'marines',leader:'librarian-1',unit:'intercessor'});
   game=step(game,'form-reserve',{team:'marines',unit:'intercessor'});
@@ -50,7 +51,7 @@ function reveal(map){
   assert.equal(game.rules.reserves.intercessor.length,6);
   assert.ok(game.rules.reserves.intercessor.every(id=>piece(game,id).removed));
   assert.deepEqual(game.pieces.filter(p=>visiblePatrolPiece(game.rules,p)).map(p=>p.faction),Array(15).fill('terrain'));
-  deployments.set(map,game);
+  deployments.set(key,game);
   return structuredClone(game);
 }
 
@@ -161,6 +162,28 @@ test('a pending group can be saved while being adjusted but cannot be committed 
   piece(game,'captain-1').elevation=0;
   assert.equal(patrolPlacementError(game),'');
   assert.equal(step(game,'official-place').rules.deployment.placed[0],'captain');
+});
+
+test('two legal elevations on the same landing cannot conceal overlapping bases on commit or restore',()=>{
+  let game=step(reveal('A','orks'),'official-select',{unit:'warboss'});
+  const ruin=piece(game,'largeRuin-1'),position={x:ruin.x-.62,z:ruin.z-.48};
+  Object.assign(piece(game,'warboss-1'),position,{elevation:3.37});
+  game=step(game,'official-place');
+  game=step(step(game,'official-select',{unit:'captain'}),'official-place');
+  game=step(game,'official-select',{unit:'weirdboy'});
+  const other=piece(game,'weirdboy-1');
+  Object.assign(other,position,{elevation:3.38});
+  assert.equal(patrolTerrainPlacement(other,[ruin]).error,'','upper floor independently supports the second base');
+  assert.match(patrolPlacementError(game),/다른 모델의 베이스/);
+  assert.throws(()=>step(game,'official-place'),/다른 모델의 베이스/);
+
+  other.elevation=0;
+  const separated=checkpoint(step(game,'official-place'));
+  assert.equal(piece(separated,'warboss-1').elevation,3.37);
+  assert.equal(piece(separated,'weirdboy-1').elevation,0);
+  const forged=snapshot(separated);
+  piece(forged,'weirdboy-1').elevation=3.38;
+  assert.throws(()=>restore(createTable(),forged));
 });
 
 test('objective polygons stay within the two boards, use the chosen home faction and measure partial bases',()=>{

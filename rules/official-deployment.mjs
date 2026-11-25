@@ -7,6 +7,8 @@ import {patrolTerrainPlacement} from './patrol-terrain-placement.mjs';
 
 export const officialPreparing=rules=>!!rules?.officialSetup&&rules.status==='setup';
 const fighters=game=>game.pieces.filter(p=>p.faction!=='terrain'&&!p.removed);
+// The solid plinth in assets/sculpt.mjs is 0.12 inches thick before decoration.
+const baseThickness=.12;
 export function remainingPatrolUnits(game){
   const r=game.rules,placed=r.deployment?.placed??[];
   return [...new Set(fighters(game).filter(p=>!placed.includes(groupId(r,p))).map(p=>groupId(r,p)))];
@@ -31,7 +33,7 @@ function unitPlacementError(game,unit,bodies){
   for(const p of unit){
     const support=patrolTerrainPlacement(p,terrain);
     if(support.error)return support.error;
-    if(bodies.some(q=>Math.abs((q.elevation||0)-(p.elevation||0))<.001&&sweptGap(p,p,q)<-1e-6))
+    if(bodies.some(q=>Math.abs((q.elevation??0)-(p.elevation??0))<baseThickness-1e-6&&sweptGap(p,p,q)<-1e-6))
       return '다른 모델의 베이스와 겹칩니다.';
     bodies.push(p);
   }
