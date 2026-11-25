@@ -1,0 +1,15 @@
+# Local product photography, including repackaged image and mesh data
+/reference/
+/data/board*.svg
+/assets/turns/*.webp
+/assets/wall-survey.mjs
+/reconstruction/models/
+# Local builds, QA captures and restored platform dependencies
+/.build/
+/.tmp/
+/dist/
+/desktop/webview2/*.dll
+__pycache__/
+*.pyc
+*.user
+.env*

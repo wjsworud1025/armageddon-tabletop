@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>아마겟돈 전장 · 워해머 40,000</title>
+  <link rel="icon" href="data:,"><link rel="stylesheet" href="./table.css">
+  <script type="importmap">{"imports":{"three":"./vendor/three.module.min.js"}}</script>
+</head>
+<body>
+  <header class="mast"><div class="identity"><span class="insignia" aria-hidden="true">⬢</span><div><small>WARHAMMER 40,000</small><h1>아마겟돈 전장</h1></div></div><div class="mast-tools"><span id="save-status" role="status">전장 준비 중</span><button id="save" title="현재 전장을 파일로 내보내기">저장 파일 ↓</button><button id="load">불러오기</button><input id="file" type="file" accept=".json,application/json" hidden></div></header>
+  <main>
+    <section id="stage" aria-label="3D 미니어처 전장">
+      <div class="stage-head"><div class="plate"><i></i> STARTER SET <b>/</b> 2026</div><button id="appearance" aria-pressed="true" title="공식 도색 사진 기물과 회전 가능한 3D 조형 전환">사진 기물</button><button id="reference-toggle" aria-pressed="false">제품 사진</button><button id="camera" title="전시 시점과 수직 시점 전환">탑뷰</button><button id="home" title="초기 카메라 시점">전체 보기</button></div>
+      <canvas id="view" aria-label="전장. 미니어처를 끌어 이동하고 우클릭으로 시점을 회전합니다." tabindex="0"></canvas>
+      <div id="reference" hidden><canvas id="photo" aria-label="Games Workshop 공식 제품 사진"></canvas><a href="https://assets.warhammer-community.com/articles/0-2026/june/wc29-06/sundaypreview-jul05-40k_01-starterset-2kklbdlero.jpg" target="_blank" rel="noopener">공식 배치 사진 · © Games Workshop ↗</a></div>
+      <div id="notice" role="status" hidden></div>
+      <div id="stage-load" role="status">미니어처 준비 중…</div>
+      <div class="stage-foot"><div id="route-bar" class="toolstrip" hidden><button id="back-point">끝점 취소</button><button id="walk">경로대로 이동</button></div><div class="toolstrip" aria-label="전장 도구"><button id="pick" aria-pressed="true">배치</button><button id="path" aria-pressed="false">경로 이동</button><button id="ruler" aria-pressed="false">거리 측정</button><button id="grid" aria-pressed="false">격자</button><span></span><button id="undo" disabled>되돌리기</button><button id="redo" disabled>다시 실행</button></div><p id="hint">드래그 이동 · 우클릭 회전 · 휠 확대 · Shift 드래그 시점 이동</p></div>
+    </section>
+    <aside><nav aria-label="전장 패널"><button data-tab="roster" aria-selected="true">편성</button><button data-tab="battle" aria-selected="false">대전</button><button data-tab="history" aria-selected="false">기록</button></nav>
+      <section id="roster" class="pane">
+        <div class="section-heading"><h2>전장 편성</h2><span id="total"></span></div>
+        <div id="selection" hidden><small>선택한 기물</small><h3 id="piece-name"></h3><p id="piece-spec"></p><div class="row"><button id="focus">가까이 보기</button><button id="rotate">15° 회전</button><button id="remove">제거</button></div><label class="alt">바닥에서 높이 <input id="elevation" type="number" step="0.25" min="0" max="20" value="0"> 인치</label></div>
+        <div id="studio-tools" hidden><button id="studio-view">실물 360° 보기</button></div>
+        <div id="sight-tools" hidden><button id="sight">이 기물에서 시선 확인</button></div>
+        <label class="squad-control"><input type="checkbox" id="squad"> 분대 단위로 이동</label>
+        <label class="search"><span aria-hidden="true">⌕</span><input id="search" type="search" aria-label="기물 검색" placeholder="기물 이름 검색"></label>
+        <div id="army-list"></div>
+        <details class="board-faces"><summary>양면 게임 보드</summary><div class="row"><button id="flip-left" aria-pressed="false">왼쪽 판 뒤집기</button><button id="flip-right" aria-pressed="false">오른쪽 판 뒤집기</button></div></details>
+      </section>
+      <section id="battle" class="pane" hidden><details id="deployment"><summary>컴뱃 패트롤 전장 배치</summary>
+        <div class="row"><label>지도 <select id="map"><option>A</option><option>B</option><option>C</option></select></label><label>청색 진영 <select id="blue"><option value="marines">스페이스 마린</option><option value="orks">오크</option></select></label></div>
+        <div class="row"><button id="apply-map">전장에 배치</button><button id="roll-map">D6로 지도 선택</button></div>
+        <p id="map-status">제품 사진 배치</p><label><input type="checkbox" id="zones" checked> 배치 구역과 거점 표시</label><button id="show-map">배치도 보기</button>
+      </details><details class="faction-books"><summary>팩션 룰북과 스타터 규칙</summary>
+        <h3>스페이스 마린</h3><p>2026년 코덱스의 전투 교리는 전력 이동 후 돌격, 전력 이동 후 사격, 후퇴 후 사격·돌격 중 하나를 선택하게 한다. 이 전장에서는 Assault Force의 교리 사용 횟수와 점유력 보너스를 적용한다.</p>
+        <a href="https://www.warhammer.com/shop/codex-space-marines-2026-eng" target="_blank" rel="noopener">Codex: Space Marines</a> · <a href="https://www.warhammer-community.com/en-gb/articles/ifgezlgu/space-marines-rules-first-look/" target="_blank" rel="noopener">공개 규칙</a>
+        <h3>오크</h3><p>2026년 코덱스의 와아!는 전력 이동 재굴림과 전투 함성을 제공한다. 이 전장에서는 ’Ardmob의 전용 효과에 따라 와아! 중 공격의 힘(S)이 오크의 내구도(T)보다 높으면 상대의 상처 굴림에 −1을 적용한다.</p>
+        <a href="https://www.warhammer.com/shop/codex-orks-2026-eng" target="_blank" rel="noopener">Codex: Orks</a> · <a href="https://www.warhammer-community.com/en-gb/articles/ckwgwgyx/new-codex-orks-army-rules-to-get-you-riled-up/" target="_blank" rel="noopener">공개 규칙</a>
+        <h3>스타터 세트 전용 자료</h3><p>공식 Warhammer 40,000 앱의 Combat Patrol에서 Assault Force 또는 ’Ardmob을 선택하면 전용 데이터시트와 임무를 무료로 열 수 있다.</p>
+        <a href="https://www.warhammer-community.com/en-gb/articles/2akzkx92/combat-patrol-is-now-live-in-your-app/" target="_blank" rel="noopener">공식 앱 안내 ↗</a>
+      </details><div id="rules"></div></section>
+      <section id="history" class="pane" hidden><div class="section-heading"><h2>전장 기록</h2></div><ol id="log"></ol><button id="reset">초기 배치로 새 게임</button></section>
+      <footer><span class="led"></span> 로컬 테이블 <span class="scale" id="scale"></span></footer>
+    </aside>
+  </main>
+  <dialog id="question"><form method="dialog"><h2>새 게임을 시작할까요?</h2><p>현재 배치와 대전 기록을 초기화합니다. 저장 파일을 내려받으면 이 전장을 다시 열 수 있습니다.</p><div class="row"><button value="cancel" autofocus>취소</button><button value="yes">새 게임</button></div></form></dialog>
+  <dialog id="map-dialog"><form method="dialog"><div class="section-heading"><h2>컴뱃 패트롤 배치도</h2><button autofocus>닫기</button></div><img id="map-image" alt="구역 경계와 지형의 거리 치수가 표시된 배치도"></form></dialog>
+  <script type="module" src="./main.mjs"></script>
+</body></html>
