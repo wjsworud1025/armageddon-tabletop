@@ -1,4 +1,5 @@
 import {profiles,getProfile,unitId} from './profiles.mjs';
+import {validFightSequence} from '../fight-sequence.mjs';
 import {doctrines,enhancements,tactics} from './patrol.mjs';
 
 const boolean = value => typeof value === 'boolean';
@@ -40,7 +41,7 @@ const declaration=fields({unit:group,locked:boolean,focus:nullable(group),rows:l
 const unit = fields({
   shocked:boolean,shockChecked:boolean,reinforcing:boolean,movementTracked:boolean,movement:oneOf(['normal','advance','fallback','remain']),
   order:string,charge:int(0,12),chargeTracked:boolean,charged:boolean,rerolled:boolean,attacks,finishedAttack:attackStep,
-  counterCharge:boolean,reaction:boolean,shotAt:boolean,suppressedEnemy:boolean,hitTargets:list(group,12)
+  counterCharge:boolean,reaction:boolean,fightsFirst:boolean,shotAt:boolean,suppressedEnemy:boolean,hitTargets:list(group,12)
 });
 const doctrine=oneOf(Object.keys(doctrines)),tactic=oneOf(Object.keys(tactics));
 const patrol=fields({
@@ -54,6 +55,9 @@ const pose=fields({x:Number.isFinite,z:Number.isFinite,elevation:n=>Number.isFin
 const chargeFields={unit:group,actor:model,mode:oneOf(['normal','masterOfBattle','leapToDefend','intoTheFray']),
   roll:int(2,12),dice:list(int(1,6),2),targets:list(group,12),origins:map(model,pose),paths:map(model,list(pose,512)),takeToSkies:boolean};
 const chargePlan=fields(chargeFields,Object.keys(chargeFields));
+const fightFields={unit:group,type:oneOf(['pile-in','consolidate']),mode:oneOf(['pile-in','ongoing','engaging','objective']),
+  targets:list(identifier,16),origins:map(model,pose),paths:map(model,list(pose,512))};
+const fightPlan=fields(fightFields,Object.keys(fightFields));
 const movePlan=fields({unit:group,type:oneOf(['advance','normal','fallback']),advanceRoll:int(0,6),
   origins:map(model,pose),paths:map(model,list(pose,512)),takeToSkies:boolean,fallbackMode:oneOf(['ordered','desperate']),
   desperateEscapeResolved:boolean,rerollClosed:boolean},['unit','type','advanceRoll','origins','paths','takeToSkies','fallbackMode','desperateEscapeResolved']);
@@ -61,6 +65,7 @@ const battle=fields({
   version:oneOf([1]),status:oneOf(['setup','playing','finished']),first:team,active:team,
   round:int(1,20),rounds:int(1,20),step:int(0,5),cp:totals,vp:totals,hp,
   units:map(group,unit),attachments:map(model,group),objectives:map(identifier,objective),hazard:nullable(hazard),declaration:nullable(declaration),movePlan:nullable(movePlan),chargePlan:nullable(chargePlan),chargeWindow:boolean,
+  fightSequence:validFightSequence,fightPlan:nullable(fightPlan),
   reserves:map(group,list(model,46)),patrol,notes:string,mission:string,last:string,
   deployment:fields({defender:team,next:team,placed:list(group,12)},['defender','next','placed']),
   destroyedUnits:map(group,boolean),lossEvents:list(fields({id:group,faction:team,turn:int(1,40)},['id','faction','turn']),20000)
@@ -70,6 +75,19 @@ export function validateRulesState(value) {
   if (value==null) return true;
   if (fields({hp},['hp'])(value)) return true;
   if(!battle(value) || value.round>value.rounds)return false;
+  if(value.fightSequence&&(value.status!=='playing'||value.step!==4))return false;
+  if(value.fightPlan){
+    const p=value.fightPlan,ids=Object.keys(p.origins),seq=value.fightSequence;
+    if(!seq||seq.reactions.length&&!seq.active?.extraPile)return false;
+    const correctStage=seq.active?seq.active.extraPile&&seq.active.unit===p.unit&&p.type==='pile-in':
+      seq.stage===(p.type==='pile-in'?'pile':'consolidate');
+    const validTargets=p.mode==='objective'?p.targets.length===1&&['blue-home','red-home','neutral-1','neutral-2'].includes(p.targets[0]):
+      p.targets.every(id=>group(id)&&id!==p.unit);
+    return correctStage&&validTargets&&!value.chargePlan&&!value.movePlan&&!value.hazard&&!value.declaration&&
+      ids.length>0&&p.targets.length>0&&new Set(p.targets).size===p.targets.length&&
+      (p.mode==='pile-in')===(p.type==='pile-in')&&ids.every(id=>(value.attachments?.[id]||unitId(models.get(id)))===p.unit)&&
+      Object.keys(p.paths).every(id=>ids.includes(id));
+  }
   if(value.chargePlan){
     const p=value.chargePlan,ids=Object.keys(p.origins),sum=p.dice.reduce((a,b)=>a+b,0);
     const expected=['masterOfBattle','intoTheFray'].includes(p.mode)?Math.min(sum,6):sum;

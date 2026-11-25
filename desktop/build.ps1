@@ -12,6 +12,7 @@ try {
     $sources = @('index.html','table.css','main.mjs','media.mjs','state.mjs','scene.mjs','photo-camera.mjs','painted.mjs','studio-scene.mjs','layouts.mjs','move-session.mjs','movement.mjs','charge-session.mjs','charge.mjs','assets','data','rules','vendor','reconstruction')
     $localPhotos = Test-Path -LiteralPath (Join-Path $tableRoot 'reference/starter-set.jpg')
     if ($localPhotos) { $sources += 'reference' }
+    $sources += @('fight-session.mjs','fight-sequence.mjs')
     foreach ($source in $sources) {
         foreach ($file in (Get-ChildItem -Recurse -File -LiteralPath (Join-Path $tableRoot $source))) {
             if ($file.Name -match '\.test\.mjs$|\.pyc?$|^browser-acceptance\.mjs$') {continue}

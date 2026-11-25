@@ -62,11 +62,14 @@ export function overlapsArea(p,poly){
     return (x+t*dx)**2+(z+t*dz)**2<=1.000001;
   });
 }
+export function objectiveFootprints(game){
+  const areas=layouts[game.layout?.map]?.areas??[];
+  return areas.map((area,i)=>({...area,name:['청색 진영 본진','적색 진영 본진','중립 거점 1','중립 거점 2'][i]}));
+}
 export function objectiveAreas(game){
-  const geo=layoutGeometry(game.layout?.map);if(!geo)return [];
-  return geo.areas.map((area,i)=>({id:area.id,name:['청색 진영 본진','적색 진영 본진','중립 거점 1','중립 거점 2'][i],
-    home:area.side==='blue'?game.layout.blue:area.side==='red'?(game.layout.blue==='marines'?'orks':'marines'):null,
-    members:game.pieces.filter(p=>p.faction!=='terrain'&&!p.removed&&overlapsArea(p,area.polygon)).map(p=>p.id)}));
+  return objectiveFootprints(game).map(({id,name,side,polygon})=>({id,name,
+    home:side==='blue'?game.layout.blue:side==='red'?(game.layout.blue==='marines'?'orks':'marines'):null,
+    members:game.pieces.filter(p=>p.faction!=='terrain'&&!p.removed&&overlapsArea(p,polygon)).map(p=>p.id)}));
 }
 function fitsZone(p,zone){
   if(!inside(p.x,p.z,zone))return false;

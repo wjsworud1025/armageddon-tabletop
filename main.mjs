@@ -7,7 +7,8 @@ import {getProfile} from './rules/profiles.mjs';
 import {newBattle,unitMembers,groupId,roll,shockTest,changeUnit} from './rules/battle.mjs';
 import {beginMove,proposeMove,finishMove,rewindMove,rerollMove,abandonInvalidMove} from './move-session.mjs';
 import {beginCharge,selectChargeTargets,proposeCharge,finishCharge,rewindCharge,cancelCharge} from './charge-session.mjs';
-import {applyLayout,objectiveAreas,validDeployment} from './layouts.mjs';
+import {beginFightMove,proposeFightMove,finishFightMove,cancelFightMove} from './fight-session.mjs';
+import {applyLayout,objectiveAreas,validDeployment,objectiveFootprints} from './layouts.mjs';
 import {studioGroupFor,openStudioViewer} from './assets/turntable.mjs';
 import {loadPortraitMap,portraitUrl} from './painted.mjs';
 import {findLocalArt} from './media.mjs';
@@ -92,6 +93,7 @@ function setMode(value){mode=value;scene?.setMode(mode);
 function movingByRules(p){
   const r=game.rules;
   if(r?.status!=='playing')return false;
+  if(r.step===4)return true;
   const unit=r.units?.[groupId(r,p)];
   if(r.step===3)return !!r.chargePlan||!(unit?.charge&&!unit.chargeTracked&&!unit.charged);
   if(r.step!==1)return false;
@@ -101,7 +103,11 @@ function movingByRules(p){
   return true;
 }
 function proposeTableMotion(p,paths){
+  if(game.rules.step===4)return proposeFightMove(game,p,paths,fightObjectives());
   return game.rules.step===3?proposeCharge(game,p,paths):proposeMove(game,p,paths);
+}
+function fightObjectives(){
+  return objectiveFootprints(game);
 }
 function applyMovement(result){
   const manual=[...new Set((result.manual||[]).map(m=>m.message))];
@@ -161,6 +167,9 @@ document.addEventListener('keydown',e=>{if(e.target.closest('input,select,textar
   else if(e.key.toLowerCase()==='r')rotate()});
 const api={
   getTable:()=>game,
+  fightObjectives,
+  beginFightPath(choice){applyMovement(beginFightMove(game,choice,fightObjectives()))},
+  finishFightPath(cancel){applyMovement(cancel?cancelFightMove(game):finishFightMove(game,fightObjectives()))},
   chargeCommand(command,actor,targets,takeToSkies){
     const r=game.rules;
     try{

@@ -144,13 +144,21 @@ try {
   assert.equal(s.rules.units.intercessor.attacks[rifles[1].id].length,2);
   await choose('fighter',rifles[1].id);
   assert.equal(await disabled('attack'),true);
-  for(let i=0;i<3;i++)await click(button('next'));
+  // In this five-round scoring fixture all combatants stay out of engagement.
+  // Only press the actual optional movement pass. A mandatory combat blocks it.
+  async function advancePhases(count){
+    await js('(()=>{for(let i=0;i<'+count+';i++){let next=document.querySelector("[data-act=next]");'+
+      'for(let side=0;side<4&&next?.disabled;side++){const pass=document.querySelector("[data-act=fight-pass]");'+
+      'if(!pass||pass.disabled||!/(밀착|재정비) 마침/.test(pass.textContent))break;pass.click();next=document.querySelector("[data-act=next]");}'+
+      'if(!next||next.disabled)throw Error("Required action at phase transition "+i+" · "+document.querySelector("#rules .br-phase")?.textContent);next.click();}})()');
+  }
+  await advancePhases(3);
   assert.equal((await state()).rules.step,5);assert.equal(await disabled('next'),true);
   await click(button('coherency-'+rifles[0].id));assert.equal(await disabled('next'),true);
   await click('#undo');assert.equal((await state()).pieces.find(p=>p.id===rifles[0].id).removed,false);
   await click('#redo');await send('Page.reload');await until(()=>js('!!window.tabletopView'));await click('[data-tab=battle]');
   await click(button('coherency-'+rifles[1].id));assert.equal(await disabled('next'),false);
-  await js('(()=>{for(let i=0;i<55;i++){const b=document.querySelector("[data-act=next]"); if(!b || b.disabled)throw Error("Missing phase "+i);b.click();}})()');
+  await advancePhases(55);
   s=await state();
   assert.equal(s.rules.status,'finished');assert.equal(s.rules.round,5);
   assert.equal(Object.keys(s.rules.objectives).length,4);
@@ -309,9 +317,56 @@ try {
     await click(button('charge-finish'));s=await state();assert.equal(s.rules.step,3);
     assert.equal(s.rules.units.captain.charged,true);assert.equal(s.rules.cp.marines,3-cost);
   }
+  const fightSave=movementFixture({[actor.id]:[0,0],[victim.id]:[4,0],[near]:[1.4,0],[far]:[2.2,0]},
+    [actor.id,victim.id],'marines');
+  fightSave.rules.step=4;fightSave.rules.units.captain={charged:true,chargeTracked:true,charge:7};
+  await upload(fightSave);await click('[data-tab=battle]');await click('#home');await click('#camera');
+  await choose('fighter',actor.id);assert.equal(await disabled('next'),true);assert.equal(await disabled('attack'),true);
+  await choose('fight-unit','captain');await click(button('fight-move'));
+  await drag(actor.id,near);s=await state();nearX(s,actor.id,1.4);
+  const pileDraft=structuredClone(s.rules.fightPlan);
+  assert.deepEqual(pileDraft.targets,['gretchin']);assert.equal(pileDraft.paths[actor.id].length,1);
+  await click(button('combat-path-cancel'));s=await state();nearX(s,actor.id,0);assert.equal(s.rules.fightPlan,null);
+  await click('#undo');s=await state();nearX(s,actor.id,1.4);assert.deepEqual(s.rules.fightPlan,pileDraft);
+  await send('Page.reload');await until(()=>js('!!window.tabletopView'));await click('[data-tab=battle]');
+  assert.deepEqual((await state()).rules.fightPlan,pileDraft);assert.equal(await disabled('next'),true);
+  const badFight=structuredClone(await state());badFight.rules.fightSequence.reactions=['<script>'];badFight.pieces[0].x=-10;
+  const beforeBad=await state();await upload(badFight);assert.deepEqual(await state(),beforeBad);
+  await click(button('combat-path-finish'));s=await state();
+  assert.equal(s.rules.fightPlan,null);assert.equal(s.rules.fightSequence.team,'orks');assert.deepEqual(s.rules.fightSequence.piled,['captain']);
+  await click(button('fight-pass'));s=await state();assert.equal(s.rules.fightSequence.stage,'first');
+  assert.deepEqual(s.rules.fightSequence.engagedAtFightStart,['captain','gretchin']);
+  assert.equal(await js('!!document.querySelector("[data-act=fight-pass]")'),false);
+  for(const [unit,attacker,defender] of [['captain',actor,victim],['gretchin',victim,actor]]){
+    await choose('fight-unit',unit);await click(button('fight-normal'));
+    assert.equal((await state()).rules.fightSequence.active.unit,unit);assert.equal(await disabled('fight-finish'),true);
+    await choose('fighter',defender.id);await choose('target',attacker.id);assert.equal(await disabled('attack'),true);
+    await choose('fighter',attacker.id);await choose('target',defender.id);
+    await click(button('attack'));await click(button('lock'));s=await state();
+    assert.equal(s.rules.declaration.locked,true);assert.equal(s.rules.declaration.unit,unit);
+    assert.equal(await disabled('fight-finish'),true);assert.equal(await disabled('next'),true);
+    if(unit==='captain'){
+      await send('Page.reload');await until(()=>js('!!window.tabletopView'));await click('[data-tab=battle]');
+      assert.deepEqual((await state()).rules.declaration,s.rules.declaration);
+      assert.deepEqual((await state()).rules.fightSequence,s.rules.fightSequence);
+    }
+    await js('window.fightRandom=Math.random;Math.random=()=>.01');
+    try{await click(button('resolve-0'));}finally{await js('Math.random=window.fightRandom');}
+    s=await state();assert.equal(s.rules.units[unit].finishedAttack,4);assert.equal(s.rules.declaration,null);
+    await click(button('fight-finish'));
+  }
+  s=await state();assert.equal(s.rules.fightSequence.stage,'consolidate');assert.deepEqual(s.rules.fightSequence.fought,['captain','gretchin']);
+  await choose('fight-unit','captain');await click(button('fight-move'));
+  assert.equal((await state()).rules.fightPlan.mode,'ongoing');
+  await click('#home');await click('#camera');await drag(actor.id,far);s=await state();nearX(s,actor.id,2.2);
+  await click(button('combat-path-finish'));await click(button('fight-pass'));s=await state();
+  assert.equal(s.rules.fightSequence.stage,'done');assert.equal(await disabled('next'),false);
+  await click(button('next'));s=await state();assert.equal(s.rules.step,5);assert.ok(!s.rules.fightSequence);
+  await click(button('next'));s=await state();assert.equal(s.rules.step,0);assert.equal(s.rules.active,'orks');
   assert.deepEqual(errors,[]);
   console.log(JSON.stringify({passed:true,areas:4,rounds:5,winner:'marines',vp:finalVP,casualtyUndoRedo:true,
     corruptImportsRejected:2,volley:true,splitFire:true,lockedDeclarationReload:true,persisted:true,hazardousVolleyUndoRedo:true,
     localArt,movementDrag:true,movementRange:true,movementUndoReload:true,desperateEscape:true,endTurnCoherency:true,
-    chargeDrag:true,chargeFailure:true,chargeUndoReload:true,chargeReactions:3}));
+    chargeDrag:true,chargeFailure:true,chargeUndoReload:true,chargeReactions:3,fightDrag:true,fightUndoReload:true,
+    fightTurns:2,fightLocked:true,fightConsolidation:true,fightEndTurn:true,corruptFightRejected:true}));
 } finally {ws?.close();browser.kill();server.closeAllConnections();server.close();}

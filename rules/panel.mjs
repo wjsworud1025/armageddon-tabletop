@@ -1,6 +1,7 @@
 import {getProfile} from './profiles.mjs';
 import {brokenFormations,removeForCoherency} from './end-turn.mjs';
 import {chargeActions,chargeControls} from './charge-controls.mjs';
+import {createFightControls} from './fight-controls.mjs';
 import {coherency,travelCost,moveLimit} from '../movement.mjs';
 import {newBattle,startBattle,advance,opposite,steps,teams,roll,currentHP,unitMembers,
   groupId,changeUnit,needsShock,shockTest,adjustHP,controlObjective,engaged,modelProfile,
@@ -61,6 +62,12 @@ export function mountRules(container,api) {
   const contents=()=>api.getPieces().filter(p=>!!getProfile(p));
   const living=(state)=>contents().filter(p=>currentHP(state,p)>0);
   const getPiece=id=>api.getPieces().find(p=>p.id===id);
+  const fights=createFightControls({getGame:api.getTable,getObjectives:api.fightObjectives,commit,
+    startMove:choice=>api.beginFightPath(choice),selectUnit:key=>{
+      const member=contents().find(p=>!p.removed&&groupId(read(),p)===key);
+      if(member)api.selectPiece(member.id);
+    },refresh});
+  let fightView=null;
   function commit(state,message,changes={}) {
     writing=true;
     try {
@@ -94,6 +101,7 @@ export function mountRules(container,api) {
     return {options,selected,candidates,target,members,dist};
   }
   function attackRestriction(state,actor,weapon,targets,dist) {
+    if(state.step===4&&(state.fightPlan||fightView?.attackUnit!==groupId(state,actor)))return '근접전 순서에서 전투할 분대를 먼저 선택하세요';
     if (!currentHP(state,actor)) return '제거된 모델';
     const order=findKey(state,actor);
     if(!targets.length)return '선택할 표적이 없습니다';
@@ -177,15 +185,8 @@ export function mountRules(container,api) {
     const alive=members.filter(m=>currentHP(state,m)>0);
     const mine=state.active===actor.faction;
     const reserve=state.reserves[groupId(state,actor)];
-    const enemy=living(state).filter(p=>p.faction!==actor.faction);
-    let engagedEnemy=false,enemyInTwelve=false;
-    if (state.status==='playing' && (state.step===1 || state.step===3)) {
-      for (const a of alive) for (const b of enemy) {
-        const inches=api.getDistance(a.id,b.id);
-        engagedEnemy ||= engaged(a,b,inches);
-        enemyInTwelve ||= inches<=12;
-      }
-    }
+    const engagedEnemy=state.status==='playing' && state.step===1 && living(state).some(b=>
+      b.faction!==actor.faction && alive.some(a=>engaged(a,b,api.getDistance(a.id,b.id))));
     const stats='M '+p.move+'″ · T '+p.toughness+' · Sv '+p.save+'+ · W '+currentHP(state,actor)+'/'+p.wounds+' · Ld '+p.leadership+'+ · OC '+(unit.shocked?'–':p.oc);
     let action='';
     if (reserve) {
@@ -271,6 +272,7 @@ export function mountRules(container,api) {
     if (!getProfile(actor)) actor=null;
     const all=contents();
     const dispersed=brokenFormations(state,all);
+    fightView=state.step===4&&state.status==='playing'?fights.view():null;
     const selector=select('fighter','현재 모델',opt('','미니어처 선택',actor?.id||'')+all.map(p=>opt(p.id,pieceLabel(p)+(p.removed?' (제거됨)':''),actor?.id||'')).join(''));
     let top='';
     if (state.status==='setup') {
@@ -294,9 +296,16 @@ export function mountRules(container,api) {
     } else {
       top=chunk(esc(state.mission || (state.rounds===5 ? patrolMissions[state.active] : '로컬 대전'))+' · '+state.round+'/'+state.rounds+' 라운드',
         '<b class="br-phase">'+teams[state.active]+' · '+steps[state.step]+'</b><p>'+prompts[state.step]+'</p>'+
-        btn('next',state.step<5?'다음 · '+steps[state.step+1]:(state.active!==state.first && state.round===state.rounds?'대전 마치기':'다음 플레이어'),!!(state.hazard||state.declaration||state.movePlan||state.chargePlan||dispersed.length)));
+        btn('next',state.step<5?'다음 · '+steps[state.step+1]:(state.active!==state.first && state.round===state.rounds?'대전 마치기':'다음 플레이어'),!!(state.hazard||state.declaration||state.movePlan||state.chargePlan||dispersed.length||fightView&&!fightView.done)));
     }
     if(state.step===3)top+=chargeControls(api.getTable());
+    if(fightView){
+      if(state.fightPlan){
+        const title=state.fightPlan.type==='pile-in'?'밀착 이동':'재정비 이동';
+        top+=chunk(title+' 경로 편집','<p>분대원을 끌거나 경유점을 지정한 뒤 이동을 마치세요.</p>'+
+          row(btn('combat-path-finish',title+' 완료')+btn('combat-path-cancel','원점으로 · 경로 취소')));
+      }else top+=fights.render();
+    }
     for(const formation of dispersed){
       top+=chunk(esc(teams[formation[0].faction]+' · '+unitLabel(formation[0]))+' · 응집도 회복',
         '<p>이 분대의 플레이어가 제거할 모델을 하나 고르세요. 제거할 때마다 남은 모델의 간격을 다시 검사합니다.</p>'+
@@ -382,7 +391,7 @@ export function mountRules(container,api) {
       return commit({...state,deployment:{...d,placed,next}},unitLabel(actor)+' 배치 완료');
     }
     if (action==='next') {
-      if (state.hazard || state.declaration || state.movePlan || state.chargePlan || brokenFormations(state,contents()).length) return;
+      if (state.hazard || state.declaration || state.movePlan || state.chargePlan || brokenFormations(state,contents()).length || state.step===4&&!fights.view().done) return;
       let resolved=recordLosses(state,contents());
       const areas=api.getObjectiveAreas?.()||[];
       if (areas.length) resolved.objectives=objectiveSnapshot(resolved,contents(),areas,api.getDistance);
@@ -400,6 +409,13 @@ export function mountRules(container,api) {
       const command=action.slice(7);
       const targets=[...root.querySelectorAll('[data-charge-target]:checked')].map(el=>el.dataset.chargeTarget);
       feedback=api.chargeCommand(command,actor,targets,!!root.querySelector('[data-charge-fly]:checked'));return refresh();
+    }
+    if(action.startsWith('fight-')||action.startsWith('combat-path-')){
+      try{
+        if(action.startsWith('fight-'))fights.dispatch(action);
+        else api.finishFightPath(action==='combat-path-cancel');
+      }catch(e){feedback=e.message;refresh()}
+      return;
     }
     if (action==='cancel-plan' || action.startsWith('drop-') || action==='reopen') {
       const plan=state.declaration;
@@ -579,6 +595,7 @@ export function mountRules(container,api) {
   function change(event) {
     const el=event.target,key=el.dataset.field;
     if (!key) return;
+    if(key.startsWith('fight-')){fights.change(key,el.value,el.checked);return}
     const state=read();
     if (key==='mission') {
       state.mission=el.value.slice(0,80);

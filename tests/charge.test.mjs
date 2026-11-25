@@ -51,6 +51,11 @@ test('Captain and Heroic Intervention are opponent-end reactions with separate r
   assert.ok(has(chargeOptions(game,actor,{mode:'masterOfBattle',endOfPhase:false}),'reaction-timing'));
   const leap=chargeOptions(game,actor,{mode:'leapToDefend',roll:12});
   assert.deepEqual(leap.targets.map(t=>t.eligible),[true,false]);assert.equal(leap.cost,1);
+  const noCharge=board([actor,boy],{active:'orks',cp:{marines:1,orks:1}});
+  const noLeapTarget=chargeOptions(noCharge,actor,{mode:'leapToDefend'});
+  assert.ok(noLeapTarget.ok);assert.ok(noLeapTarget.targets.every(t=>!t.eligible));
+  const short=chargeOptions(game,actor,{mode:'leapToDefend',roll:2});
+  assert.ok(short.ok);assert.ok(short.targets.every(t=>!t.eligible));
   const fray=chargeOptions(game,actor,{mode:'intoTheFray',roll:8});
   assert.equal(fray.limit,6);assert.equal(fray.cost,2);
   const speeder=model('landSpeeder',0);
