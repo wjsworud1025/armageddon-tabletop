@@ -2,6 +2,7 @@ import {createTable} from './data/catalog.mjs';
 import {drawDeploymentDiagram} from './data/deployment-diagram.mjs';
 import {createTrainingOne,rollTrainingOne,trainingOneView} from './rules/training-one.mjs';
 import {actTrainingTwo,createTrainingTwo,trainingTwoPieces,trainingTwoView} from './rules/training-two.mjs';
+import {createTrainingThreeDeployment,moveTrainingThreeDeployment,trainingThreeDeploymentPieces} from './rules/training-three-deployment.mjs';
 import {mountRules} from './rules/panel.mjs';
 import {baseDistance,place,restore,snapshot,translateFormation} from './state.mjs';
 import {buildScene} from './scene.mjs';
@@ -38,9 +39,10 @@ for(const [team,p] of Object.entries(duelists)){
 const trainingField={width:30,depth:22,surface:'reverse',pieces:structuredClone(template.pieces)};
 function shownTable(){
   if(!game.training)return game;
-  if(game.training.scenario===2){
+  if(game.training.scenario===2||game.training.scenario===3){
     if(trainingField.training!==game.training){
-      const poses=new Map(trainingTwoPieces(game.training).map(p=>[p.id,p]));
+      const project=game.training.scenario===2?trainingTwoPieces:trainingThreeDeploymentPieces;
+      const poses=new Map(project(game.training).map(p=>[p.id,p]));
       for(const p of trainingField.pieces){
         const pose=poses.get(p.id);
         if(pose)Object.assign(p,pose);else p.removed=true;
@@ -84,10 +86,12 @@ function changed(){persist();redraw()}
 function mutate(fn,message){checkpoint();fn();log(message);changed()}
 function select(id){active=piece(id)?.id??null;scene?.select(active);roster();selection();
   if(game.training?.scenario===2)renderTrainingTwo(game.training);
+  if(game.training?.scenario===3)renderTrainingThree();
   notify()}
 function history(){
   const list=$('log');list.replaceChildren();
-  const entries=game.training?.scenario===2?game.training.rolls.map(describeSecondRoll):
+  const entries=game.training?.scenario===3?Object.keys(game.training.positions).map(id=>piece(id).name+' 배치 조정'):
+    game.training?.scenario===2?game.training.rolls.map(describeSecondRoll):
     game.training?game.training.rolls.map(describeTrainingRoll):game.logs;
   for(const entry of [...entries].reverse()){const li=document.createElement('li');li.textContent=entry;list.append(li)}
 }
@@ -204,7 +208,9 @@ function renderTraining(){
   const scenario=String(state?.scenario??0),previous=document.body.dataset.training;
   document.body.dataset.training=scenario;
   document.body.classList.toggle('training-active',enabled);
-  $('training').hidden=scenario==='2';$('training-two').hidden=scenario==='1';
+  $('training').hidden=enabled&&scenario!=='1';$('training-two').hidden=enabled&&scenario!=='2';
+  $('training-three').hidden=enabled&&scenario!=='3';
+  $('training-three-play').hidden=scenario!=='3';$('training-three-intro').hidden=enabled;
   $('training-two-play').hidden=scenario!=='2';$('training-two-intro').hidden=enabled;
   $('training-play').hidden=scenario!=='1';$('training-start').hidden=enabled;
   $('training-intro').hidden=enabled;
@@ -213,8 +219,10 @@ function renderTraining(){
     scene?.home();$('camera').textContent='탑뷰';
     if(scenario==='1')$('hint').textContent='두 베이스가 맞닿은 상태에서 싸웁니다. 드래그로 시점 회전 · 휠로 확대';
     if(scenario==='2')$('hint').textContent='분대의 행동을 선택한 뒤 미니어처를 드래그하세요. 경유지가 필요하면 경로 도구를 사용하세요.';
+    if(scenario==='3')$('hint').textContent='미니어처를 드래그해 같은 구역 안에 놓으세요. 상대 모델까지의 거리는 거리 측정으로 확인하세요.';
   }
   if(!state)return;
+  if(state.scenario===3){renderTrainingThree();return}
   if(state.scenario===2){renderTrainingTwo(state);return}
   const view=trainingOneView(state);
   $('training-wounds').textContent='캡틴 '+state.wounds.marines+' / 6 W　·　워보스 '+state.wounds.orks+' / 6 W';
@@ -244,6 +252,16 @@ $('training-roll').onclick=()=>{
 $('training-exit').onclick=()=>{if(game.training)mutate(()=>{delete game.training})};
 $('training-two-start').onclick=()=>{if(!game.training)mutate(()=>{game.training=createTrainingTwo()})};
 $('training-two-exit').onclick=$('training-exit').onclick;
+$('training-three-start').onclick=()=>{if(!game.training)mutate(()=>{game.training=createTrainingThreeDeployment()})};
+$('training-three-exit').onclick=$('training-exit').onclick;
+$('training-three-zones').onchange=()=>scene?.sync();
+$('training-three-sight').onclick=()=>{if(!active)return;setMode('sight');$('hint').textContent='시선을 확인할 다른 모델을 클릭하세요. 전체 보기로 돌아올 수 있습니다.'};
+function renderTrainingThree(){
+  const p=shownTable().pieces.find(m=>m.id===active&&!m.removed&&m.faction!=='terrain');
+  $('training-three-sight').disabled=!p;
+  $('training-three-status').textContent=p?p.name+' · '+(p.kind==='gretchin'?'그레친':factionNames[p.faction])+' 배치 구역':
+    '마린 6명 · 워보스와 보이 11명 · 그레친 5명 · 폐허 4개';
+}
 function applyTrainingActions(actions){
   try{
     let next=game.training;
@@ -415,14 +433,23 @@ async function start(){
   if(original)await loadPortraitMap();
   for(const id of ['reference-toggle','appearance'])$(id).hidden=!original;
   redraw();mountRules($('rules'),api);
-  scene=await buildScene($('view'),{game:shownTable,template,localArt:!!original,select,checkpoint,zones:()=>$('zones').checked,
+  scene=await buildScene($('view'),{game:shownTable,template,localArt:!!original,select,checkpoint,zones:()=>game.training?.scenario===3?$('training-three-zones').checked:$('zones').checked,
     sightInfo:text=>{$('hint').textContent=text},
     appearance:(on,photo)=>{$('appearance').setAttribute('aria-pressed',String(on));$('appearance').textContent=on?(photo?'사진 기물':'회전 사진'):'3D 조형'},
     progress:(i,n)=>$('stage-load').textContent='미니어처 준비 중 · '+i+' / '+n,
     moving:movingGroup,
     trainingDrag:p=>{const plan=game.training?.plan;
+      if(game.training?.scenario===3)return p.faction!=='terrain';
       return game.training?.scenario===2&&plan?.ids.includes(p.id)&&(plan.mode!=='charge'||!!plan.target)},
     route(p,points,drag=false){
+      if(game.training?.scenario===3){
+        const {x,z}=points.at(-1);
+        try{
+          const next=moveTrainingThreeDeployment(game.training,p.id,x,z);
+          if(next!==game.training)mutate(()=>{game.training=next});
+          return true;
+        }catch(error){toast(error.message);return false}
+      }
       if(game.training?.scenario===2)return applyTrainingActions(points.slice(1).map(({x,z})=>({type:'path',id:p.id,x,z})));
       if(game.training)return false;
       const group=movingGroup(p).map(m=>({piece:{...m},x:m.x,z:m.z}));let distance=0;

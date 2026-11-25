@@ -3,6 +3,7 @@ import {photoCamera} from './photo-camera.mjs';
 import {createPiece} from './assets/pieces.mjs';
 import {paintedFigures} from './painted.mjs';
 import {layoutGeometry} from './layouts.mjs';
+import {trainingThreePlan,trainingThreeWorldPoint} from './data/training-three-layout.mjs';
 import {studioScene} from './studio-scene.mjs';
 import {loadReconstruction} from './reconstruction/mesh.mjs';
 import {loadWallSurvey} from './assets/wall-relief.mjs';
@@ -91,16 +92,28 @@ export async function buildScene(canvas,api) {
   const tape=new T.Line(new T.BufferGeometry(),new T.LineBasicMaterial({color:0xffe189,depthTest:false}));tape.renderOrder=11;scene.add(tape);
   const zones=new T.Group();scene.add(zones);let drawnMap=null;
   function updateZones(){
-    const code=api.game().layout?.map??null;zones.visible=api.zones()&&!!code;
+    const table=api.game();
+    const code=table.training?.scenario===3&&table.training.phase==='deployment'?'training-three':table.layout?.map??null;
+    zones.visible=api.zones()&&!!code;
     if(code===drawnMap)return;drawnMap=code;
     for(const obj of [...zones.children]){obj.geometry.dispose();obj.material.dispose();zones.remove(obj)}
-    const data=layoutGeometry(code);if(!data)return;
     function patch(polygon,color,opacity,y){
       const shape=new T.Shape(polygon.map(([x,z])=>new T.Vector2(x,-z)));
       const mesh=new T.Mesh(new T.ShapeGeometry(shape),new T.MeshBasicMaterial({color,transparent:true,opacity,depthWrite:false,side:T.DoubleSide}));
       mesh.rotation.x=-Math.PI/2;mesh.position.y=y;mesh.renderOrder=-3;zones.add(mesh);
       const edge=new T.LineLoop(new T.BufferGeometry().setFromPoints(polygon.map(([x,z])=>new T.Vector3(x,y+.01,z))),new T.LineBasicMaterial({color}));zones.add(edge);
     }
+    if(code==='training-three'){
+      const colors={marines:0x3c9bee,orks:0xa6b955,gretchin:0xe3bd62};
+      for(const [unit,{left,top,right,bottom}] of Object.entries(trainingThreePlan.zones)){
+        const polygon=[[left,top],[right,top],[right,bottom],[left,bottom]].map(([x,z])=>{
+          const world=trainingThreeWorldPoint({x,z});return [world.x,world.z];
+        });
+        patch(polygon,colors[unit],.14,.035);
+      }
+      return;
+    }
+    const data=layoutGeometry(code);if(!data)return;
     patch(data.blue,0x3c9bee,.25,.035);patch(data.red,0xe46b50,.25,.035);
     for(const area of data.areas)patch(area.polygon,area.side?'#ffe295':'#98e2c6',.36,.05);
   }

@@ -2,6 +2,7 @@ import {validateRulesState} from './rules/validate.mjs';
 import {measureFootprints} from './ruler.mjs';
 import {validateTrainingOne} from './rules/training-one.mjs';
 import {validateTrainingTwo} from './rules/training-two.mjs';
+import {validateTrainingThreeDeployment} from './rules/training-three-deployment.mjs';
 
 const clamp = (n, low, high) => Math.max(low, Math.min(high, n));
 const finite = Number.isFinite;
@@ -49,9 +50,11 @@ export function restore(template, save) {
     throw new Error('이 스타터 세트의 저장 파일이 아닙니다.');
   if(!validateRulesState(save.rules,save.pieces))throw new Error('저장 파일의 대전 규칙 데이터가 올바르지 않습니다.');
   if(save.training!=null){
-    const second=save.training.scenario===2;
-    if(!(second?validateTrainingTwo:validateTrainingOne)(save.training))
-      throw new Error((second?'두 번째':'첫')+' 훈련 임무의 저장 기록이 올바르지 않습니다.');
+    const validators={1:validateTrainingOne,2:validateTrainingTwo,3:validateTrainingThreeDeployment};
+    const titles={1:'첫',2:'두 번째',3:'세 번째'};
+    const scenario=save.training.scenario;
+    if(!Number.isInteger(scenario)||!validators[scenario]?.(save.training))
+      throw new Error((titles[scenario]??'선택한')+' 훈련 임무의 저장 기록이 올바르지 않습니다.');
   }
   const records = new Map(save.pieces.map(p => [p.id,p]));
   const game = structuredClone(template);

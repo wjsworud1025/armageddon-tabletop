@@ -45,6 +45,15 @@
           <p id="training-two-plan"></p><div id="training-two-options"></div>
           <p id="training-two-last"></p><button id="training-two-exit">원래 전장으로</button>
         </div>
+      </section><section id="training-three" aria-labelledby="training-three-title">
+        <h2 id="training-three-title">훈련 3 · 사격 전장</h2>
+        <div id="training-three-intro"><p>핸드북 67쪽의 폐허와 병력을 펼치고 세 구역에 미니어처를 배치합니다.</p>
+          <button id="training-three-start">사격 전장 배치 열기</button></div>
+        <div id="training-three-play" hidden>
+          <p id="training-three-status" role="status"></p>
+          <label><input id="training-three-zones" type="checkbox" checked> 배치 구역 표시</label>
+          <div class="row"><button id="training-three-sight" disabled>선택한 모델의 시점</button><button id="training-three-exit">원래 전장으로</button></div>
+        </div>
       </section><details id="deployment"><summary>컴뱃 패트롤 전장 배치</summary>
         <div class="row"><label>지도 <select id="map"><option>A</option><option>B</option><option>C</option></select></label><label>청색 진영 <select id="blue"><option value="marines">스페이스 마린</option><option value="orks">오크</option></select></label></div>
         <div class="row"><button id="apply-map">전장에 배치</button><button id="roll-map">D6로 지도 선택</button></div>

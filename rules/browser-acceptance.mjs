@@ -17,6 +17,7 @@ import {checkShootingReactions} from './browser-shooting-reactions.mjs';
 import {checkCoreStratagems} from './browser-core-stratagems.mjs';
 import {checkTraining} from './browser-training.mjs';
 import {checkTrainingTwo} from './browser-training-two.mjs';
+import {checkTrainingThree} from './browser-training-three.mjs';
 
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const server=createServer(async(req,res)=>{
@@ -78,14 +79,15 @@ try {
   await click('[data-tab=battle]');
   assert.equal(await js('!!document.querySelector("[data-act=next]")'),false);
   const save=await state();
-  await checkTraining({save,upload,click,state,js,reload:async()=>{
+  const trainingTools={save,upload,click,state,js,send,reload:async()=>{
     await send('Page.reload');await until(()=>js('!!window.tabletopView'));await click('[data-tab=battle]');
-  }});
+  }};
+  await checkTraining(trainingTools);
   console.log('Passed the handbook duel, both winners, save import, reload and table restoration');
-  await checkTrainingTwo({save,upload,click,state,js,send,reload:async()=>{
-    await send('Page.reload');await until(()=>js('!!window.tabletopView'));await click('[data-tab=battle]');
-  }});
+  await checkTrainingTwo(trainingTools);
   console.log('Passed the second handbook battlefield, model movement, undo, reload and restoration');
+  await checkTrainingThree(trainingTools);
+  console.log('Passed the shooting battlefield, deployment zones, undo, reload and table restoration');
   await checkCoreStratagems({save,upload,choose,click,button,state,js,
     reload:async()=>{await send('Page.reload');await until(()=>js('!!window.tabletopView'));await click('[data-tab=battle]');}});
   assert.deepEqual(errors,[]);

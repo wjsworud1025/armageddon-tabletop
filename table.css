@@ -12,8 +12,9 @@ aside{display:flex;flex-direction:column;min-height:0;background:var(--panel);bo
 #map-diagram{display:block;width:min(600px,78vw,93dvh);height:auto;margin-top:8px}
 #training{border:1px solid var(--line);border-radius:5px;padding:11px;margin-bottom:12px}#training h2{font-size:15px}#training p{font-size:13px;margin:7px 0}#training-wounds{color:var(--gold)}#training-dice{color:var(--dim);overflow-wrap:anywhere}
 body.training-active :is(#deployment,.faction-books,#rules,[data-tab="roster"],#reference-toggle,#reset),body[data-training="1"] :is(#path,#back-point,#pick){display:none}
-#training-two{border:1px solid var(--line);border-radius:5px;padding:11px;margin-bottom:12px}
-#training-two h2{font-size:15px}#training-two p{font-size:13px;margin:7px 0}#training-two-forces{color:var(--gold)}
+:is(#training-two,#training-three){border:1px solid var(--line);border-radius:5px;padding:11px;margin-bottom:12px}
+:is(#training-two,#training-three) h2{font-size:15px}:is(#training-two,#training-three) p{font-size:13px;margin:7px 0}#training-two-forces{color:var(--gold)}
+#training-three label{display:block;font-size:13px;margin:8px 0}body[data-training="3"] #path{display:none}
 #training-two-options{display:flex;flex-wrap:wrap;gap:5px;margin:8px 0}#training-two-plan:empty,#training-two-last:empty{display:none}
 #training-dice{font-size:13px;margin:8px 0 12px}#training-dice .die{display:inline-grid;place-items:center;width:1.65rem;height:1.65rem;margin-right:4px;border:1px solid #77796e;border-radius:4px;font:bold 15px Consolas,monospace}#training-dice .success{color:#252922;background:var(--gold);border-color:var(--gold)}
 #sight-tools{margin-bottom:12px}

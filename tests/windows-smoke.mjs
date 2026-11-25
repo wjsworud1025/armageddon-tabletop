@@ -147,6 +147,10 @@ try{
   await click('#training-two-options [data-action="move"][data-unit="warboss"][data-mode="normal"]');
   assert.equal((await state()).training.plan.unit,'warboss');
   await click('#training-two-exit');assert.deepEqual(await state(),beforeSecond);
+  await click('#training-three-start');
+  await until(()=>js('tabletopView.stats().boardSurface==="reverse"&&tabletopView.stats().visiblePieces===26'));
+  await click('#camera');await screenshot('04-handbook-shooting.png');
+  await click('#training-three-exit');assert.deepEqual(await state(),beforeSecond);
   await js('document.querySelector("#deployment").open=true');
   const beforePreview=await state(),diagrams=new Set();
   for(const map of ['B','C','A']){
