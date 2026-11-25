@@ -80,7 +80,7 @@ try {
   const positions=areas.map(a=>centroid(a.polygon));
   const actor=template.pieces.find(p=>p.kind==='captain');
   const victim=template.pieces.find(p=>p.kind==='gretchin');
-  const scouts=template.pieces.filter(p=>p.kind==='vanguard').slice(0,2);
+  const scouts=template.pieces.filter(p=>p.kind==='landSpeeder'||p.kind==='librarian');
   const rifles=template.pieces.filter(p=>p.kind==='intercessor').slice(0,2);
   const preset=new Map([[actor.id,[0,0]],[victim.id,[5,0]],[scouts[0].id,positions[2]],[scouts[1].id,positions[3]],
     [rifles[0].id,[1,-2]],[rifles[1].id,[2,-2]]]);
@@ -144,7 +144,13 @@ try {
   assert.equal(s.rules.units.intercessor.attacks[rifles[1].id].length,2);
   await choose('fighter',rifles[1].id);
   assert.equal(await disabled('attack'),true);
-  await js('(()=>{for(let i=0;i<58;i++){const b=document.querySelector("[data-act=next]"); if(!b || b.disabled)throw Error("Missing phase "+i);b.click();}})()');
+  for(let i=0;i<3;i++)await click(button('next'));
+  assert.equal((await state()).rules.step,5);assert.equal(await disabled('next'),true);
+  await click(button('coherency-'+rifles[0].id));assert.equal(await disabled('next'),true);
+  await click('#undo');assert.equal((await state()).pieces.find(p=>p.id===rifles[0].id).removed,false);
+  await click('#redo');await send('Page.reload');await until(()=>js('!!window.tabletopView'));await click('[data-tab=battle]');
+  await click(button('coherency-'+rifles[1].id));assert.equal(await disabled('next'),false);
+  await js('(()=>{for(let i=0;i<55;i++){const b=document.querySelector("[data-act=next]"); if(!b || b.disabled)throw Error("Missing phase "+i);b.click();}})()');
   s=await state();
   assert.equal(s.rules.status,'finished');assert.equal(s.rules.round,5);
   assert.equal(Object.keys(s.rules.objectives).length,4);
@@ -252,5 +258,5 @@ try {
   assert.deepEqual(errors,[]);
   console.log(JSON.stringify({passed:true,areas:4,rounds:5,winner:'marines',vp:finalVP,casualtyUndoRedo:true,
     corruptImportsRejected:2,volley:true,splitFire:true,lockedDeclarationReload:true,persisted:true,hazardousVolleyUndoRedo:true,
-    localArt,movementDrag:true,movementRange:true,movementUndoReload:true,desperateEscape:true}));
+    localArt,movementDrag:true,movementRange:true,movementUndoReload:true,desperateEscape:true,endTurnCoherency:true}));
 } finally {ws?.close();browser.kill();server.closeAllConnections();server.close();}

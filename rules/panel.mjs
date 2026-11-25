@@ -1,4 +1,5 @@
 import {getProfile} from './profiles.mjs';
+import {brokenFormations,removeForCoherency} from './end-turn.mjs';
 import {coherency,travelCost,moveLimit} from '../movement.mjs';
 import {newBattle,startBattle,advance,opposite,steps,teams,roll,currentHP,unitMembers,
   groupId,changeUnit,needsShock,shockTest,adjustHP,controlObjective,engaged,modelProfile,
@@ -276,6 +277,7 @@ export function mountRules(container,api) {
     let actor=getPiece(choices.fighter);
     if (!getProfile(actor)) actor=null;
     const all=contents();
+    const dispersed=brokenFormations(state,all);
     const selector=select('fighter','현재 모델',opt('','미니어처 선택',actor?.id||'')+all.map(p=>opt(p.id,pieceLabel(p)+(p.removed?' (제거됨)':''),actor?.id||'')).join(''));
     let top='';
     if (state.status==='setup') {
@@ -299,7 +301,12 @@ export function mountRules(container,api) {
     } else {
       top=chunk(esc(state.mission || (state.rounds===5 ? patrolMissions[state.active] : '로컬 대전'))+' · '+state.round+'/'+state.rounds+' 라운드',
         '<b class="br-phase">'+teams[state.active]+' · '+steps[state.step]+'</b><p>'+prompts[state.step]+'</p>'+
-        btn('next',state.step<5?'다음 · '+steps[state.step+1]:(state.active!==state.first && state.round===state.rounds?'대전 마치기':'다음 플레이어'),!!(state.hazard||state.declaration||state.movePlan)));
+        btn('next',state.step<5?'다음 · '+steps[state.step+1]:(state.active!==state.first && state.round===state.rounds?'대전 마치기':'다음 플레이어'),!!(state.hazard||state.declaration||state.movePlan||dispersed.length)));
+    }
+    for(const formation of dispersed){
+      top+=chunk(esc(teams[formation[0].faction]+' · '+unitLabel(formation[0]))+' · 응집도 회복',
+        '<p>이 분대의 플레이어가 제거할 모델을 하나 고르세요. 제거할 때마다 남은 모델의 간격을 다시 검사합니다.</p>'+
+        row(formation.map(p=>btn('coherency-'+p.id,pieceLabel(p)+' 제거')).join('')));
     }
     if(state.movePlan){
       const plan=state.movePlan;
@@ -381,7 +388,7 @@ export function mountRules(container,api) {
       return commit({...state,deployment:{...d,placed,next}},unitLabel(actor)+' 배치 완료');
     }
     if (action==='next') {
-      if (state.hazard || state.declaration || state.movePlan) return;
+      if (state.hazard || state.declaration || state.movePlan || brokenFormations(state,contents()).length) return;
       let resolved=recordLosses(state,contents());
       const areas=api.getObjectiveAreas?.()||[];
       if (areas.length) resolved.objectives=objectiveSnapshot(resolved,contents(),areas,api.getDistance);
@@ -389,6 +396,11 @@ export function mountRules(container,api) {
       resolved.vp={...resolved.vp,[state.active]:resolved.vp[state.active]+score};
       const next=advance(resolved);
       return commit(next,(score?teams[state.active]+' 임무 +'+score+' VP · ':'')+(next.status==='finished'?'대전 종료':next.round+' 라운드 · '+teams[next.active]+' · '+steps[next.step]));
+    }
+    if(action.startsWith('coherency-')){
+      const result=removeForCoherency(state,contents(),action.slice(10));
+      if(result)return commit(result.rules,result.message,result.removed);
+      return;
     }
     if (action==='cancel-plan' || action.startsWith('drop-') || action==='reopen') {
       const plan=state.declaration;
