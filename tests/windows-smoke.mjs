@@ -131,7 +131,30 @@ try{
   const groundGap=await rulerValue('베이스–지점');
   assert.ok(Math.abs(groundGap-baseDistance(speeder,ground))<.1,'Ground click is measured from the rotated base rim');
   await click('#pick');
-  await click('[data-tab=battle]');await click('#apply-map');assert.equal((await state()).layout.map,'A');
+  await click('[data-tab=battle]');await js('document.querySelector("#deployment").open=true');
+  const beforePreview=await state(),diagrams=new Set();
+  for(const map of ['B','C','A']){
+    await js('document.querySelector("#map").value='+JSON.stringify(map));
+    assert.equal(await js('document.querySelector("#show-map").getClientRects().length>0'),true);
+    await click('#show-map');
+    assert.equal(await js('document.querySelector("#map-dialog").open'),true);
+    if(studioInstalled){
+      await js('document.querySelector("#map-image").decode()');
+      assert.equal(await js('document.querySelector("#map-image").hidden'),false);
+    }else{
+      assert.equal(await js('document.querySelector("#map-diagram").hidden'),false);
+      assert.match(await js('document.querySelector("#map-diagram").getAttribute("aria-label")'),new RegExp('지도 '+map));
+      diagrams.add(await js(`(async()=>{
+        const c=document.querySelector('#map-diagram'),pixels=c.getContext('2d').getImageData(0,0,c.width,c.height);
+        return [...new Uint8Array(await crypto.subtle.digest('SHA-256',pixels.data))].join(',');
+      })()`));
+    }
+    if(map==='C')await screenshot('04-map-preview.png');
+    await click('#map-dialog button');
+  }
+  if(!studioInstalled)assert.equal(diagrams.size,3);
+  assert.deepEqual(await state(),beforePreview,'previewing all three maps preserves the table');
+  await click('#apply-map');assert.equal((await state()).layout.map,'A');
   await screenshot('04a-deployment.png');
   await js('(()=>{const s=document.querySelector("[data-field=first]");s.value="marines";s.dispatchEvent(new Event("change",{bubbles:true}))})()');
   await click('[data-act=start]');assert.equal((await state()).rules.status,'playing');

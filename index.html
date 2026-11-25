@@ -45,6 +45,6 @@
     </aside>
   </main>
   <dialog id="question"><form method="dialog"><h2>새 게임을 시작할까요?</h2><p>현재 배치와 대전 기록을 초기화합니다. 저장 파일을 내려받으면 이 전장을 다시 열 수 있습니다.</p><div class="row"><button value="cancel" autofocus>취소</button><button value="yes">새 게임</button></div></form></dialog>
-  <dialog id="map-dialog"><form method="dialog"><div class="section-heading"><h2>컴뱃 패트롤 배치도</h2><button autofocus>닫기</button></div><img id="map-image" alt="구역 경계와 지형의 거리 치수가 표시된 배치도"></form></dialog>
+  <dialog id="map-dialog" aria-labelledby="map-title"><form method="dialog"><div class="section-heading"><h2 id="map-title">컴뱃 패트롤 배치도</h2><button autofocus>닫기</button></div><img hidden id="map-image" alt="구역 경계와 지형의 거리 치수가 표시된 배치도"><canvas hidden id="map-diagram" role="img"></canvas></form></dialog>
   <script type="module" src="./main.mjs"></script>
 </body></html>

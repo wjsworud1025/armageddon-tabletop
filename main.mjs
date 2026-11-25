@@ -1,4 +1,5 @@
 import {createTable} from './data/catalog.mjs';
+import {drawDeploymentDiagram} from './data/deployment-diagram.mjs';
 import {mountRules} from './rules/panel.mjs';
 import {baseDistance,place,restore,snapshot,translateFormation} from './state.mjs';
 import {buildScene} from './scene.mjs';
@@ -166,7 +167,20 @@ for(const side of ['left','right'])$('flip-'+side).onclick=async()=>{
   const value=game.surface==='reverse'?other:game.surface===side?'front':game.surface===other?'reverse':side;
   mutate(()=>game.surface=value,(side==='left'?'왼쪽':'오른쪽')+' 보드 뒤집기');
 };
-$('zones').onchange=()=>scene?.sync();$('show-map').onclick=()=>{$('map-image').src='./reference/maps/'+$('map').value+'.webp';$('map-dialog').showModal()};
+$('zones').onchange=()=>scene?.sync();
+$('show-map').onclick=()=>{
+  const code=$('map').value,image=$('map-image'),diagram=$('map-diagram');
+  $('map-title').textContent='컴뱃 패트롤 배치도 '+code;
+  function showDiagram(){
+    image.hidden=true;diagram.hidden=false;
+    drawDeploymentDiagram(diagram,code,$('blue').value,template);
+  }
+  if(original){
+    diagram.hidden=true;image.hidden=false;image.onerror=showDiagram;
+    image.src='./reference/maps/'+code+'.webp';
+  }else showDiagram();
+  $('map-dialog').showModal();
+};
 document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>switchTab(b.dataset.tab));
 $('search').oninput=roster;$('pick').onclick=()=>setMode('pick');$('ruler').onclick=()=>setMode('ruler');
 $('path').onclick=()=>setMode('path');$('back-point').onclick=()=>scene?.backPoint();$('walk').onclick=()=>scene?.walk();
@@ -260,7 +274,7 @@ const api={
 async function start(){
   original=await findLocalArt();
   if(original)await loadPortraitMap();
-  for(const id of ['reference-toggle','appearance','show-map'])$(id).hidden=!original;
+  for(const id of ['reference-toggle','appearance'])$(id).hidden=!original;
   redraw();mountRules($('rules'),api);
   scene=await buildScene($('view'),{game:()=>game,template,localArt:!!original,select,checkpoint,zones:()=>$('zones').checked,
     sightInfo:text=>{$('hint').textContent=text},

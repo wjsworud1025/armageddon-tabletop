@@ -53,8 +53,14 @@ export async function buildScene(canvas,api) {
     tex.colorSpace=T.SRGBColorSpace;tex.anisotropy=renderer.capabilities.getMaxAnisotropy();return tex}
   const localArt=api.localArt;
   if(localArt)await loadWallSurvey();
-  const texture=localArt?await textureFor('./data/board.svg'):fieldTexture(T);let reverse=null,reverseRequest;
-  async function loadReverse(){if(reverse)return;reverseRequest??=localArt?textureFor('./data/board-reverse.svg'):Promise.resolve(fieldTexture(T,true));
+  async function boardTexture(back){
+    if(localArt)return textureFor(back?'./data/board-reverse.svg':'./data/board.svg');
+    const tex=await fieldTexture(T,back);
+    tex.anisotropy=renderer.capabilities.getMaxAnisotropy();
+    return tex;
+  }
+  const texture=await boardTexture(false);let reverse=null,reverseRequest;
+  async function loadReverse(){if(reverse)return;reverseRequest??=boardTexture(true);
     try{reverse=await reverseRequest}finally{reverseRequest=null}}
   if(['left','right','reverse'].includes(game.surface))await loadReverse();
   const objects=new Map(),painted=localArt?await paintedFigures(T,game.pieces):new Map();
