@@ -8,13 +8,20 @@ import {inspectButton,sightButton} from './browser-shooter-sight.mjs';
 
 // The same two procedural figures are available in both distributions.
 const observer='intercessor-2',target='boy-2';
-function aimFixture(save,offset,y,wall,pickY,alongX){
+function aimFixture(save,offset,y,wall,pickY,alongX,viewLine){
   const data=structuredClone(save),pieces=createTable().pieces;
   data.training=undefined;data.layout=null;data.rules=startBattle(newBattle(),'marines',5);data.rules.step=2;
+  // Extend the surveyed sight line to the two figures on either side of the wall.
+  const surfacePoints=viewLine&&[-6,3].map(x=>{
+    const [a,b]=viewLine.map(p=>new T.Vector3(...p));
+    return a.lerp(b,(x-a.x)/(b.x-a.x));
+  });
   const models=[observer,target].map((id,i)=>{
     const piece=pieces.find(p=>p.id===id),obj=createPiece(T,piece);
     const distance=i?6:-6;
-    obj.position.set(alongX?distance:offset,0,alongX?offset:distance);return obj;
+    obj.position.set(alongX?distance:offset,0,alongX?offset:distance);
+    if(surfacePoints)obj.position.copy(surfacePoints[i]);
+    return obj;
   });
   const picker=createSightPicker();
   // Align the two actual surface points, compensating for asymmetric sculpts.
@@ -22,8 +29,11 @@ function aimFixture(save,offset,y,wall,pickY,alongX){
     const other=models[1-index].position,p=obj.position;
     picker.show(obj,Math.atan2(other.x-p.x,other.z-p.z));
     const q=picker.sample(new T.Vector2(0,pickY),1000,700);assert.ok(q,'Selected point hits the figure');
-    if(alongX)p.z+=offset-q.z;else p.x+=offset-q.x;
-    p.y+=y-q.y;
+    if(surfacePoints)p.add(surfacePoints[index].clone().sub(q));
+    else{
+      if(alongX)p.z+=offset-q.z;else p.x+=offset-q.x;
+      p.y+=y-q.y;
+    }
   }
   picker.clear();
   for(const rec of data.pieces){
@@ -40,6 +50,16 @@ export async function checkRuinSight({save,upload,state,js,click,send,screenshot
   const samples=[
     ['06-ruin-window','largeRuin-2',-1.42,2.84,0,false],
     ['06-ruin-bar','largeRuin-2',-1.42,2.96,0,true],
+    // Look across the low corner with the actual 1 mm sight cylinder.
+    ['06-ruin-lower-opening','largeRuin-2',1.583,1.672,0,false,true],
+    ['06-ruin-lower-strap','largeRuin-2',1.675,1.950,0,true,true],
+    // The full line between these figures clears the piece through the gap in view 01-01.
+    ['06-ruin-lower-oblique','largeRuin-2',0,0,0,false,true,
+      [[-2.65,1.661910,1.853008],[-1.85,1.758049,1.303559]]],
+    // The short segment across the post in 01-06 is clear, but a second
+    // surface of the ruin still obstructs the longer 1 mm line.
+    ['06-ruin-lower-oblique-wall','largeRuin-2',0,0,0,true,true,
+      [[-2.65,1.801749,1.643054],[-1.85,1.710852,1.616966]]],
     ['06-small-return-wall','smallRuin-1',.89,.5,-.5,true],
     ['06-small-return-above','smallRuin-1',.89,1.48,0,false],
     ['06-pipe-return-wall','smallRuin-4',-.27,.5,-.5,true,true],
@@ -53,8 +73,8 @@ export async function checkRuinSight({save,upload,state,js,click,send,screenshot
     await send('Input.dispatchMouseEvent',{type:'mousePressed',...pt,button:'left',buttons:1,clickCount:1});
     await send('Input.dispatchMouseEvent',{type:'mouseReleased',...pt,button:'left',buttons:0,clickCount:1});
   }
-  for(const [label,wall,offset,y,pickY,blocked,alongX] of samples){
-    await upload(aimFixture(save,offset,y,wall,pickY,alongX));await click('[data-tab=battle]');
+  for(const [label,wall,offset,y,pickY,blocked,alongX,viewLine] of samples){
+    await upload(aimFixture(save,offset,y,wall,pickY,alongX,viewLine));await click('[data-tab=battle]');
     await select('fighter',observer);await select('target',target);
     await click(inspectButton(observer,target));await click('#surface-start');
     assert.match(await js('document.querySelector("#surface-status").textContent'),/시선을 시작할 점/);

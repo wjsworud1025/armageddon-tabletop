@@ -7,13 +7,16 @@ import * as T from '../vendor/three.module.min.js';
 import {createPiece} from '../assets/pieces.mjs';
 import {createTable} from '../data/catalog.mjs';
 import {loadWallSurvey} from '../assets/wall-relief.mjs';
+import {sightObstructions} from '../assets/sight-line.mjs';
+import {loadReconstruction} from '../reconstruction/mesh.mjs';
 
 const path=fileURLToPath(import.meta.url);
 if(process.argv[1]===path&&process.argv[2]==='--check-ruin-windows'){
   const mode=process.argv[3];
   assert.ok(mode==='public'||mode==='local');
   if(mode==='local')await loadWallSurvey();
-  const mesh=createPiece(T,createTable().pieces.find(p=>p.id==='largeRuin-2'));
+  const piece=createTable().pieces.find(p=>p.id==='largeRuin-2');
+  const mesh=(mode==='local'?await loadReconstruction(T,piece):null)??createPiece(T,piece);
   mesh.updateMatrixWorld(true);
   const ray=new T.Raycaster();
   function blocked(face,u,y,side){
@@ -43,6 +46,36 @@ if(process.argv[1]===path&&process.argv[2]==='--check-ruin-windows'){
       for(const y of [3.04,3.13,3.24,3.35])assert.ok(blocked('reliquary',1.08,y,side),'central mullion at '+y);
     });
   }
+  test(mode+' lower corner lattice preserves its braces and passes a finite 1 mm sight line in both directions',()=>{
+    // The scene tags and poses the piece root. Apply the same transform to the
+    // endpoints, which are local inches inferred from the photographed views.
+    const wall=mesh.clone();
+    wall.userData.pieceId=piece.id;
+    wall.position.set(piece.x,piece.elevation??0,piece.z);
+    wall.rotation.y=piece.yaw;
+    wall.updateMatrixWorld(true);
+    const samples=[
+      // Both ends reproject to white pixels in the registered 480 px study.
+      ['01-01 (238,204), held out',[-2.65,1.661910,1.853008],[-1.85,1.758049,1.303559],false,false],
+      ['01-06 (301,224)',[-2.65,1.801749,1.643054],[-1.85,1.710852,1.616966],false,false],
+      ['02-06 (295,264)',[-2.65,2.107056,1.513156],[-1.85,1.604327,1.495466],false,false],
+      // The small white patch in 02-07 clears a centre ray but clips its 1 mm cylinder.
+      ['02-07 (239,280), held out',[-2.65,2.0399,1.8666],[-1.85,1.4178,1.3278],false,true],
+      ['horizontal lower light',[-3.5,1.672,1.583],[1,1.672,1.583],false,false],
+      ['horizontal X intersection',[-3.5,1.950,1.675],[1,1.950,1.675],true,true],
+      ['descending strap',[-3.5,1.82,1.59],[1,1.82,1.59],true,true],
+      ['ascending strap',[-3.5,1.82,1.76],[1,1.82,1.76],true,true],
+    ];
+    for(const [name,start,end,centreBlocked,cylinderBlocked] of samples){
+      const from=wall.localToWorld(new T.Vector3(...start)),to=wall.localToWorld(new T.Vector3(...end));
+      for(const [a,b] of [[from,to],[to,from]]){
+        const delta=b.clone().sub(a),length=delta.length();
+        const centre=new T.Raycaster(a,delta.normalize(),0,length);
+        assert.equal(centre.intersectObject(wall,true).length>0,centreBlocked,name+' centre line');
+        assert.deepEqual(sightObstructions(a,b,[wall]),cylinderBlocked?[piece.id]:[],name+' 1 mm line');
+      }
+    }
+  });
 }else{
   const modes=['public'];
   if(existsSync(new URL('../assets/wall-survey.mjs',import.meta.url)))modes.push('local');

@@ -25,11 +25,22 @@ function facade(s){
         panel(dark,x-.031,x+.031,y-.029,y+.028,.023,face*.143);
     }
   }
-  function pier(x,y1,faces=[-1,1]){
-    panel(iron,x-.061,x+.061,.025,y1,.21);
+  function pier(x,y1,faces=[-1,1],openBay=false){
+    function upright(color,halfWidth,bottom,depth,z=0){
+      if(!openBay || z<0){
+        panel(color,x-halfWidth,x+halfWidth,bottom,y1,depth,z);
+        return;
+      }
+      // Only the outside flange continues across the lower corner light.
+      panel(color,x-halfWidth,x+halfWidth,bottom,1.52,depth,z);
+      panel(color,x-halfWidth,x+halfWidth,2.25,y1,depth,z);
+      if(z===0)panel(color,x-halfWidth,x+halfWidth,1.52,2.25,.160,-.025);
+    }
+    upright(iron,.061,.025,.21);
     for(const face of faces){
-      panel(rim,x-.032,x+.032,.03,y1,.049,face*.112);
+      upright(rim,.032,.03,.049,face*.112);
       for(const y of [.07,1.57,2.25,2.95,3.55])if(y<y1){
+        if(openBay && face>0 && y===1.57)continue;
         panel(iron,x-.079,x+.079,y-.043,Math.min(y+.062,y1),.060,face*.137);
         s.cylinder(brass,[x,y,face*.173],.029,.029,.022,7,[Math.PI/2,0,0]);
       }
@@ -98,8 +109,13 @@ function reliquaryWall(s){
     [2.33,1.80],[2.13,2.16],[2.05,2.27],[1.63,2.30],[1.57,2.44],
     [1.52,2.78],[1.48,2.97],[.43,2.98],[.41,1.60],[-.23,1.60]]);
   // The corner column is a genuinely open three-storey lattice.
-  for(const [x,top] of [[-.17,3.61],[.343,3.60],[1.983,2.30],[2.46,1.64]])pier(x,top);
-  for(const [y0,y1] of [[1.63,2.20],[2.30,2.91],[3.00,3.53]])
+  for(const [x,top] of [[-.17,3.61],[.343,3.60],[1.983,2.30],[2.46,1.64]])
+    pier(x,top,undefined,x===.343);
+  // The lowest cross is a flat iron strap on the outside face of the post.
+  // Its two exposed edges have little depth when seen through the corner.
+  slab(rim,[[-.155,1.66],[-.050,1.66],[.335,2.24],[.230,2.24]],.032,-.030);
+  slab(iron,[[-.155,2.24],[-.050,2.24],[.335,1.66],[.230,1.66]],.032,-.030);
+  for(const [y0,y1] of [[2.30,2.91],[3.00,3.53]])
     crossed(-.115,.286,y0,y1);
   for(const [end,y] of [[2.51,1.56],[2.27,2.25],[1.48,2.96],[.45,3.54]])
     band(-.215,end,y);
