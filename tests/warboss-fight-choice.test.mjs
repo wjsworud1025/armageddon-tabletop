@@ -11,7 +11,9 @@ const boss='warboss-1',boy='boy-2',otherBoy='boy-12',captain='captain-1',librari
 
 function controls(t,game){
   const listeners={};
-  const host={addEventListener(name,fn){listeners[name]=fn;},querySelector:()=>null,remove(){}};
+  let checked=null;
+  const host={addEventListener(name,fn){listeners[name]=fn;},
+    querySelector:selector=>selector==='[data-fight-tactic]:checked'&&checked&&host.innerHTML.includes('data-fight-tactic="'+checked+'"')?{dataset:{fightTactic:checked}}:null,remove(){}};
   const previous=globalThis.document;
   globalThis.document={createElement:()=>host,querySelector:()=>true};
   t.after(()=>{if(previous===undefined)delete globalThis.document;else globalThis.document=previous;});
@@ -31,7 +33,7 @@ function controls(t,game){
   const tag=act=>host.innerHTML.match(new RegExp('<button[^>]*data-act="'+act+'"[^>]*>'))?.[0];
   function click(act){
     assert.ok(tag(act)&&!tag(act).includes('disabled'),act+' is available');
-    listeners.click({target:{closest:()=>({dataset:{act}})}});
+    listeners.click({target:{closest:()=>({dataset:{act}})}});checked=null;
   }
   function choose(key,value){
     assert.ok(host.innerHTML.includes('data-field="'+key+'"'),key+' exists');
@@ -44,7 +46,8 @@ function controls(t,game){
     Object.assign(game,restore(createTable(),structuredClone(saved)));
     view.refresh();
   }
-  return {click,choose,allocate,load,tag};
+  function checkTactic(key){assert.ok(host.innerHTML.includes('data-fight-tactic="'+key+'"'));checked=key;}
+  return {click,choose,allocate,load,tag,checkTactic};
 }
 
 function checkRows(game,style,assignments){
@@ -57,6 +60,27 @@ function chooseUnit(ui){
 const first=[boss,'captain',3],second=[boss,'librarian',3];
 const boyAttacks=getProfile(createTable().pieces.find(p=>p.id===boy)).weapons.find(w=>!w.range).attacks;
 const third=[boy,'librarian',boyAttacks];
+
+test('a Boy can gain +1 Strength at selection but cannot buy it after six known misses, including on a resumed attack',t=>{
+  const game=warbossFightBoard();game.rules.hp[librarian]=1;
+  const ui=controls(t,game);chooseUnit(ui);
+  const before=snapshot(game);
+  let dice=[];t.mock.method(Math,'random',()=>{assert.ok(dice.length,'unexpected D6');return (dice.shift()-.5)/6;});
+  for(const pay of [false,true]){
+    ui.load(before);ui.choose('fight-unit','boy-0');
+    if(pay)ui.checkTactic('crush');
+    ui.click('fight-normal');
+    assert.equal(game.rules.cp.orks,pay?0:1);
+    ui.allocate(boss,captain,3);ui.allocate(boss,librarian,3);ui.allocate(boy,librarian,boyAttacks);ui.click('lock');
+    for(const i of [0,1]){dice=[1,1,1];ui.click('resolve-'+i);assert.equal(dice.length,0);}
+    const partial=snapshot(game);
+    ui.load(partial);ui.choose('fighter',boy);
+    assert.ok(!ui.tag('tactic-crush'));assert.throws(()=>ui.checkTactic('crush'));
+    dice=pay?[3,3,1]:[3,3];ui.click('resolve-2');assert.equal(dice.length,0);
+    assert.equal(game.rules.hp[librarian],pay?0:1);
+    assert.equal(game.pieces.find(p=>p.id===librarian).removed,pay);
+  }
+});
 
 test('Smash ’Em Up belongs to the whole fight across split targets, cancellation, load and the next unit',t=>{
   const game=warbossFightBoard(),ui=controls(t,game);

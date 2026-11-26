@@ -1000,7 +1000,7 @@ export function mountRules(container,api) {
     }
     if(action.startsWith('fight-')||action.startsWith('combat-path-')){
       try{
-        if(action.startsWith('fight-'))fights.dispatch(action);
+        if(action.startsWith('fight-'))fights.dispatch(action,root.querySelector('[data-fight-tactic]:checked')?.dataset.fightTactic);
         else api.finishFightPath(action==='combat-path-cancel');
       }catch(e){feedback=e.message;refresh()}
       return;

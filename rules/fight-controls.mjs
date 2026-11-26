@@ -1,6 +1,7 @@
-import {beginFightSequence,fightOptions,fightMoveOptions,transitionFight,resolveCounteroffensive,
+import {beginFightSequence,fightOptions,fightMoveOptions,selectPatrolFight,transitionFight,resolveCounteroffensive,
   bossStyles,hasFightingWarboss,needsLegacyBossStyle,chooseLegacyBossStyle} from '../fight-sequence.mjs';
 import {teams,groupId,opposite} from './battle.mjs';
+import {fightSelectionTactic,tactics} from './patrol.mjs';
 
 const stages={pile:'밀착 이동',first:'선제 공격',remaining:'일반 근접전',consolidate:'재정비',done:'근접전 완료'};
 const modes={'pile-in':'밀착 이동',ongoing:'교전 유지 재정비',engaging:'교전 진입 재정비',objective:'거점 재정비'};
@@ -77,7 +78,10 @@ export function createFightControls({getGame,getObjectives=()=>[],commit,startMo
         if(v.attackUnit)body+='<p>아래에서 이 분대의 근접 무기와 표적을 선언하세요.</p>';
         body+=button('finish','이 분대 전투 마침',!options.canFinish||busy);
       }else{
-        for(const kind of options.kinds[unit]??[]){
+        const kinds=options.kinds[unit]??[];
+        const tactic=kinds.length&&fightSelectionTactic(game.rules,unit,options.team);
+        if(tactic)body+='<label><input type="checkbox" data-fight-tactic="'+tactic+'"> '+escape(tactics[tactic].name)+' · 분대 선택 시 1 CP</label><p>'+escape(tactics[tactic].rule)+'</p>';
+        for(const kind of kinds){
           const name=kind==='normal'?'일반 전투':'돌파 전투';
           if(hasFightingWarboss(game.rules,game.pieces,unit)){
             body+=button(kind,name+' · '+bossStyles.lethal,busy)+button(kind+'-sustained',name+' · '+bossStyles.sustained,busy);
@@ -101,7 +105,7 @@ export function createFightControls({getGame,getObjectives=()=>[],commit,startMo
     }
     refresh?.();return true;
   }
-  function dispatch(action){
+  function dispatch(action,tactic=null){
     if(action.startsWith('fight-style-')){
       const v=view(),style=action.slice('fight-style-'.length);
       const next=chooseLegacyBossStyle(v.game,style);
@@ -127,10 +131,11 @@ export function createFightControls({getGame,getObjectives=()=>[],commit,startMo
     const kind=action.startsWith('fight-normal')?'normal':'overrun';
     const event=action==='fight-pass'?{type:'pass'}:action==='fight-skip'?{type:'skip-overrun'}:
       action==='fight-finish'?{type:'finish'}:{type:'select',unit,kind,...(action.endsWith('-sustained')?{bossStyle:'sustained'}:{})};
-    const next=transitionFight(game,sequence,event,objectives);
+    const next=event.type==='select'?selectPatrolFight(game,event,objectives,tactic):
+      {...game.rules,fightSequence:transitionFight(game,sequence,event,objectives)};
     const message=event.type==='pass'?teams[v.options.team]+' · '+stages[v.options.stage]+' 선택 마침':
       label(game,unit)+' · '+({select:kind==='normal'?'일반 전투 선택':'돌파 전투 선택',finish:'근접전 마침','skip-overrun':'추가 밀착 생략'}[event.type]);
-    commit({...game.rules,fightSequence:next},message);
+    commit(next,event.type==='select'&&tactic?message+' · '+tactics[tactic].name+' (1 CP)':message);
     if(event.type==='select')selectUnit?.(unit);
     return true;
   }

@@ -43,6 +43,8 @@ Heavy는 명중 굴림을 바꾼다. 엄폐와 고지 사격은 BS에 적용하�
 
 **뱅가드의 블레이드 마스터(뱅가드 · 돌격 방어)** 강화는 7월 상자의 독일어 참조표 *Klingenmeister*를 따른다. 이번 턴에 돌격한 적이 근접전 단계에서 강화된 뱅가드를 공격하면 그 공격의 상처 굴림에 −1을 적용한다. 같은 적 분대가 공격을 나눠 다른 표적에 배정하면 그쪽은 보통대로 굴린다. 적이 다른 분대에 돌격을 마친 뒤 뱅가드가 영웅적 개입으로 합류한 경우에도 뱅가드에 배정한 공격은 보호를 받는다. [7월 동봉 참조표 직접 촬영, 왼쪽 아래](https://www.brueckenkopf-online.com/wp-content/uploads/2026/07/Brueckenkopf-Online_Unboxing-Warhammer-40.000-%E2%80%93-Starterset-11.-Edition-43-e1785095029772.jpeg)
 
+**근접 공격 분대를 선택할 때 사용하는 전술.** 오크의 ‘으깨 버려!’와 마린의 ‘참수 공격’은 해당 분대를 선택하면서 1 CP를 지불한다. 전자는 그 페이즈 동안 해당 분대의 근접 무기 힘을 1 높이고, 후자는 해당 분대의 근접 무기에 정밀을 부여한다. 무료로 분대를 선택하면 그 분대의 이번 사용 기회는 끝난다. 공격이 진행 중인 구판 저장은 이미 지불한 효과를 유지한다. [오크 동봉 참조표 오른쪽 위](https://www.brueckenkopf-online.com/wp-content/uploads/2026/07/Brueckenkopf-Online_Unboxing-Warhammer-40.000-%E2%80%93-Starterset-11.-Edition-46-e1785095099140.jpeg) · [마린 동봉 참조표 오른쪽 위](https://www.brueckenkopf-online.com/wp-content/uploads/2026/07/Brueckenkopf-Online_Unboxing-Warhammer-40.000-%E2%80%93-Starterset-11.-Edition-43-e1785095029772.jpeg)
+
 10월 앱 2.7.1 영문 전사본은 적 분대가 뱅가드와 교전한 채 돌격을 마치는 순간을 발동 조건으로 삼고, 발동한 적 분대의 모든 근접 공격에 턴 종료까지 −1을 적용한다고 적는다. 두 판본은 돌격 종료 후 뱅가드가 합류하거나 적이 근접 공격을 여러 표적으로 나눌 때 판정이 달라진다. [앱 패트롤 전사본의 Blade Masters](https://wahapedia.ru/wh40k11ed_cp/factions/assault-force/#Blade-Masters)
 
 ## 플레이 범위

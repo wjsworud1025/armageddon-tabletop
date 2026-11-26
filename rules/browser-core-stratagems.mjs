@@ -25,7 +25,14 @@ export async function checkCoreStratagems({save,upload,choose,click,button,state
   await upload(fight);await click('[data-tab=battle]');await choose('fighter','intercessor-1');
   assert.equal(await has('epic-librarian-1'),false);
   await click(button('fight-pass'));await click(button('fight-pass'));
-  await choose('fight-unit','intercessor');await click(button('fight-normal'));
+  await choose('fight-unit','intercessor');
+  const beforePrecision=await state();
+  await click('[data-fight-tactic="precision"]');await click(button('fight-normal'));
+  const paid=await state();
+  assert.equal(paid.rules.cp.marines,0);assert.equal(paid.rules.patrol.tactics.precision,'1-marines-4/intercessor');
+  assert.equal(await has('epic-librarian-1'),false);assert.equal(await has('tactic-precision'),false);
+  await reload();assert.deepEqual(await state(),paid);
+  await upload(beforePrecision);await choose('fight-unit','intercessor');await click(button('fight-normal'));
   await click(button('epic-librarian-1'));
   assert.equal((await state()).rules.units.intercessor.epicChallengeModel,'librarian-1');
   assert.equal(await has('tactic-precision'),false);

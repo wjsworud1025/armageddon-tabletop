@@ -76,7 +76,6 @@ test('Epic Challenge distinguishes the selected attached model, blocks other str
   assert.equal(hasEpicPrecision({...used,step:5},captain,melee),false);
   assert.equal(hasEpicPrecision({...used,active:'orks'},captain,melee),false);
   assert.equal(useTactic(used,'precision','intercessor','marines',false),null);
-  assert.equal(useEpicChallenge(useTactic(ready,'precision','intercessor','marines',false),pieces,captain.id),null);
 });
 
 test('Epic Challenge is limited once per player per phase, with both sides independently eligible',()=>{

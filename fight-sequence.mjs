@@ -3,7 +3,7 @@ import {assessMove} from './movement.mjs';
 import {overlapsArea} from './layouts.mjs';
 import {currentHP,groupId,opposite} from './rules/battle.mjs';
 import {getProfile,profiles} from './rules/profiles.mjs';
-import {tacticActive,unitTargetedByStratagem} from './rules/patrol.mjs';
+import {payFightSelectionTactic,tacticActive,unitTargetedByStratagem} from './rules/patrol.mjs';
 
 // 11th ed. Core Rules 03, 12.01–12.09 and Appendix 12.04.01.
 // https://assets.warhammer-community.com/eng_01-06_warhammer40k_new40k_core_rules-was6fbu1ix-hfewhmxyiy.pdf
@@ -333,6 +333,19 @@ export function assessFightMove({game,sequence,unit,targets=[],origins={},paths=
   if(objective&&!ends.some(p=>objectiveDistance(p,objective)<=EPS))errors.push(issue('within-objective',[unit],'분대가 선택 거점 범위 안에서 끝내야 합니다.'));
   if(objective&&foes.some(([,u])=>engagedWith(ends,u)))errors.push(issue('objective-engaged',[unit],'거점 재정비 후 분대는 비교전 상태여야 합니다.'));
   return {ok:!errors.length,errors,manual,poses};
+}
+export function selectPatrolFight(game,action,objectives=[],tactic=null){
+  if(action?.type!=='select')throw Error('근접 공격할 분대를 선택하세요.');
+  const sequence=game.rules.fightSequence??beginFightSequence(game,objectives);
+  const next=transitionFight(game,sequence,action,objectives);
+  let rules=game.rules;
+  if(tactic!==null){
+    // Reaction fights can belong to the other player. The unit owns the CP.
+    const team=forces(game).get(action.unit)[0].faction;
+    rules=payFightSelectionTactic(rules,next,team,tactic);
+    if(!rules)throw Error('이 분대를 선택할 때 해당 전술을 사용할 수 없습니다.');
+  }
+  return {...rules,fightSequence:next};
 }
 export function transitionFight(game,sequence,action,objectives=[]){
   if(action?.type==='move')game=startBoard(game,action.origins);

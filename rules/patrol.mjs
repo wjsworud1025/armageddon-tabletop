@@ -60,8 +60,22 @@ function payTactic(state,key,unit,team,shocked){
     spent:{...p.spent,[key]:phaseKey(state)},tactics:{...p.tactics,[key]:phaseKey(state)+'/'+unit}}};
 }
 export function useTactic(state,key,unit,team,shocked){
-  if(key==='shockCharge'||state.terrifyingCharge)return null;
+  if(key==='shockCharge'||key==='crush'||key==='precision'||state.terrifyingCharge)return null;
   return payTactic(state,key,unit,team,shocked);
+}
+// Both starter cards specify the moment the target unit is selected to fight.
+// A saved activation without a payment receipt has already passed that moment.
+export function fightSelectionTactic(state,unit,team){
+  if(state.fightSequence?.active||state.fightSequence?.counterAfter||state.declaration||state.fightPlan||state.hazard)return null;
+  const order=state.units?.[unit];
+  if(order?.finishedAttack===4||Object.values(order?.attacks??{}).some(rows=>rows.some(r=>!r.ranged)))return null;
+  const key=team==='orks'?'crush':'precision';
+  return canUsePatrolTactic(state,key,unit,team,order?.shocked)?key:null;
+}
+export function payFightSelectionTactic(state,sequence,team,key){
+  const unit=sequence.active.unit;
+  if(key!==fightSelectionTactic(state,unit,team))return null;
+  return payTactic(state,key,unit,team,state.units[unit]?.shocked);
 }
 export function payTerrifyingCharge(state,unit){
   if(state.terrifyingCharge?.unit!==unit)return null;
