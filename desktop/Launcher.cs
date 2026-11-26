@@ -13,8 +13,9 @@ using System.Windows.Forms;
 
 internal static class Launcher
 {
-    const int Port = 41946;
-    const string Address = "http://127.0.0.1:41946";
+    const int PlayerPort = 41946;
+    static int Port = PlayerPort;
+    static string Address { get { return "http://127.0.0.1:" + Port; } }
     static readonly Dictionary<string, byte[]> Files = new Dictionary<string, byte[]>(StringComparer.Ordinal);
     [DllImport("user32.dll")] static extern bool SetForegroundWindow(IntPtr handle);
     [DllImport("user32.dll")] static extern bool ShowWindowAsync(IntPtr handle, int command);
@@ -41,6 +42,7 @@ internal static class Launcher
         catch (Exception ex) {
             Environment.ExitCode = 1;
             if (args.Length==2 && args[0]=="--verify-window") File.WriteAllText(Path.Combine(args[1],"native-error.txt"),ex.ToString());
+            else if(args.Length==2 && args[0]=="--serve") Console.Error.WriteLine(ex.Message);
             else MessageBox.Show(ex.Message, "Armageddon Table", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
     }
@@ -54,11 +56,13 @@ internal static class Launcher
     {
         bool serverOnly = Array.IndexOf(args, "--serve") >= 0;
         string verification = args.Length==2 && args[0]=="--verify-window" ? args[1] : null;
-        TcpListener listener = new TcpListener(IPAddress.Loopback, Port);
+        string portFile = args.Length==2 && args[0]=="--serve" ? args[1] : null;
+        bool isolated = verification!=null || portFile!=null;
+        TcpListener listener = new TcpListener(IPAddress.Loopback, isolated ? 0 : PlayerPort);
         try { listener.Start(); }
         catch (SocketException)
         {
-            if(verification!=null)throw new IOException("Close the running table before the native package test.");
+            if(isolated)throw;
             using (WebClient probe = new WebClient())
             {
                 probe.Proxy = null;
@@ -70,6 +74,7 @@ internal static class Launcher
         }
         try
         {
+            Port=((IPEndPoint)listener.LocalEndpoint).Port;
             using (Stream embedded = Assembly.GetExecutingAssembly().GetManifestResourceStream("table.zip"))
             using (ZipArchive zip = new ZipArchive(embedded, ZipArchiveMode.Read))
             {
@@ -88,6 +93,7 @@ internal static class Launcher
             });
             accept.IsBackground = true;
             accept.Start();
+            if(portFile!=null)File.WriteAllText(portFile,Port.ToString(System.Globalization.CultureInfo.InvariantCulture));
             if (serverOnly) accept.Join();
             else GameWindow.Open(Address, verification);
         }

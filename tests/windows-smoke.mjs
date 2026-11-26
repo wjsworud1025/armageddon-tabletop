@@ -25,7 +25,6 @@ const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const publicFlag=process.argv.indexOf('--public-exe');
 if(publicFlag!==-1)assert.ok(process.argv[publicFlag+1],'--public-exe requires an executable path');
 const executable=publicFlag===-1?join(root,'dist','ArmageddonTable.exe'):resolve(process.argv[publicFlag+1]);
-const target='http://127.0.0.1:41946';
 const profile=mkdtempSync(join(tmpdir(),'armageddon-smoke-'));
 const evidence=join(root,'.build','qa');mkdirSync(evidence,{recursive:true});
 const delay=ms=>new Promise(r=>setTimeout(r,ms));
@@ -34,8 +33,10 @@ async function until(fn,timeout=60000){const expires=Date.now()+timeout;let last
   throw Error('Timed out: '+fn.toString().slice(0,180)+' '+(last?.message||''))}
 let host,browser,ws;
 try{
-  await fetch(target+'/table-health',{signal:AbortSignal.timeout(500)}).then(()=>{throw Error('Close the running game before testing.')},()=>{});
-  host=spawn(executable,['--serve'],{windowsHide:true,stdio:'ignore'});
+  const gamePortFile=join(profile,'game.port');
+  host=spawn(executable,['--serve',gamePortFile],{windowsHide:true,stdio:'ignore'});
+  const gamePort=await until(()=>existsSync(gamePortFile)&&Number(readFileSync(gamePortFile,'ascii')),15000);
+  const target='http://127.0.0.1:'+gamePort;
   await until(async()=>(await(await fetch(target+'/table-health')).text())==='armageddon-2026-v1',15000);
   const chrome=['C:/Program Files/Google/Chrome/Application/chrome.exe','C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe'].find(existsSync);
   assert.ok(chrome);
