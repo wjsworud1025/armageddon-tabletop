@@ -47,12 +47,25 @@ export function unitTargetedByStratagem(state,unit) {
 export function tacticActive(state,key,unit) {
   return state.patrol?.tactics?.[key]===phaseKey(state)+'/'+unit;
 }
-export function useTactic(state,key,unit,team,shocked) {
+export function canUsePatrolTactic(state,key,unit,team,shocked) {
   const t=tactics[key],p=state.patrol;
-  if (!t || state.status!=='playing' || t.team!==team || state.step!==t.step || shocked || state.cp[team]<1) return null;
-  if ((t.own && team!==state.active) || (t.opponent && team===state.active) || p.spent[key]===phaseKey(state) || unitTargetedByStratagem(state,unit)) return null;
+  if (!t || !p?.spent || !p.tactics || state.status!=='playing' || t.team!==team || state.step!==t.step || shocked || !(state.cp?.[team]>=1)) return false;
+  if ((t.own && team!==state.active) || (t.opponent && team===state.active) || p.spent[key]===phaseKey(state) || unitTargetedByStratagem(state,unit)) return false;
+  return true;
+}
+function payTactic(state,key,unit,team,shocked){
+  if(!canUsePatrolTactic(state,key,unit,team,shocked))return null;
+  const p=state.patrol;
   return {...state,cp:{...state.cp,[team]:state.cp[team]-1},patrol:{...p,
     spent:{...p.spent,[key]:phaseKey(state)},tactics:{...p.tactics,[key]:phaseKey(state)+'/'+unit}}};
+}
+export function useTactic(state,key,unit,team,shocked){
+  if(key==='shockCharge'||state.terrifyingCharge)return null;
+  return payTactic(state,key,unit,team,shocked);
+}
+export function payTerrifyingCharge(state,unit){
+  if(state.terrifyingCharge?.unit!==unit)return null;
+  return payTactic(state,'shockCharge',unit,'marines',state.units?.[unit]?.shocked);
 }
 export function effectProfile(state,piece,base,unit,shocked) {
   const armour=piece.kind==='wartrakk' && state.patrol?.enhanced?.armour;

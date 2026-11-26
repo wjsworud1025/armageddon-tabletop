@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {beginCharge,selectChargeTargets,proposeCharge,finishCharge,cancelCharge,rewindCharge} from '../charge-session.mjs';
+import {declineTerrifyingCharge} from '../rules/terrifying-charge.mjs';
 import {newBattle} from '../rules/battle.mjs';
 import {useTactic} from '../rules/patrol.mjs';
 
@@ -33,6 +34,7 @@ test('declare, mark targets, preview from original pose, undo routes, and comple
   game=apply(game,proposeCharge(game,marine,{[marine.id]:[{x:4.3}]}));
   game=apply(game,finishCharge(game));
   assert.equal(game.rules.units.captain.charged,true);assert.equal(game.rules.chargePlan,null);
+  game=apply(game,declineTerrifyingCharge(game));
   assert.throws(()=>beginCharge(game,marine),/이미/);
 });
 

@@ -182,9 +182,9 @@ function selection(){
   $('piece-spec').textContent=factionNames[p.faction]+' · '+(p.faction==='terrain'?'지면 점유 폭':'베이스')+' '+Math.round(p.baseWidth*25.4)+' × '+Math.round(p.baseDepth*25.4)+' mm';
   const inReserve=Object.values(game.rules?.reserves??{}).some(ids=>ids.includes(p.id));
   $('elevation').value=(preview??p).elevation||0;
-  $('elevation').disabled=$('rotate').disabled=!!rally&&!preview;
+  $('elevation').disabled=$('rotate').disabled=!!game.rules?.terrifyingCharge||!!rally&&!preview;
   showFloorLevels(preview?{...p,...preview,removed:false}:p);
-  $('remove').disabled=inReserve||!!(rally||game.rules?.overwatch||game.rules?.reinforcePlan||game.rules?.shootingReaction||game.rules?.reactionPlan||pendingAttack());
+  $('remove').disabled=inReserve||!!(rally||game.rules?.terrifyingCharge||game.rules?.overwatch||game.rules?.reinforcePlan||game.rules?.shootingReaction||game.rules?.reactionPlan||pendingAttack());
   $('remove').textContent=inReserve?(p.removed?'예비대 대기 중':'예비대 배치 중'):p.removed?'전장 복귀':'전장에서 제거';
   $('focus').disabled=!!p.removed&&!preview;
 }
@@ -282,7 +282,7 @@ function applyMovement(result){
   if(manual.length)toast(manual.join(' '));
 }
 function editPose(p,delta,message){
-  if(game.training)return;
+  if(game.training||game.rules?.terrifyingCharge)return;
   if(game.rules?.rallyPlan){
     if(game.rules.rallyPlan.selected[p.id])try{rallyCommand('pose',p.id,delta)}catch(e){toast(e.message);selection()}
     return;
@@ -298,7 +298,7 @@ function rotate(){
 }
 function pendingAttack(){return game.rules?.declaration?.attackRoll||game.rules?.declaration?.precisionRoll}
 function remove(id,removed){const p=piece(id);
-  if(game.training||game.rules?.rallyPlan||officialPreparing(game.rules))return;
+  if(game.training||game.rules?.rallyPlan||game.rules?.terrifyingCharge||officialPreparing(game.rules))return;
   if(game.rules?.overwatch){toast('경계 사격 중에는 공격 판정에서 사상자를 처리하세요.');return}
   if(pendingAttack()){toast('진행 중인 공격의 피해 배정을 먼저 마치세요.');return}
   if(game.rules?.shootingReaction||game.rules?.reactionPlan){toast('현재 사격 반응을 먼저 마치세요.');return}
@@ -661,6 +661,7 @@ const api={
     const r=game.rules;
     try{
       if(r?.status!=='playing'||r.step!==3)throw Error('돌격 페이즈에서 사용할 수 있습니다.');
+      if(r.terrifyingCharge)throw Error('공포의 돌격을 사용하거나 건너뛰세요.');
       let result;
       if(command==='window'){
         if(r.chargePlan||r.chargeWindow)throw Error('진행 중인 돌격부터 마치세요.');
@@ -737,11 +738,13 @@ async function start(){
       try{rallyCommand('pose',active,{x:point.x,z:point.z})}catch(e){toast(e.message)}
     },
     canDrag:p=>{if(!game.training&&game.rules?.rallyPlan)return !!p.rallyPreview;
+      if(!game.training&&game.rules?.terrifyingCharge)return false;
       if(!game.training)return !officialPreparing(game.rules)||pendingPatrolPiece(game.rules,p);
       const plan=game.training.plan;
       if(game.training?.phase==='deployment')return p.faction!=='terrain';
       return game.training?.scenario>=2&&plan?.ids.includes(p.id)&&(plan.mode!=='charge'||!!plan.target)},
     route(p,points,drag=false){
+      if(!game.training&&game.rules?.terrifyingCharge)return false;
       if(!game.training&&game.rules?.rallyPlan){
         if(!game.rules.rallyPlan.selected[p.id])return false;
         const {x,z}=points.at(-1);

@@ -13,6 +13,7 @@ import {overwatchUnits,overwatchUnitReady,overwatchTargetEligible} from './overw
 import {weaponSlot} from './battle.mjs';
 import {playerTurnNumber} from './ranged-history.mjs';
 import {validatePendingRally} from './rally-placement.mjs';
+import {validTerrifyingOffer} from './terrifying-charge.mjs';
 import {heavyStatus} from './heavy.mjs';
 
 const boolean = value => typeof value === 'boolean';
@@ -108,6 +109,8 @@ const battle=fields({
   round:int(1,20),rounds:int(1,20),step:int(0,5),cp:totals,vp:totals,hp,
   units:map(group,unit),attachments:map(model,group),objectives:map(identifier,objective),hazard:nullable(hazard),declaration:nullable(declaration),movePlan:nullable(movePlan),chargePlan:nullable(chargePlan),chargeWindow:boolean,
   rallyPlan:fields(rallyFields,Object.keys(rallyFields)),rallyStarters:list(model,11),
+  terrifyingCharge:fields({round:int(1,20),unit:group,targets:list(group,12)},['round','unit','targets']),
+  terrifyingResult:fields({round:int(1,20),unit:group,target:group,dice:list(int(1,6),2),leadership:int(2,12)},['round','unit','target','dice','leadership']),
   fightSequence:validFightSequence,fightPlan:nullable(fightPlan),shootingSight,
   overwatch:fields({stage:oneOf(['offer','shoot','done']),team,unit:nullable(group)},['stage','team','unit']),
   shootingReaction:nullable(reactionWindow),reactionPlan:nullable(fields(reactionFields,Object.keys(reactionFields))),
@@ -215,6 +218,23 @@ export function validateRulesState(value,pieceRecords=null,layout=undefined) {
   const ranged=value.step===2||shootingOverwatch,shootingTeam=window?.team??value.active;
   const savedPieces=()=>pieceRecords.map(({id,x,z,elevation,yaw,removed})=>patrolTerrainPiece(
     {...catalog.get(id),x,z,elevation,yaw,removed:!!removed},value.officialSetup?.version));
+  if(value.terrifyingCharge){
+    const w=value.terrifyingCharge;
+    if(groupTeam(w.unit)!=='marines'||w.targets.some(key=>groupTeam(key)!=='orks')||
+      !validTerrifyingOffer(value,pieceRecords?savedPieces():null))return false;
+  }
+  if(value.terrifyingResult){
+    const t=value.terrifyingResult;
+    // A receipt is historical: another Charge-phase effect or a manual
+    // adjustment may have changed which models are alive since the roll.
+    if(![...catalog.values()].some(p=>p.faction==='orks'&&(value.attachments?.[p.id]??unitId(p))===t.target&&
+      getProfile(p).leadership===t.leadership))return false;
+    const stamp=[value.round,value.active,value.step].join('-');
+    if(value.status!=='playing'||value.step!==3||value.active!=='marines'||t.round!==value.round||t.dice.length!==2||
+      groupTeam(t.unit)!=='marines'||groupTeam(t.target)!=='orks'||!value.units?.[t.unit]?.charged||
+      !value.units[t.unit].chargeTracked||value.patrol?.spent?.shockCharge!==stamp||
+      value.patrol.tactics?.shockCharge!==stamp+'/'+t.unit)return false;
+  }
   if(value.rallyStarters){
     const unit=value.attachments?.['warboss-1'];
     if(value.status!=='playing'||value.step!==0||value.active!=='orks'||!value.patrol?.enhanced?.warcry||

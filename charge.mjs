@@ -29,6 +29,7 @@ export function chargeOptions(game,actor,{mode='normal',roll,takeToSkies=false,o
   if(!Array.isArray(game?.pieces) || state?.status!=='playing' || state.step!==3) {
     fail('wrong-phase','대전의 돌격 페이즈에서 선언하세요.');return result;
   }
+  if(state.terrifyingCharge){fail('terrifying-charge','공포의 돌격을 먼저 사용하거나 생략하세요.');return result;}
   if(!Object.hasOwn(costs,mode)) {fail('invalid-mode','돌격 선언 종류를 확인하세요.');return result;}
   const onTable=game.pieces.filter(p=>getProfile(p) && currentHP(state,p)>0 && !state.reserves?.[groupId(state,p)]);
   const member=onTable.find(p=>p.id===(typeof actor==='string'?actor:actor?.id));

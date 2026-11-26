@@ -96,6 +96,12 @@ A/B/C 맵에서는 게임이 상대 배치 구역을 검사한다. 제품 전장
 
 위어드보이의 근접 무기가 영웅적 도전으로 정밀을 얻으면 같은 공격 묶음에서 일반 피해를 먼저 해결한다. 치명상으로 발생한 모탈 운드도 앞서 선택한 캐릭터가 살아 있으면 그 캐릭터에게 먼저 배정한다. [패트롤 앱 부록 전사본 24.28.01](https://wahapedia.ru/wh40k11ed_cp/the-rules/rules-appendix/#Precision-and-Devastating-Wounds)
 
+## 마린 공포의 돌격
+
+스타터 세트의 마린 전술 *공포의 돌격*은 아군 분대가 자기 돌격 단계에 돌격 이동을 마친 직후에 사용할 수 있다. 플레이어는 1 CP를 쓰고 방금 돌격한 분대와 교전 중인 적 분대 하나를 고른다. 적은 생존 모델 중 가장 좋은 리더십으로 전장 충격 검사를 하고, 2D6 합계에 −1을 적용한다. 생략하면 CP를 보존한다. [인쇄 카드 오른쪽 아래](https://www.brueckenkopf-online.com/wp-content/uploads/2026/07/Brueckenkopf-Online_Unboxing-Warhammer-40.000-%E2%80%93-Starterset-11.-Edition-43-e1785095029772.jpeg)
+
+실패한 분대는 전장 충격을 받아 거점 점유에 기여할 수 없다. 이미 충격 상태인 분대가 이 검사에 성공하면 기존 충격은 유지된다. 자기 지휘 단계에서 검사를 통과해 충격을 해제하는 규정은 별도로 적용된다. [전장 충격 §01.07, 9쪽](https://assets.warhammer-community.com/eng_01-06_warhammer40k_new40k_core_rules-was6fbu1ix-hfewhmxyiy.pdf#page=9) · [지휘 단계 §08.03, 30쪽](https://assets.warhammer-community.com/eng_01-06_warhammer40k_new40k_core_rules-was6fbu1ix-hfewhmxyiy.pdf#page=30)
+
 ## 차량 조형과 이동 종료
 
 §03.01은 이동 중 베이스가 들어가는 공간을 통과할 수 있다고 규정한다. 회전은 베이스 중심에서 하고 거리 비용은 0이다. 분대가 이동이나 배치를 마칠 때는 모델의 어느 부분도 벽·천장 등 지형 표면을 관통할 수 없다. 랜드 스피더와 워트랙은 이때 받침대에 더해 차체·날개·탑승원·장비의 조형을 검사한다. 각도나 높이를 바꿔 돌출부가 지형을 벗어나면 이동을 완료할 수 있다. 베이스가 지나온 경로의 지형 종류·높이 제한은 계속 적용된다. [공식 기본 규칙 §03.01, 12쪽](https://assets.warhammer-community.com/eng_01-06_warhammer40k_new40k_core_rules-was6fbu1ix-hfewhmxyiy.pdf#page=12) · [지형 §13.06, 48쪽](https://assets.warhammer-community.com/eng_01-06_warhammer40k_new40k_core_rules-was6fbu1ix-hfewhmxyiy.pdf#page=48)

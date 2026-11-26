@@ -1,3 +1,4 @@
+import {openTerrifyingCharge} from './rules/terrifying-charge.mjs';
 import {assessCharge,chargeOptions} from './charge.mjs';
 import {canCommandReroll,useCommandReroll} from './rules/command-reroll.mjs';
 import {appendUnitPaths} from './move-session.mjs';
@@ -30,7 +31,7 @@ function evaluate(game,plan,survivors,phase) {
 // dice stores both physical D6. Declining even a double one consumes the attempt.
 export function beginCharge(game,actor,options={}) {
   const rules=game.rules;
-  if(rules?.chargePlan||rules?.movePlan||rules?.declaration||rules?.hazard)
+  if(rules?.terrifyingCharge||rules?.chargePlan||rules?.movePlan||rules?.declaration||rules?.hazard)
     throw new Error('진행 중인 분대 판정을 먼저 마치세요.');
   const mode=options.mode??'normal',endOfPhase=options.endOfPhase===true;
   const declaration=chargeOptions(game,actor,{mode,endOfPhase});
@@ -93,8 +94,10 @@ export function finishCharge(game) {
   if(!survivors.length) return cancelCharge(game);
   const assessment=evaluate(game,plan,survivors,'finish');
   const poses=Object.fromEntries(Object.entries(assessment.models).map(([id,m])=>[id,m.end]));
-  const next=changeUnit(rules,survivors[0],{charged:true});
-  return {rules:{...next,chargePlan:null},poses,assessment,manual:assessment.manual,message:'돌격 이동 완료 · 이번 턴 선제 전투'};
+  const finished={...changeUnit(rules,survivors[0],{charged:true}),chargePlan:null};
+  const board={...game,rules:finished,pieces:game.pieces.map(p=>poses[p.id]?{...p,...poses[p.id]}:p)};
+  const next=plan.mode==='normal'?openTerrifyingCharge(board,plan.unit):finished;
+  return {rules:next,poses,assessment,manual:assessment.manual,message:'돌격 이동 완료 · 이번 턴 선제 전투'};
 }
 
 export function rewindCharge(game) {

@@ -29,7 +29,7 @@ export function startBattle(state,first,rounds,pieces) {
   return recordRallyStarters({...state,status:'playing',first,active:first,rounds,cp:{marines:1,orks:1},rangedHistory:{since:1,last:{}}},pieces);
 }
 export function advance(state,pieces) {
-  if (state.status !== 'playing' || state.rallyPlan || state.hazard || state.declaration || state.movePlan || state.reinforcePlan || state.chargePlan || state.fightPlan || state.fightSequence?.counterAfter || state.shootingReaction || state.reactionPlan || state.units?.wartrakk?.suppressionTargets?.length) return state;
+  if (state.status !== 'playing' || state.rallyPlan || state.terrifyingCharge || state.hazard || state.declaration || state.movePlan || state.reinforcePlan || state.chargePlan || state.fightPlan || state.fightSequence?.counterAfter || state.shootingReaction || state.reactionPlan || state.units?.wartrakk?.suppressionTargets?.length) return state;
   if(state.overwatch&&state.overwatch.stage!=='done')return state;
   if(pendingCommandShock(state,pieces).length)return state;
   state=recoverRangedHistory(state);
@@ -44,6 +44,7 @@ export function advance(state,pieces) {
     if(state.step===0&&state.active==='marines')
       next.units={...state.units,intercessor:{...state.units?.intercessor,heavyTravel:{}}};
     delete next.rallyStarters;
+    delete next.terrifyingResult;
     delete next.shootingSight;
     delete next.overwatch;
     return next;
@@ -137,12 +138,12 @@ export function pendingCommandShock(state,pieces){
   }
   return pending;
 }
-export function shockTest(state,members,random=Math.random) {
+export function shockTest(state,members,random=Math.random,modifier=0) {
   const alive=members.filter(p=>shockWounds(state,p)>0);
   if (!alive.length) return null;
   const dice=[roll(6,random),roll(6,random)];
   const target=Math.min(...alive.map(p=>getProfile(p).leadership));
-  return {dice,target,passed:dice[0]+dice[1]>=target};
+  return {dice,target,passed:dice[0]+dice[1]+modifier>=target};
 }
 export function resolveCommandShock(state,pieces,unit,random=Math.random){
   const pending=pendingCommandShock(state,pieces).find(p=>p.unit===unit);

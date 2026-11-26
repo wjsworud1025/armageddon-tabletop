@@ -6,6 +6,7 @@ import {needsLegacyBossStyle} from '../fight-sequence.mjs';
 import {reinforcementOptions,expiringReserves,reserveCapacity} from './reinforcements.mjs';
 import {attachForDeployment} from './reinforcement-session.mjs';
 import {assessRally,rallyOptions} from './rally-placement.mjs';
+import {terrifyingChargeTargets,resolveTerrifyingCharge,declineTerrifyingCharge} from './terrifying-charge.mjs';
 import {openShootingReaction,shootingReactionOptions} from './shooting-reaction.mjs';
 import {useInsaneBravery,useEpicChallenge} from './core-stratagems.mjs';
 import {acceptMovementRoll} from './command-reroll.mjs';
@@ -381,7 +382,7 @@ export function mountRules(container,api) {
   }
   function selectedTactic(state,key,actor){
     const unit=groupId(state,actor);
-    if(key==='surge')return null;
+    if(key==='surge'||key==='shockCharge')return null;
     if(key==='med'){
       const plan=state.declaration;
       if(!plan?.locked||plan.rows.some(r=>r.done)||!plan.rows.some(r=>r.target===unit))return null;
@@ -568,6 +569,22 @@ export function mountRules(container,api) {
   }
   function renderPanel() {
     const state=read();
+    const unitName=key=>{
+      const members=contents().filter(p=>groupId(state,p)===key);
+      const bodyguard=members.find(p=>unitId(p)===key);
+      return bodyguard?unitLabel(bodyguard):members.length?unitLabel(members[0]):key;
+    };
+    if(state.terrifyingCharge){
+      const targets=terrifyingChargeTargets(api.getTable()),unit=state.terrifyingCharge.unit;
+      const selected=targets.includes(choices['terrifying-target'])?choices['terrifying-target']:targets.length===1?targets[0]:'';
+      const options=(targets.length===1?'':opt('','표적 분대 선택',selected))+targets.map(k=>opt(k,unitName(k),selected)).join('');
+      root.innerHTML='<section class="br-card" data-terrifying-charge><h3>공포의 돌격</h3>'+
+        '<p>'+esc(unitName(unit))+'의 돌격 이동이 끝났습니다. 교전 중인 적 한 분대가 2D6 − 1로 전장 충격을 검사합니다. 합계가 리더십 이상이면 통과합니다.</p><p>마린 보유 CP '+state.cp.marines+'</p>'+
+        (targets.length?select('terrifying-target','전장 충격을 검사할 적 분대',options):'<p>검사할 수 있는 표적이 없습니다.</p>')+
+        row(btn('terrifying-use','1 CP 사용 · 2D6 굴리기',!selected)+btn('terrifying-pass','공포의 돌격 건너뛰기'))+
+        (feedback?'<p role="status">'+esc(feedback)+'</p>':'')+'</section>';
+      return;
+    }
     if(state.rallyPlan){root.innerHTML=renderRally(state.rallyPlan);return;}
     restoreMovementSelection(state);
     if(officialPreparing(state)){
@@ -635,6 +652,11 @@ export function mountRules(container,api) {
         pickMember+row(btn('reinforce-finish','증원 배치 완료')+btn('reinforce-cancel','배치 취소 · 예비대 복귀')))+
         (feedback?'<p aria-live="polite">'+esc(feedback)+'</p>':'');
       return;
+    }
+    if(state.terrifyingResult){
+      const {target,dice,leadership}=state.terrifyingResult,total=dice[0]+dice[1]-1;
+      top+='<p class="br-latest" data-terrifying-result role="status">'+esc(unitName(target))+' · 공포의 돌격 2D6 ['+
+        dice.join(' + ')+'] − 1 = '+total+' · 리더십 '+leadership+'+ · '+(total>=leadership?'통과':'실패 · 전장 충격')+'</p>';
     }
     if(state.step===3)top+=chargeControls(api.getTable());
     if(state.movePlan?.commandRerollOpen||state.chargePlan?.commandRerollOpen){
@@ -803,6 +825,15 @@ export function mountRules(container,api) {
     const button=event.target.closest('button'),action=button?.dataset.act;
     if (!action) return;
     const state=read();
+    if(state.terrifyingCharge){
+      if(!['terrifying-use','terrifying-pass'].includes(action))return;
+      try{
+        const result=action==='terrifying-pass'?declineTerrifyingCharge(api.getTable()):
+          resolveTerrifyingCharge(api.getTable(),field('terrifying-target')?.value);
+        delete choices['terrifying-target'];feedback='';
+        return commit(result.rules,result.message);
+      }catch(error){feedback=error.message;refresh();return}
+    }
     if(state.rallyPlan||action==='warcry'){
       if(action!=='warcry'&&!action.startsWith('rally-'))return;
       feedback='';
@@ -1189,6 +1220,10 @@ export function mountRules(container,api) {
   function change(event) {
     const el=event.target,key=el.dataset.field;
     if (!key) return;
+    if(api.getRulesState()?.terrifyingCharge){
+      if(key==='terrifying-target'){choices[key]=el.value;refresh()}
+      return;
+    }
     if(api.getRulesState()?.rallyPlan)return;
     if(key.startsWith('reaction-')){
       choices[key]=el.type==='checkbox'?el.checked:el.value;
