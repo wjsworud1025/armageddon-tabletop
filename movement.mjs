@@ -207,10 +207,12 @@ export function assessMove({game,pieces,origins={},paths={},type,advanceRoll=0,p
     if(distance>budget+EPS) fail('distance',[p.id],p.name+'의 누적 이동 거리가 허용 거리를 초과합니다.');
     models[p.id]={distance,limit:budget,end:pose(position)};
     ends.push(position);
-    if(phase==='finish' && type!=='remain' && position.elevation>0) {
+    if(phase==='finish' && type!=='remain') {
       const support=patrolTerrainPlacement(position,others);
-      if(support.error) fail(p.kind==='wartrakk'?'upper-floor':'unsupported-floor',[p.id],support.error);
-      else if(support.manual) check('supported-floor',[p.id],support.manual);
+      if(position.elevation>0){
+        if(support.error) fail(p.kind==='wartrakk'?'upper-floor':'unsupported-floor',[p.id],support.error);
+        else if(support.manual) check('supported-floor',[p.id],support.manual);
+      }else if(support.error) fail('terrain-base',[p.id],support.error);
     }
   }
   if(phase!=='finish' || type==='remain') return result(null);
