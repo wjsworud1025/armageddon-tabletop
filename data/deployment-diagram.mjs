@@ -21,7 +21,8 @@ function footprint(piece){
 
 // Use the same x/z coordinates as deployment. One cell is one tabletop inch.
 export function drawDeploymentDiagram(canvas,code,blueFaction,table){
-  const layout=layoutGeometry(code,table.rules?.officialSetup?.version);
+  const oldQuick=table.layout?.map&&!table.pieces.find(p=>p.id==='largeRuin-2')?.patrolCD;
+  const layout=layoutGeometry(code,table.rules?.officialSetup?.version??(oldQuick?8:undefined));
   const ctx=canvas.getContext('2d');
   const cell=17,left=45,top=40;
   const width=table.width*cell,height=table.depth*cell;
@@ -66,7 +67,7 @@ export function drawDeploymentDiagram(canvas,code,blueFaction,table){
     const piece=table.pieces.find(p=>p.id===pose.id);
     ctx.save();ctx.translate(pose.x,pose.z);ctx.rotate(-pose.yaw);
     ctx.fillStyle=colors[pose.id]==='yellow'?'#f4cd61':'#8fc189';
-    ctx.fill(footprint(piece));
+    ctx.fill(footprint(pose.patrolCD?{...piece,...pose}:piece));
     ctx.restore();
   }
   ctx.restore();

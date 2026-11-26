@@ -39,7 +39,7 @@ export function studioScene(T,scene,pieces,ready){
   function update(p,cameraYaw,pitch,distance,enabled){
     const item=figures.get(p.id);if(!item)return false;
     const {sprite,group}=item;sprite.visible=false;
-    if(!enabled||p.removed||pitch>65*rad)return false;
+    if(!enabled||p.removed||p.patrolCD||pitch>65*rad)return false;
     const f=studioViewFrame(group,cameraYaw-p.yaw,pitch);if(!f||!(f.widthInches>0))return false;
     const sheet=request(String(f.url));if(!sheet.texture)return false;
     if(item.url!==f.url){item.texture?.dispose();item.texture=sheet.texture.clone();item.texture.needsUpdate=true;item.url=f.url;sprite.material.map=item.texture;sprite.material.needsUpdate=true}

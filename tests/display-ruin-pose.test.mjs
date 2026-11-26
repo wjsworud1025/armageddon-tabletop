@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as T from '../vendor/three.module.min.js';
 import {createMapTable,createTable,photoToBoard} from '../data/catalog.mjs';
+import {patrolCDSize} from '../data/reliquary-dimensions.mjs';
 import {photoCamera,photoFit} from '../photo-camera.mjs';
 import {matchesPortraitPose} from '../painted.mjs';
 import {studioViewFrame} from '../studio-scene.mjs';
@@ -76,18 +77,20 @@ test('the saved exhibition firing position keeps its 3-inch floor or the precedi
   }
 });
 
-test('quick maps and the handbook keep the documented earlier footprint when entered from a new display',()=>{
+test('new quick maps use their CD assembly while the handbook keeps its documented earlier footprint',()=>{
   const table={...createTable(),logs:[],rules:newBattle()};
   for(const map of ['A','B','C']){
     applyLayout(table,map,'marines');
     const save=snapshot(table),resumed=restore(createTable(),save);
-    for(const game of [table,resumed,createTrainingThreeTable()]){
+    for(const game of [table,resumed]){
       const p=game.pieces.find(p=>p.id===ruin.id);
-      assert.deepEqual([p.baseWidth,p.baseDepth],[5.2,4.22]);
+      assert.deepEqual([p.baseWidth,p.baseDepth],[patrolCDSize.baseWidth,patrolCDSize.baseDepth]);assert.equal(p.patrolCD,true);
     }
-    assert.ok(!Object.hasOwn(save,'reliquaryRevision'));
+    assert.equal(save.reliquaryRevision,3);
     assert.deepEqual(snapshot(resumed),save);
   }
   const copied={...createTable(),logs:[],layout:{map:'B',blue:'marines'},rules:newBattle()};
+  const handbook=createTrainingThreeTable().pieces.find(p=>p.id===ruin.id);
+  assert.deepEqual([handbook.baseWidth,handbook.baseDepth],[5.2,4.22]);assert.ok(!handbook.patrolCD);
   assert.deepEqual(snapshot(restore(display,snapshot(copied))),snapshot(copied));
 });

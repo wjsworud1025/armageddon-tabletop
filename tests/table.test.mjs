@@ -141,7 +141,7 @@ test('printed walls and open courtyards on the three patrol maps align with the 
   ];
   const down=new T.Vector3(0,-1,0);
   for(const [map,id,wall,yard] of marks){
-    const model=createPiece(T,createMapTable().pieces.find(p=>p.id===id));
+    const model=createPiece(T,createMapTable({patrolCD:true}).pieces.find(p=>p.id===id));
     const at=layoutGeometry(map).terrain.find(p=>p.id===id);
     model.position.set(at.x,0,at.z);model.rotation.y=at.yaw;model.updateMatrixWorld(true);
     function surface([u,v]){

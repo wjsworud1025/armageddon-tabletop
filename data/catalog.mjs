@@ -1,4 +1,4 @@
-import {mapReliquarySize,reliquarySize} from './reliquary-dimensions.mjs';
+import {mapReliquarySize,patrolCDSize,reliquarySize} from './reliquary-dimensions.mjs';
 
 // World axes are x right, z toward the near edge of the assembled 44 × 30 inch board.
 // The four corners and ground contact points were digitised on the 1920 × 1212 July photograph.
@@ -88,11 +88,11 @@ export function createTable() {
   return {width: 44, depth: 30, pieces};
 }
 
-// The display combines the C door wall and B saint wall. The printed games
-// retain their established wall assembly, geometry and ground coordinates.
-export function createMapTable(){
+// Handbook replays and older maps have their own cast and saved coordinates.
+export function createMapTable({patrolCD=false}={}){
   const table=createTable();
-  Object.assign(table.pieces.find(p=>p.id==='largeRuin-2'),mapReliquarySize,
+  const casting=patrolCD?{...patrolCDSize,patrolCD:true}:mapReliquarySize;
+  Object.assign(table.pieces.find(p=>p.id==='largeRuin-2'),casting,
     photoToBoard(570.31,970.76),{yaw:132.10*Math.PI/180});
   return table;
 }

@@ -1,7 +1,7 @@
 import {groupId} from './rules/battle.mjs';
 import {applyWartrakkEdition} from './rules/patrol-setup.mjs';
 import {patrolTerrainAreas} from './data/patrol-terrain-areas.mjs';
-import {mapReliquarySize} from './data/reliquary-dimensions.mjs';
+import {mapReliquarySize,patrolCDSize,patrolCDVersion} from './data/reliquary-dimensions.mjs';
 
 // Board edges in the 1535 x 1961 reference diagrams. Rotate the portrait sheet
 // onto the long horizontal axis of the digital table.
@@ -63,7 +63,10 @@ const originalPlants={
   C:{'shockArray-1':[766,1323,90],'capacitorStack-1':[768,622,90],'generatorShrine-1':[769,679,90]}
 };
 const terrainAreas=Object.fromEntries(Object.entries(layouts).map(([code,data])=>[code,patrolTerrainAreas(code,data.areas,world)]));
-export function layoutGeometry(code,version=6){
+// Centres in the 1535 x 1961 app diagrams. The red door runs along local
+// +X and the shorter return runs along -Z. The three marked pieces are CD.
+const patrolCDCentre={A:[587,1500],B:[987,1460],C:[360,1447]};
+export function layoutGeometry(code,version=patrolCDVersion){
   const data=layouts[code];if(!data)return null;
   const blue=points(data.zone),red=blue.map(([x,z])=>[-x,-z]);
   const ruins=version>=3?registeredRuins[code]:[];
@@ -71,9 +74,11 @@ export function layoutGeometry(code,version=6){
   if(version>=4)positions['smallRuin-1']=smallShrinePoses[code];
   if(version>=5)Object.assign(positions,pipeRuinPoses[code]);
   if(version===1)Object.assign(positions,originalPlants[code]);
+  if(version>=patrolCDVersion)positions['largeRuin-2']=[...patrolCDCentre[code],positions['largeRuin-2'][2]];
   return {blue,red,areas:data.areas,terrainAreas:terrainAreas[code],terrain:Object.entries(positions).map(([id,[u,v,deg]])=>{
     const [x,z]=world([u,v]);
     const pose={id,x,z,yaw:deg*Math.PI/180};
+    if(id==='largeRuin-2'&&version>=patrolCDVersion)Object.assign(pose,patrolCDSize,{patrolCD:true});
     if(id==='smallRuin-1')Object.assign(pose,{baseDepth:version>=4?1.25:1.4,previousSmallRuin:version<4});
     if(id==='smallRuin-4')pose.previousPipeRuin=version<5;
     if(id.startsWith('barricade-'))Object.assign(pose,{previousBarricade:version<6,baseDepth:version<6?.65:1.25});
@@ -84,7 +89,9 @@ export function layoutScenery(game,geo){
   const poses=new Map(geo.terrain.map(at=>[at.id,at]));
   return game.pieces.filter(p=>p.faction==='terrain').map(p=>{
     const at=poses.get(p.id);
-    return [p,at?{...at,...(p.id==='largeRuin-2'?mapReliquarySize:{}),elevation:0,removed:false}:{removed:true}];
+    if(!at)return [p,{removed:true}];
+    const older=p.id==='largeRuin-2'&&!at.patrolCD?{...mapReliquarySize,patrolCD:false}:{};
+    return [p,{...at,...older,elevation:0,removed:false}];
   });
 }
 function inside(x,z,poly){

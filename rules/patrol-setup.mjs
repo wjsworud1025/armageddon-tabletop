@@ -1,6 +1,6 @@
 import {opposite,roll} from './battle.mjs';
 import {createTable} from '../data/catalog.mjs';
-import {mapReliquarySize,reliquarySize} from '../data/reliquary-dimensions.mjs';
+import {mapReliquarySize,patrolCDSize,patrolCDVersion,reliquarySize} from '../data/reliquary-dimensions.mjs';
 
 // Combat Patrol Mission Sequence 2–8, Warhammer 40,000 app 2.7.1:
 // https://wahapedia.ru/wh40k11ed_cp/the-rules/combat-patrol-mission/
@@ -15,7 +15,7 @@ const fields=(value,keys)=>value!==null&&typeof value==='object'&&
   Object.keys(value).length===keys.length&&keys.every(k=>Object.hasOwn(value,k));
 
 export function newPatrolSetup(){
-  return {version:8,layoutDie:null,roleRolls:[],roleChoice:null,
+  return {version:patrolCDVersion,layoutDie:null,roleRolls:[],roleChoice:null,
     formationsRevealed:false,deploymentComplete:false,firstRolls:[]};
 }
 
@@ -30,9 +30,14 @@ export function applyWartrakkEdition(model,version){
   if(Number.isInteger(version)&&version>=1&&version<8)model.previousWartrakkBanner=true;
   else delete model.previousWartrakkBanner;
 }
-export function patrolTerrainPiece(piece,version,displayReliquary=true){
+export function patrolTerrainPiece(piece,version,displayReliquary=true,quickCD=false){
   if(piece.id==='largeRuin-2'){
-    const model={...piece,...(Number.isInteger(version)||!displayReliquary?mapReliquarySize:reliquarySize)};
+    const official=Number.isInteger(version);
+    const cd=official?version>=patrolCDVersion:quickCD;
+    const size=cd?patrolCDSize:official||!displayReliquary?mapReliquarySize:reliquarySize;
+    const model={...piece,...size};
+    if(cd)model.patrolCD=true;
+    else delete model.patrolCD;
     delete model.previousSecondRuin;
     return model;
   }
@@ -69,7 +74,7 @@ function validRolls(rolls){
 
 export function validatePatrolSetup(s){
   if(!fields(s,['version','layoutDie','roleRolls','roleChoice','formationsRevealed','deploymentComplete','firstRolls'])||
-    ![1,2,3,4,5,6,7,8].includes(s.version)||s.layoutDie!==null&&!die(s.layoutDie)||
+    ![1,2,3,4,5,6,7,8,patrolCDVersion].includes(s.version)||s.layoutDie!==null&&!die(s.layoutDie)||
     !validRolls(s.roleRolls)||!validRolls(s.firstRolls)||
     typeof s.formationsRevealed!=='boolean'||typeof s.deploymentComplete!=='boolean')return false;
   if(s.roleRolls.length&&s.layoutDie===null)return false;

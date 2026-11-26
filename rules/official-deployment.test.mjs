@@ -26,10 +26,11 @@ function step(game,act,args={},dice=[]){
 
 // Cache costly automatic layouts. Transitions and reloads operate on detached tables.
 const deployments=new Map();
-function reveal(map,defender=map==='B'?'orks':'marines'){
-  const key=map+'-'+defender;
+function reveal(map,defender=map==='B'?'orks':'marines',version=newPatrolSetup().version){
+  const key=map+'-'+defender+'-'+version;
   if(deployments.has(key))return structuredClone(deployments.get(key));
-  let game=step(fresh(),'official-roll-layout',{},[{A:2,B:4,C:6}[map]]);
+  const start=fresh();start.rules.officialSetup.version=version;
+  let game=step(start,'official-roll-layout',{},[{A:2,B:4,C:6}[map]]);
   assert.equal(stage(game),'role-roll');
   assert.equal(game.layout,null);
   game=checkpoint(step(game,'official-roll-role',{},[5,5]));
@@ -130,13 +131,18 @@ test('saved map, defender, turn, terrain and revealed reserve records agree with
 });
 
 test('the box shows all 15 terrain pieces before the draw; each saved map version restores its own structures and resumes through placement',()=>{
-  assert.equal(fresh().rules.officialSetup.version,8);
-  for(const version of [1,2,3,4,5,6,7,8])for(const [map,die] of [['A',1],['B',3],['C',5]]){
+  assert.equal(fresh().rules.officialSetup.version,9);
+  for(const version of [1,2,3,4,5,6,7,8,9])for(const [map,die] of [['A',1],['B',3],['C',5]]){
     let game=fresh();game.rules.officialSetup.version=version;
     assert.equal(game.pieces.filter(p=>visiblePatrolPiece(game.rules,p)).length,15);
     const tooEarly=snapshot(game);piece(tooEarly,'shockArray-1').removed=true;
     assert.throws(()=>restore(createTable(),tooEarly));
     game=checkpoint(step(game,'official-roll-layout',{},[die]));
+    assert.equal(!!piece(game,'largeRuin-2').patrolCD,version>=9);
+    if(version===8||version===9){
+      const wrongCast=snapshot(game);wrongCast.rules.officialSetup.version=version===9?8:9;
+      assert.throws(()=>restore(createTable(),wrongCast));
+    }
     assert.equal(!!piece(game,'smallRuin-1').previousSmallRuin,version<4);
     assert.equal(!!piece(game,'smallRuin-4').previousPipeRuin,version<5);
     for(const id of ['barricade-1','barricade-2']){
@@ -164,7 +170,7 @@ test('the box shows all 15 terrain pieces before the draw; each saved map versio
       const wrongPipe=snapshot(game);wrongPipe.rules.officialSetup.version=version===4?5:4;
       assert.throws(()=>restore(createTable(),wrongPipe),'the registered pipe wall changes between v4 and v5');
     }
-    const unsupported=snapshot(game);unsupported.rules.officialSetup.version=9;
+    const unsupported=snapshot(game);unsupported.rules.officialSetup.version=10;
     assert.throws(()=>restore(createTable(),unsupported));
     game=step(step(game,'official-roll-role',{},[1,4]),'official-defend');
     game=step(game,'form-enhance',{team:'marines',enhancement:'veterans'});
@@ -282,34 +288,35 @@ test('a pending group can be saved while being adjusted but cannot be committed 
   assert.equal(step(game,'official-place').rules.deployment.placed[0],'captain');
 });
 
-test('two legal elevations on the same landing cannot conceal overlapping bases on commit or restore',()=>{
-  let game=step(step(reveal('A','marines'),'official-select',{unit:'captain'}),'official-place');
+for(const [version,lx,lz,height] of [[8,-1.12,.56,2.30],[9,-1.25,0,3.00]]){
+test('v'+version+' cannot conceal overlapping bases at slightly different elevations on its landing',()=>{
+  let game=step(step(reveal('A','marines',version),'official-select',{unit:'captain'}),'official-place');
   game=step(game,'official-select',{unit:'warboss'});
   const ruin=piece(game,'largeRuin-2');
-  // Local (−1.12, +0.56) is inside the broken landing with clearance for
-  // either 50 mm base, measured in the ruin's local axes.
+  // Each point allows either 50 mm base on this edition's landing.
   const c=Math.cos(ruin.yaw),s=Math.sin(ruin.yaw);
-  const position={x:ruin.x-1.12*c+.56*s,z:ruin.z+1.12*s+.56*c};
+  const position={x:ruin.x+lx*c+lz*s,z:ruin.z-lx*s+lz*c};
   const first=piece(game,'warboss-1');
-  Object.assign(first,position,{elevation:2.30});
+  Object.assign(first,position,{elevation:height});
   assert.equal(patrolTerrainPlacement(first,[ruin]).error,'','the landing independently supports the first base');
   game=step(game,'official-place');
   game=step(step(game,'official-select',{unit:'landSpeeder'}),'official-place');
   game=step(game,'official-select',{unit:'weirdboy'});
   const other=piece(game,'weirdboy-1');
-  Object.assign(other,position,{elevation:2.31});
+  Object.assign(other,position,{elevation:height+.01});
   assert.equal(patrolTerrainPlacement(other,[ruin]).error,'','upper floor independently supports the second base');
   assert.match(patrolPlacementError(game),/다른 모델의 베이스/);
   assert.throws(()=>step(game,'official-place'),/다른 모델의 베이스/);
 
   other.elevation=0;
   const separated=checkpoint(step(game,'official-place'));
-  assert.equal(piece(separated,'warboss-1').elevation,2.30);
+  assert.equal(piece(separated,'warboss-1').elevation,height);
   assert.equal(piece(separated,'weirdboy-1').elevation,0);
   const forged=snapshot(separated);
-  piece(forged,'weirdboy-1').elevation=2.31;
+  piece(forged,'weirdboy-1').elevation=height+.01;
   assert.throws(()=>restore(createTable(),forged));
 });
+}
 
 test('objective polygons stay within the two boards, use the chosen home faction and measure partial bases',()=>{
   for(const map of ['A','B','C']){

@@ -10,6 +10,7 @@ export async function loadPortraitMap(){
 export const portraitId=id=>mapped?.[id]??id;
 export const portraitUrl=id=>'./reference/painted/'+portraitId(id)+'.webp';
 export function matchesPortraitPose(piece,initialYaw){
+  if(piece.patrolCD)return false;
   // The single reliquary portrait shows the red door. Retain it for the old
   // display pose. The corrected opening view faces the landing and saints.
   let bearing=initialYaw;

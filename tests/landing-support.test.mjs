@@ -13,8 +13,8 @@ function onRuin(ruin,x,z,elevation){
   return {x:ruin.x+c*x+s*z,z:ruin.z-s*x+c*z,elevation};
 }
 
-function pendingGretchin(){
-  let game={...createTable(),logs:[],rules:{...newBattle(),officialSetup:newPatrolSetup()}};
+function pendingGretchin(version=8){
+  let game={...createTable(),logs:[],rules:{...newBattle(),officialSetup:{...newPatrolSetup(),version}}};
   function act(act,args={},dice=[]){
     game=advanceOfficialSetup(game,{act,...args},()=>dice.shift());
   }
@@ -61,13 +61,12 @@ test('a Gretchin squad can deploy beside the fracture and reload, while its base
 });
 
 test('a previously completed deployment next to the fracture can resume',()=>{
-  const game=pendingGretchin(),ruin=piece(game,'largeRuin-2'),model=piece(game,'gretchin-1');
+  const game=pendingGretchin(5),ruin=piece(game,'largeRuin-2'),model=piece(game,'gretchin-1');
   Object.assign(model,onRuin(ruin,-1.3,.65,2.31));
   const previous=snapshot(advanceOfficialSetup(game,{act:'official-place'}));
   // This exact 25 mm placement was offered by the earlier mesh's floor
   // picker, accepted by official-place and restored in terrain revision 2.
   previous.terrainRevision=2;
-  previous.rules.officialSetup.version=5;
   Object.assign(piece(previous,model.id),onRuin(ruin,-.12,.94,2.31));
   const resumed=restore(createTable(),previous);
   assert.deepEqual(resumed.layout,game.layout);

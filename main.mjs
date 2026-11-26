@@ -109,6 +109,7 @@ function toast(message){const n=$('notice');n.textContent=message;n.hidden=false
 function log(message){if(message){game.logs.push(String(message));if(game.logs.length>100)game.logs.shift()}}
 function checkpoint(){past.push(snapshot(game));if(past.length>100)past.shift();future.length=0}
 function piece(id){return game.pieces.find(p=>p.id===id)}
+function displayedPiece(id){return game.training?shownTable().pieces.find(p=>p.id===id):piece(id)}
 function persist(){try{localStorage.setItem(storageKey,JSON.stringify(snapshot(game)));$('save-status').textContent='자동 저장됨'}catch{$('save-status').textContent='파일 저장 필요'}}
 function notify(){for(const fn of subscribers)fn()}
 function canRestoreFrom(stack){
@@ -176,10 +177,11 @@ function history(){
 }
 function selection(){
   const p=piece(active);$('selection').hidden=!p;$('sight-tools').hidden=!p||p.removed||p.faction==='terrain';
-  $('studio-tools').hidden=!original||!p||!studioGroupFor(p);if(!p)return;
+  const displayed=displayedPiece(active);
+  $('studio-tools').hidden=!original||!studioGroupFor(displayed);if(!p)return;
   const rally=!game.training&&game.rules?.rallyPlan,preview=rally?.selected?.[p.id];
   $('piece-name').textContent=p.name;
-  $('piece-spec').textContent=factionNames[p.faction]+' · '+(p.faction==='terrain'?'지면 점유 폭':'베이스')+' '+Math.round(p.baseWidth*25.4)+' × '+Math.round(p.baseDepth*25.4)+' mm';
+  $('piece-spec').textContent=factionNames[p.faction]+(displayed?.patrolCD?' · 패트롤 지도 조립 C+D':'')+' · '+(p.faction==='terrain'?'지면 점유 폭':'베이스')+' '+Math.round((displayed??p).baseWidth*25.4)+' × '+Math.round((displayed??p).baseDepth*25.4)+' mm';
   const inReserve=Object.values(game.rules?.reserves??{}).some(ids=>ids.includes(p.id));
   $('elevation').value=(preview??p).elevation||0;
   $('elevation').disabled=$('rotate').disabled=!!game.rules?.terrifyingCharge||!!rally&&!preview;
@@ -224,10 +226,10 @@ function roster(){
     for(const [kind,group] of groups){
       const title=kind==='boy'?'오크 보이즈':group[0].name.replace(/\s*[#\d]+$/u,'');
       const item=detail(kind,title,'× '+group.length,'unit',!!search||opened.has(kind));
-      if(original){const thumbnail=document.createElement('img');thumbnail.src=portraitUrl(group[0].id);thumbnail.alt='';thumbnail.className='roster-photo';item.firstChild.prepend(thumbnail)}
+      if(original&&!displayedPiece(group[0].id)?.patrolCD){const thumbnail=document.createElement('img');thumbnail.src=portraitUrl(group[0].id);thumbnail.alt='';thumbnail.className='roster-photo';item.firstChild.prepend(thumbnail)}
       const buttons=document.createElement('div');buttons.className='models';
       group.forEach((p,i)=>{const b=document.createElement('button');
-        if(original){const image=document.createElement('img');image.src=portraitUrl(p.id);image.alt='';image.loading='lazy';b.append(image)}
+        if(original&&!displayedPiece(p.id)?.patrolCD){const image=document.createElement('img');image.src=portraitUrl(p.id);image.alt='';image.loading='lazy';b.append(image)}
         b.append(document.createTextNode(String((p.variant??i)+1).padStart(2,'0')));b.title=p.name+' · '+p.id;b.setAttribute('aria-label',b.title);
         b.className=[p.id===active?'selected':'',p.removed?'gone':''].join(' ');b.addEventListener('click',()=>select(p.id));buttons.append(b)});
       item.append(buttons);d.append(item);
@@ -547,7 +549,7 @@ $('camera').onclick=()=>{reference(false);exitSight();if(scene)$('camera').textC
 $('home').onclick=()=>{reference(false);exitSight();scene?.home();$('camera').textContent='탑뷰'};$('focus').onclick=()=>{reference(false);exitSight();scene?.focus(active)};
 $('rotate').onclick=rotate;$('remove').onclick=()=>{const p=piece(active);if(p)remove(p.id,!p.removed)};
 $('sight').onclick=()=>{reference(false);setMode('sight');$('hint').textContent='시선을 확인할 상대 기물을 클릭하세요.'};
-$('studio-view').onclick=()=>{const p=piece(active);if(p)openStudioViewer(p)};
+$('studio-view').onclick=()=>{const p=displayedPiece(active);if(original&&p)openStudioViewer(p)};
 $('elevation').onchange=()=>{const p=piece(active),n=$('elevation').valueAsNumber;if(!p||!Number.isFinite(n))return selection();
   editPose(p,{elevation:Math.min(20,Math.max(0,n))},p.name+' 높이 조정')};
 $('save').onclick=()=>{const data=new Blob([JSON.stringify(snapshot(game),null,2)],{type:'application/json'});
@@ -625,7 +627,7 @@ const api={
     }
     if(action.act==='official-new'){
       if(game.training||game.rules&&game.rules.status!=='setup'||officialPreparing(game.rules))return;
-      next=fresh();next.pieces=createMapTable().pieces;next.rules={...newBattle(),officialSetup:newPatrolSetup()};
+      next=fresh();next.pieces=createMapTable({patrolCD:true}).pieces;next.rules={...newBattle(),officialSetup:newPatrolSetup()};
     }else next=advanceOfficialSetup(game,action);
     const setup=next.rules.officialSetup;
     const messages={

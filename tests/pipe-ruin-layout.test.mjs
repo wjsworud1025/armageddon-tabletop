@@ -35,7 +35,7 @@ test('the printed pipes and return intersect the cast on all maps, and a Gretchi
 
 test('version 5 changes two red-home slots on A/B and one on C, preserving mats, scoring and previous casts',()=>{
   for(const map of ['A','B','C']){
-    const previous=layoutGeometry(map,4),current=layoutGeometry(map);
+    const previous=layoutGeometry(map,4),current=layoutGeometry(map,5);
     assert.deepEqual(previous.areas,current.areas);
     assert.deepEqual(previous.terrainAreas,current.terrainAreas);
     assert.deepEqual(current.terrainAreas.find(a=>a.id==='red-home').terrainIds,

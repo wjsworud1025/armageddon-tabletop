@@ -53,7 +53,7 @@ function facade(s){
   return {slab,panel,rod,molding,louvers,band,pier,crossed};
 }
 
-function doorWall(s){
+export function doorWall(s){
   const {slab,panel,rod,molding,louvers,band,pier,crossed}=facade(s);
   slab(iron,[[-.11,0],[4.86,0],[4.79,.10],[4.52,.20],[4.42,.23],
     [4.43,.49],[4.30,.57],[4.30,.96],[4.18,1.19],[4.10,1.28],[4.05,1.61],

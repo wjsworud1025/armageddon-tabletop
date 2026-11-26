@@ -12,11 +12,14 @@ function acrossRuin(start,end){
   const a=new T.Vector3(...start),b=new T.Vector3(...end);
   return [-6,3].map(x=>a.clone().lerp(b,(x-a.x)/(b.x-a.x)).toArray());
 }
-function aimFixture(save,offset,y,wall,pickY,alongX,viewLine){
+function aimFixture(save,offset,y,wall,pickY,alongX,viewLine,mapCasting){
   const data=structuredClone(save),pieces=createTable().pieces;
   data.training=undefined;data.layout=null;data.rules=startBattle(newBattle(),'marines',5);data.rules.step=2;
-  const scale=wall==='largeRuin-2'?3/2.30:1;
-  if(wall==='largeRuin-2')data.reliquaryRevision=2;
+  const scale=wall==='largeRuin-2'&&!mapCasting?3/2.30:1;
+  if(mapCasting){
+    data.layout={map:'B',blue:'marines'};
+    if(mapCasting==='CD')data.reliquaryRevision=3;else delete data.reliquaryRevision;
+  }else if(wall==='largeRuin-2')data.reliquaryRevision=2;
   offset*=scale;y*=scale;
   const surfacePoints=viewLine?.map(p=>new T.Vector3(...p).multiplyScalar(scale));
   const models=[observer,target].map((id,i)=>{
@@ -89,7 +92,7 @@ export function checkBarricadeSight(tools){
   ]);
 }
 
-async function checkSightSamples({save,upload,state,js,click,send,screenshot},samples){
+export async function checkSightSamples({save,upload,state,js,click,send,screenshot},samples,mapCasting){
   async function select(key,value){
     await js(`(()=>{const el=document.querySelector('[data-field="${key}"]');el.value=${JSON.stringify(value)};el.dispatchEvent(new Event('change',{bubbles:true}));})()`);
   }
@@ -99,7 +102,7 @@ async function checkSightSamples({save,upload,state,js,click,send,screenshot},sa
     await send('Input.dispatchMouseEvent',{type:'mouseReleased',...pt,button:'left',buttons:0,clickCount:1});
   }
   for(const [label,wall,offset,y,pickY,blocked,alongX,viewLine] of samples){
-    await upload(aimFixture(save,offset,y,wall,pickY,alongX,viewLine));await click('[data-tab=battle]');
+    await upload(aimFixture(save,offset,y,wall,pickY,alongX,viewLine,mapCasting));await click('[data-tab=battle]');
     await select('fighter',observer);await select('target',target);
     await click(inspectButton(observer,target));await click('#surface-start');
     assert.match(await js('document.querySelector("#surface-status").textContent'),/시선을 시작할 점/);

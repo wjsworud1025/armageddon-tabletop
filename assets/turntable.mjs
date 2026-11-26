@@ -15,7 +15,7 @@ const exemplar={captain:1,librarian:2,intercessor:3,vanguard:4,landSpeeder:5,war
   barricade:17,smallRuin:18};
 
 export function studioGroupFor(piece,{allowExemplar=false}={}) {
-  if(!piece) return null;
+  if(!piece||piece.patrolCD) return null;
   if(exact[piece.id]) return exact[piece.id];
   if(piece.kind==='pylon') return 14;
   if(!allowExemplar) return null;

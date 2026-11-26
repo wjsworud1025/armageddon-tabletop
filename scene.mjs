@@ -81,7 +81,7 @@ export async function buildScene(canvas,api) {
     try{reverse=await reverseRequest}finally{reverseRequest=null}}
   if(['left','right','reverse'].includes(api.game().surface))await loadReverse();
   const objects=new Map(),painted=localArt?await paintedFigures(T,game.pieces):new Map();
-  const studio=studioScene(T,scene,localArt?game.pieces:[],()=>sync());
+  const studio=studioScene(T,scene,localArt?api.template.pieces:[],()=>sync());
   const initialYaw=new Map(api.template.pieces.map(p=>[p.id,p.yaw]));
   for(const obj of painted.values())scene.add(obj);
   let usePaint=localArt;
@@ -219,7 +219,8 @@ export async function buildScene(canvas,api) {
         // The earlier photo edition already displayed scans of these pieces.
         const previous=p.previousSecondRuin||p.previousPipeRuin||((p.previousSmallRuin||p.previousBarricade||p.previousWartrakkBanner)&&!edition.current.userData.reconstruction);
         let required=edition.current;
-        if(previous)required=edition.previous??=createPiece(T,p);
+        if(p.patrolCD)required=edition.patrolCD??=createPiece(T,p);
+        else if(previous)required=edition.previous??=createPiece(T,p);
         else if(p.id==='largeRuin-2'&&p.baseWidth===5.2)required=edition.intermediate??=createPiece(T,p);
         if(required!==objects.get(p.id)){
           scene.remove(objects.get(p.id));required.userData.pieceId=p.id;

@@ -169,7 +169,7 @@ function officialStateOK(r,records){
     (!d.pending||left.has(d.pending)&&groupTeam(d.pending)===next);
 }
 
-export function validateRulesState(value,pieceRecords=null,layout=undefined,displayReliquary=true) {
+export function validateRulesState(value,pieceRecords=null,layout=undefined,displayReliquary=true,quickCD=false) {
   if (value==null) return true;
   if (fields({hp},['hp'])(value)) return true;
   if(pieceRecords&&(!Array.isArray(pieceRecords)||pieceRecords.some(p=>!p||!catalog.has(p.id))))return false;
@@ -217,7 +217,7 @@ export function validateRulesState(value,pieceRecords=null,layout=undefined,disp
   const window=value.overwatch,shootingOverwatch=window?.stage==='shoot';
   const ranged=value.step===2||shootingOverwatch,shootingTeam=window?.team??value.active;
   const savedPieces=()=>pieceRecords.map(({id,x,z,elevation,yaw,removed})=>patrolTerrainPiece(
-    {...catalog.get(id),x,z,elevation,yaw,removed:!!removed},value.officialSetup?.version,displayReliquary));
+    {...catalog.get(id),x,z,elevation,yaw,removed:!!removed},value.officialSetup?.version,displayReliquary,quickCD));
   if(value.terrifyingCharge){
     const w=value.terrifyingCharge;
     if(groupTeam(w.unit)!=='marines'||w.targets.some(key=>groupTeam(key)!=='orks')||

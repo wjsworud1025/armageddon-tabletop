@@ -16,8 +16,7 @@ const roundtrip=game=>restore(createTable(),snapshot(game));
 
 test('only the Wartrakk in a saved official game carries the banner belonging to that edition',()=>{
   const game=fresh(),current=newPatrolSetup();
-  assert.equal(current.version,8);
-  for(const version of [1,6,7,8]){
+  for(const version of new Set([1,6,7,8,current.version])){
     game.rules={...newBattle(),officialSetup:{...current,version}};
     const saved=snapshot(game);
     assert.ok(saved.pieces.every(p=>!Object.hasOwn(p,'previousWartrakkBanner')));

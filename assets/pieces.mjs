@@ -1,6 +1,7 @@
 import {castPiece, castGeometry, plinth} from './sculpt.mjs';
 import {marine, speeder} from './marines.mjs';
 import {greenskin, wartrakk} from './orks.mjs';
+import {patrolCDRuin} from './patrol-cd-ruin.mjs';
 import {scenery,legacySecondRuin,legacySmallRuin,legacyPipeRuin,legacyBarricade} from './terrain.mjs';
 
 const marines=new Set(['captain','librarian','intercessor','vanguard']);
@@ -19,6 +20,8 @@ export function pieceGeometry(THREE,item) {
 }
 
 function buildPiece(THREE,item,cast) {
+  if(item.patrolCD===true&&item.id==='largeRuin-2'&&item.kind==='largeRuin')
+    return cast(THREE,{...item,kind:'patrol-cd-ruin'},patrolCDRuin);
   if(item.previousBarricade&&item.kind==='barricade'){
     const previous={...item,kind:'previous-barricade',baseWidth:3.8,baseDepth:.65};
     return cast(THREE,previous,s=>legacyBarricade(s,previous));
