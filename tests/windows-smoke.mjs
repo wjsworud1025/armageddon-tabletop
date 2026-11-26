@@ -18,6 +18,7 @@ import {checkVehicleClearance} from './browser-vehicle-clearance.mjs';
 import {checkWartrakkBanner} from './browser-wartrakk-banner.mjs';
 import {checkRallyPlacement} from './browser-rally-placement.mjs';
 import {checkTerrifyingCharge} from './browser-terrifying-charge.mjs';
+import {checkMatchRestart} from './browser-match-restart.mjs';
 import {checkPatrolCDPresentation} from './browser-patrol-cd-presentation.mjs';
 import {checkTerrainAreas} from './browser-terrain-areas.mjs';
 import {checkAreaCover} from './browser-area-cover.mjs';
@@ -90,6 +91,7 @@ try{
   await checkWartrakkBanner(shootingTools);
   await checkRallyPlacement({...shootingTools,send});
   await checkTerrifyingCharge(shootingTools);
+  await checkMatchRestart({...shootingTools,send});
   await checkPatrolCDPresentation({...shootingTools,send});
   await checkAreaCover(shootingTools);
   await screenshot('01-table.png');

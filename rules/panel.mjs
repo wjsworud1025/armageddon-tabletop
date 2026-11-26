@@ -630,7 +630,7 @@ export function mountRules(container,api) {
       top+=detail('deployment','교대 배치',setup);
     } else if (state.status==='finished') {
       const winner=controlObjective(state.vp.marines,state.vp.orks);
-      top=chunk('대전 종료','<b class="br-phase">'+(winner?teams[winner]+' 승리':'무승부')+'</b><p>'+state.vp.marines+' 대 '+state.vp.orks+'</p>');
+      top=chunk('대전 종료','<b class="br-phase">'+(winner?teams[winner]+' 승리':'무승부')+'</b><p>'+state.vp.marines+' 대 '+state.vp.orks+'</p>'+btn('match-restart','새 게임'));
     } else {
       const endingMove=state.step===1&&!state.overwatch;
       const reaction=state.overwatch;
@@ -825,6 +825,10 @@ export function mountRules(container,api) {
     const button=event.target.closest('button'),action=button?.dataset.act;
     if (!action) return;
     const state=read();
+    if(action==='match-restart'){
+      if(state.status==='finished')api.requestNewGame();
+      return;
+    }
     if(state.terrifyingCharge){
       if(!['terrifying-use','terrifying-pass'].includes(action))return;
       try{
