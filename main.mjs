@@ -10,7 +10,8 @@ import {officialPreparing,pendingPatrolPiece,visiblePatrolPiece,advanceOfficialS
 import {newPatrolSetup} from './rules/patrol-setup.mjs';
 import {patrolTerrainLevels} from './rules/patrol-terrain-placement.mjs';
 import {canSetPatrolSight,patrolSightStatus,reconcilePatrolSight,setPatrolSight} from './rules/patrol-sight.mjs';
-import {mountRules} from './rules/panel.mjs';
+import {detectionLabel,mountRules} from './rules/panel.mjs';
+import {patrolDetection} from './rules/patrol-detection.mjs';
 import {baseDistance,place,restore,snapshot,translateFormation} from './state.mjs';
 import {buildScene} from './scene.mjs';
 import {photoFit} from './photo-camera.mjs';
@@ -539,7 +540,11 @@ function showSightRecord(pair,stage){
   $('sight-record').hidden=!inspectedPatrolPair;
   if(!inspectedPatrolPair)return;
   const verdict=patrolSightStatus(game.rules,game.pieces,...pair);
-  $('sight-verdict').textContent=piece(pair[0]).name+' → '+piece(pair[1]).name+' · '+verdictNames[verdict];
+  const result=patrolDetection(game.rules,game.pieces,...pair,game.layout,api.getDistance);
+  const label=$('sight-verdict');
+  label.dataset.detection=result.status;label.dataset.detectionTarget=pair[1];
+  if(result.reason)label.dataset.detectionReason=result.reason;else delete label.dataset.detectionReason;
+  label.textContent=[piece(pair[0]).name+' → '+piece(pair[1]).name,'시야 기록 '+verdictNames[verdict],detectionLabel(result)].filter(Boolean).join(' · ');
   for(const value of ['visible','blocked'])$('sight-'+value).setAttribute('aria-pressed',String(verdict===value));
 }
 for(const value of ['visible','blocked'])$('sight-'+value).onclick=()=>{

@@ -1,6 +1,7 @@
 import {getProfile} from './profiles.mjs';
+import {recordRangedAttack} from './ranged-history.mjs';
 import {currentHP,groupId,modelProfile,character,roll,attackThresholds,allocationGroups} from './battle.mjs';
-import {attackPackets,weaponFor,closePacket} from './declarations.mjs';
+import {attackPackets,weaponFor,closePacket,precisionCandidates} from './declarations.mjs';
 import {canCommandReroll,useCommandReroll} from './command-reroll.mjs';
 
 export const attackRollNames={attacks:'공격 횟수',hit:'명중',wound:'상처',save:'방어',damage:'피해량'};
@@ -48,7 +49,7 @@ function* procedure(state,pieces,packet,preferred){
   const devastating=weapon.devastating?woundDice.filter(threshold.critical).length:0;
   const damage=[],saves=[];
   if(wounds){
-    const characters=defenders.filter(character);
+    const characters=weapon.precision?precisionCandidates(state,pieces,packet):[];
     let precision=null;
     if(weapon.precision&&characters.length&&defenders.length>1)
       precision=yield {kind:'precision',...attacker,choices:[null,...characters.map(p=>p.id)],hits,wounds};
@@ -168,6 +169,8 @@ export function stepAttackRoll(state,pieces,index,action={type:'begin'},random=M
   }
   while(!next.done){
     const event=next.value,record={kind:event.kind};
+    if((state.step===2||plan.mode==='overwatch')&&(event.kind==='hit'||event.kind==='wound'))
+      state=recordRangedAttack(state,plan.unit);
     if(event.sizes)record.raw=event.sizes.map(sides=>roll(sides,random));
     records.push(record);
     if(!event.sizes||(plan.mode!=='overwatch'||event.kind!=='hit')&&canCommandReroll(state,event.unit,event.team)){

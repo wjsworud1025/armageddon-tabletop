@@ -2,7 +2,7 @@ import {unitId} from './profiles.mjs';
 import {currentHP,groupId,modelProfile,engaged,controlObjective} from './battle.mjs';
 
 export const patrolMissions={marines:'Honour the Chapter',orks:"Duff ’em Up!"};
-const turnNumber=s=>(s.round-1)*2+Number(s.active!==s.first)+1;
+import {playerTurnNumber as turnNumber} from './ranged-history.mjs';
 export function recordLosses(state,pieces) {
   if (state.status!=='playing') return state;
   const present=new Set();

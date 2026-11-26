@@ -104,11 +104,23 @@ A/B/C 맵에서는 게임이 상대 배치 구역을 검사한다. 제품 전장
 
 ## 상대 이동 종료 시의 경계 사격
 
-11판 기본 규칙 15.08–15.09에 따라 상대 이동 단계가 끝날 때 1 CP를 써서 교전 중이 아닌 아군 분대 한 곳이 스냅 사격한다. 24″ 제한은 분대 간 최단 거리다. 각 사수에서 보이는 모델과 해당 무기의 사거리는 기존 사격 절차에서 확인한다. 13.09의 은폐 여부와 탐지 거리는 플레이어가 판정해 시야에 반영한다. 실제 턴과 페이즈를 유지하므로 자기 사격 페이즈에만 발동하는 능력은 적용 대상에서 빠진다. [공식 기본 규칙 57쪽](https://assets.warhammer-community.com/eng_01-06_warhammer40k_new40k_core_rules-was6fbu1ix-hfewhmxyiy.pdf#page=57) · [공식 컴뱃 패트롤 앱 안내](https://www.warhammer-community.com/en-gb/articles/2akzkx92/combat-patrol-is-now-live-in-your-app/)
+11판 기본 규칙 15.08–15.09에 따라 상대 이동 단계가 끝날 때 1 CP를 써서 교전 중이 아닌 아군 분대 한 곳이 스냅 사격한다. 24″ 제한은 분대 간 최단 거리다. 각 사수에서 보이는 모델과 해당 무기의 사거리는 기존 사격 절차에서 확인한다. 일반 사격과 같은 §13.09 은폐 판정을 적용한다. 실제 턴과 페이즈를 유지하므로 자기 사격 페이즈에만 발동하는 능력은 적용 대상에서 빠진다. [공식 기본 규칙 57쪽](https://assets.warhammer-community.com/eng_01-06_warhammer40k_new40k_core_rules-was6fbu1ix-hfewhmxyiy.pdf#page=57) · [공식 컴뱃 패트롤 앱 안내](https://www.warhammer-community.com/en-gb/articles/2akzkx92/combat-patrol-is-now-live-in-your-app/)
 
 명중 굴림은 수정 전 6만 일반 명중으로 처리하고 명중 재굴림은 생략한다. 토렌트는 24.37에 따라 명중 굴림을 건너뛴다. 최초 인쇄 규칙 이후에 추가된 ‘스냅 사격의 명중은 치명타가 되지 않는다’는 조건은 현재 패트롤 앱 규칙의 공개 전사에서 확인했다. 따라서 연속 명중과 치명타에 의한 자동 상처는 이 사격에서 발생하지 않는다. [기본 규칙과 무기 능력 원본](https://assets.warhammer-community.com/eng_01-06_warhammer40k_new40k_core_rules-was6fbu1ix-hfewhmxyiy.pdf) · [패트롤판 15.09 전사](https://wahapedia.ru/wh40k11ed_cp/the-rules/core-rules/#Snap-Shooting)
 
 ## 사수 시점과 모델 가시성
+
+### 지형 구역의 은폐와 탐지거리
+
+§13.09 초판은 밀집 지형을 대상으로 한다. 10월 패트롤 앱 규칙의 공개 전사에는 경량 지형도 포함하는 정오표가 있다. 보병·야수·군집 모델의 베이스가 해당 기물이 있는 구역에 일부라도 걸치고, 그 분대가 현재 플레이어 턴과 바로 직전 플레이어 턴에 원거리 공격을 한 적이 없으면 그 모델은 은폐된다. 첫 턴에는 직전 턴의 조건이 충족된다. 경계 사격도 실제로 공격했다면 해당 턴에 기록된다. 사격할 분대를 선택하고 공격 없이 끝낸 경우 은폐를 유지한다는 해석은 11월 세계 선수권 대회 FAQ에도 명시돼 있다. [공식 초판 50쪽](https://assets.warhammer-community.com/eng_01-06_warhammer40k_new40k_core_rules-was6fbu1ix-hfewhmxyiy.pdf#page=50) · [패트롤 앱 §13.09 정오표·13.09.01 전사](https://wahapedia.ru/wh40k11ed_cp/the-rules/core-rules/#Hidden) · [공식 세계 선수권 대회 FAQ §13.09](https://warcomprod2024productionstorage.s3.eu-west-2.amazonaws.com/worldchamps2026faqs/wcw2026_40k_update-z28qslftvl-ooradhsjdb.pdf#page=1)
+
+사수에서 **은폐된 적 모델**까지 15″를 넘으면 두 조형 사이에 시선이 통해도 그 모델을 보이는 표적으로 셀 수 없다. 같은 분대의 다른 모델이 보이면 그 분대에 사격할 수 있고, 무기 사거리는 분대에서 가장 가까운 모델까지 잰다. §13.11.01에서는 중간의 밀집 지형 기물로 은폐 모델의 일부가 가려지면 탐지거리가 3″ 줄어든다. 게임은 12″ 초과~15″ 구간에서 플레이어에게 그 사수의 실제 시선을 확인하도록 안내한다. 12″ 이내에서도 벽이 표적 전체를 가리면 시야를 가림으로 기록한다. [패트롤 앱 §13.11.01 전사](https://wahapedia.ru/wh40k11ed_cp/the-rules/core-rules/#Gone-to-Ground) · [코어 규칙 §04.02·06.01](https://assets.warhammer-community.com/eng_01-06_warhammer40k_new40k_core_rules-was6fbu1ix-hfewhmxyiy.pdf#page=16)
+
+패트롤 지도 A·B·C에는 경량 또는 밀집 기물이 들어간 구역이 각각 열 곳 있다. 엄폐는 분대 단위로, 탐지는 사수·적 모델 쌍마다 확인한다. 과거 저장에 사격 이력이 부족하거나 옮긴 기물이 구역에 걸쳤는지 확정할 수 없으면 화면이 수동 확인 사유를 표시한다. [패트롤 도면과 색상 범례의 출처](../data/PATROL-TERRAIN-AREAS.md)
+
+호위병이 보여서 분대를 표적으로 삼았더라도 정밀 피해를 지휘관에게 배정하려면 그 지휘관이 공격 묶음의 사수 한 명 이상에게 보여야 한다. 지휘관이 모두의 탐지거리 밖에서 은폐 중이면 정밀 배정 목록에서 제외한다. 남은 후보의 실제 시야는 플레이어가 확인한다. [공식 코어 규칙 §24.28](https://assets.warhammer-community.com/eng_01-06_warhammer40k_new40k_core_rules-was6fbu1ix-hfewhmxyiy.pdf) · [패트롤 앱 §13.09 전사](https://wahapedia.ru/wh40k11ed_cp/the-rules/core-rules/#Hidden)
+
+### 고지 사격과 사수 시점
 
 패트롤 고지 사격은 사수가 지면에 놓인 지형의 3″ 이상 상판에서 베이스 전체를 지지받고, 보이는 표적 분대에 지상 모델이 한 명 이상 있을 때 적용한다. 모델의 Y 좌표만 올리거나 베이스 일부가 가장자리 밖으로 나간 경우에는 지형 지지를 확인할 수 없다. 베이스를 지면에 둔 비행 스탠드 모델은 지상 표적에 포함한다. 스타터 두 편성에는 TOWERING 모델이 없다. [공식 코어 규칙 §13.06·22.05](https://assets.warhammer-community.com/eng_01-06_warhammer40k_new40k_core_rules-was6fbu1ix-hfewhmxyiy.pdf#page=73)
 

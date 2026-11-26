@@ -15,6 +15,7 @@ import {getProfile} from './profiles.mjs';
 import {newBattle,startBattle} from './battle.mjs';
 import {checkShootingReactions} from './browser-shooting-reactions.mjs';
 import {checkOverwatch} from '../tests/browser-overwatch.mjs';
+import {checkDetection} from '../tests/browser-detection.mjs';
 import {checkCoreStratagems} from './browser-core-stratagems.mjs';
 import {checkTraining} from './browser-training.mjs';
 import {checkTrainingTwo} from './browser-training-two.mjs';
@@ -91,6 +92,7 @@ try {
     await send('Page.reload');await until(()=>js('!!window.tabletopView'));await click('[data-tab=battle]');
   }};
   await checkOverwatch(trainingTools);
+  await checkDetection(trainingTools);
   console.log('Passed end-of-movement Overwatch, passing, Snap Shooting, casualties and reload');
   await checkSmallRuin(trainingTools);
   console.log('Passed shrine and pipe ruin wall, courtyard and archived table picking');

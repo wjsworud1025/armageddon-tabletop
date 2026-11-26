@@ -1,4 +1,5 @@
 import {validateRulesState} from './rules/validate.mjs';
+import {recoverRangedHistory} from './rules/ranged-history.mjs';
 import {reconcilePatrolSight} from './rules/patrol-sight.mjs';
 import {measureFootprints} from './ruler.mjs';
 import {validateTrainingOne} from './rules/training-one.mjs';
@@ -94,6 +95,7 @@ export function restore(template, save) {
       throw Error('경계 사격을 선언한 전장의 기물 위치가 올바르지 않습니다.');
   }
   game.rules = save.rules && typeof save.rules === 'object' ? structuredClone(save.rules) : null;
+  game.rules = recoverRangedHistory(game.rules);
   game.rules = reconcilePatrolSight(game.rules,game.pieces);
   if(save.training)game.training=structuredClone(save.training);
   else delete game.training;

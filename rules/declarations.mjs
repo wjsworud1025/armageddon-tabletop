@@ -1,10 +1,12 @@
 import {getProfile} from './profiles.mjs';
+import {recordRangedAttack} from './ranged-history.mjs';
 import {attackSkill,character,currentHP,groupId,weaponSlot,diceValue,resolveAttack,queueHazard} from './battle.mjs';
 import {effectWeapon} from './patrol.mjs';
 import {openCounteroffensive} from '../fight-sequence.mjs';
-import {captureSightBoard,forgetPatrolSightUnit,patrolSightTarget,sightBoardMatches} from './patrol-sight.mjs';
+import {captureSightBoard,forgetPatrolSightUnit,patrolSightStatus,patrolSightTarget,sightBoardMatches} from './patrol-sight.mjs';
 import {patrolHighGround,patrolGroundLevel} from './patrol-terrain-placement.mjs';
 import {patrolAreaCover} from './patrol-area-cover.mjs';
+import {detectionMap,patrolDetection} from './patrol-detection.mjs';
 import {isOverwatchShooting,overwatchTargetEligible} from './overwatch.mjs';
 
 const unitOrder=(s,id)=>s.units[id]||{};
@@ -34,8 +36,9 @@ export function draftRestriction(state,pieces,actor,index,target) {
   return '';
 }
 
-export function appendDeclaration(state,pieces,rows) {
-  if(isOverwatchShooting(state))return appendSightedDeclaration(state,pieces,rows);
+export function appendDeclaration(state,pieces,rows,distance,layout=null) {
+  if(isOverwatchShooting(state)||state.step===2&&detectionMap(state,layout))
+    return appendSightedDeclaration(state,pieces,rows,distance,layout);
   return appendRows(state,pieces,rows);
 }
 function appendRows(state,pieces,rows){
@@ -61,8 +64,9 @@ function appendRows(state,pieces,rows){
   return next;
 }
 
-export function lockDeclaration(state,pieces,eligibleMelee=[]) {
-  if(isOverwatchShooting(state))return lockSightedDeclaration(state,pieces,eligibleMelee);
+export function lockDeclaration(state,pieces,eligibleMelee=[],distance,layout=null) {
+  if(isOverwatchShooting(state)||state.step===2&&detectionMap(state,layout))
+    return lockSightedDeclaration(state,pieces,eligibleMelee,distance,layout);
   return lockRows(state,pieces,eligibleMelee);
 }
 function lockRows(state,pieces,eligibleMelee) {
@@ -97,7 +101,7 @@ function sightedRows(state,pieces,rows,distance,layout){
     if(!profile?.weapons[row.weapon])return null;
     const weapon=weaponFor(state,actor,row.weapon);
     const targets=pieces.filter(p=>getProfile(p)&&groupId(state,p)===row.target);
-    const target=patrolSightTarget(state,pieces,row.actor,targets.map(p=>p.id),weapon.range,distance);
+    const target=patrolSightTarget(state,pieces,row.actor,targets.map(p=>p.id),weapon.range,distance,layout);
     if(!target.visible.length)return null;
     const plunging=plungingFireAtDeclaration(state,pieces,actor,weapon,targets,true);
     // 13.08 applies against each attack after targets are selected (04.02.02).
@@ -160,12 +164,14 @@ export function lockSightedDeclaration(state,pieces,eligibleMelee=[],distance,la
   const plan=state.declaration;
   if(!plan||plan.locked||pendingManualCover(state,pieces).length)return null;
   const checked=sightedRows(state,pieces,plan.rows,distance,layout);
-  return checked&&lockRows({...state,declaration:{...plan,rows:checked}},pieces,eligibleMelee);
+  if(!checked)return null;
+  const map=(state.step===2||isOverwatchShooting(state))&&detectionMap(state,layout);
+  return lockRows({...state,declaration:{...plan,rows:checked,...(map?{detectionMap:map}:{})}},pieces,eligibleMelee);
 }
 
 // Recheck only visibility for an unresolved 22.05 modifier. Original
 // weapon, unit target, distance, and damage allocation remain untouched.
-export function plungingSightCandidates(state,pieces,index){
+export function plungingSightCandidates(state,pieces,index,layout=null){
   const plan=state.declaration,row=plan?.rows[index];
   if(state.status!=='playing'||state.step!==2||!Number.isInteger(index)||!plan?.locked||plan.attackRoll||plan.precisionRoll||
     !row?.plunging||row.done||plan.focus&&plan.focus!==row.target)return [];
@@ -174,11 +180,12 @@ export function plungingSightCandidates(state,pieces,index){
   const targets=pieces.filter(p=>getProfile(p)&&groupId(state,p)===row.target&&currentHP(state,p)>0);
   if(targets.some(p=>row.plungingVisible.includes(p.id))||
     !plungingFireAtDeclaration(state,pieces,actor,weapon,targets,true))return [];
-  return targets;
+  const table=layout??(plan.detectionMap?{map:plan.detectionMap}:null);
+  return targets.filter(p=>patrolDetection(state,pieces,row.actor,p.id,table).status!=='hidden');
 }
 
-export function confirmPlungingSight(state,pieces,index,targetId){
-  if(!plungingSightCandidates(state,pieces,index).some(p=>p.id===targetId))return null;
+export function confirmPlungingSight(state,pieces,index,targetId,layout=null){
+  if(!plungingSightCandidates(state,pieces,index,layout).some(p=>p.id===targetId))return null;
   const plan=state.declaration;
   const rows=plan.rows.map((r,i)=>i===index?{...r,plungingVisible:[...r.plungingVisible,targetId]}:r);
   return {...state,declaration:{...plan,rows}};
@@ -213,6 +220,18 @@ export function attackPackets(state,pieces) {
   return pending?all.filter(p=>p.index===pending.index):all;
 }
 
+// 24.28 checks visibility of the character at allocation, from at least one
+// model making these attacks. Ordinary defender allocation still includes
+// characters. A locked older save replays with its original choices.
+export function precisionCandidates(state,pieces,packet){
+  const plan=state.declaration;
+  const characters=pieces.filter(p=>character(p)&&groupId(state,p)===packet.target&&currentHP(state,p)>0);
+  if(!plan.detectionMap)return characters;
+  const attackers=packet.indices.map(i=>item(pieces,plan.rows[i].actor)).filter(p=>p&&currentHP(state,p)>0);
+  return characters.filter(p=>attackers.some(a=>patrolSightStatus(state,pieces,a.id,p.id)!=='blocked'&&
+    patrolDetection(state,pieces,a.id,p.id,{map:plan.detectionMap}).status!=='hidden'));
+}
+
 export function resolvePacket(state,pieces,index,preferred=null,random=Math.random,precisionTarget=undefined) {
   const packet=attackPackets(state,pieces).find(p=>p.index===index);
   if(!packet||state.declaration.attackRoll)return null;
@@ -222,8 +241,9 @@ export function resolvePacket(state,pieces,index,preferred=null,random=Math.rand
   const w=first.guard?{...base,ap:Math.min(0,base.ap+1)}:base;
   const rolled=plan.precisionRoll;
   if(rolled && precisionTarget===undefined)return null;
-  if(precisionTarget!=null && (!rolled||!w.precision||!defenders.some(p=>character(p)&&p.id===precisionTarget)))return null;
-  const awaitAllocation=!rolled && w.precision && defenders.length>1 && defenders.some(character);
+  const candidates=w.precision?precisionCandidates(state,pieces,packet):[];
+  if(precisionTarget!=null && (!rolled||!candidates.some(p=>p.id===precisionTarget)))return null;
+  const awaitAllocation=!rolled && defenders.length>1 && candidates.length>0;
   let count=rolled?.count??0;
   for(const i of packet.indices){
     const r=rows[i],p=item(pieces,r.actor),weapon=weaponFor(state,p,r.weapon);
@@ -239,6 +259,7 @@ export function resolvePacket(state,pieces,index,preferred=null,random=Math.rand
     attackCount:count,hitMod:first.hit-(first.vehiclePenalty||0),woundMod:first.wound,cover:packet.cover,plunging:packet.plunging,lethal:first.lethal,
     sustained:first.sustained,ignorePenalties:first.ignore,snap:plan.mode==='overwatch',random}):null;
   if(awaitAllocation&&result?.wounds){
+    if(w.range)state=recordRangedAttack(state,plan.unit);
     const precisionRoll={index,...result};
     return {state:{...state,declaration:{...plan,focus:first.target,precisionRoll}},precisionRoll,
       actor,target:item(pieces,first.preferred),packet,removed:{},finished:false,shootingEvent:null};
@@ -250,6 +271,7 @@ export function closePacket(state,pieces,packet,result) {
   const plan=state.declaration,rows=plan.rows.slice(),first=rows[packet.index],actor=item(pieces,first.actor);
   const snap=plan.mode==='overwatch';
   const order=unitOrder(state,plan.unit),attacks={...order.attacks},count=result?.count??0;
+  if(count>0&&(state.step===2||snap))state=recordRangedAttack(state,plan.unit);
   for(const i of packet.indices){
     const r=rows[i],p=item(pieces,r.actor),weapon=weaponFor(state,p,r.weapon);
     rows[i]={...r,done:true};

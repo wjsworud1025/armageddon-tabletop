@@ -9,6 +9,7 @@ const infantry = new Set([
   'captain', 'librarian', 'intercessor', 'vanguard',
   'warboss', 'weirdboy', 'boy', 'gretchin'
 ]);
+export const patrolInfantry = piece => infantry.has(piece?.kind);
 
 // Core Rules 13.08, first alternative. Partial visibility due to terrain
 // is attacker-specific and is checked separately for each remaining model.
@@ -29,7 +30,7 @@ export function patrolAreaCover(game, targets) {
   const [unit] = unitKeys;
   const models = survivors.filter(piece => groupId(rules, piece) === unit).map(piece => {
     const areas = terrain.filter(area => overlapsArea(piece, area.polygon)).map(({id, name}) => ({id, name}));
-    return {id: piece.id, eligible: infantry.has(piece.kind) && areas.length > 0, areas};
+    return {id: piece.id, eligible: patrolInfantry(piece) && areas.length > 0, areas};
   });
   return {automatic: models.every(model => model.eligible), models};
 }

@@ -6,11 +6,12 @@ import {canCommandReroll} from './command-reroll.mjs';
 import {validatePatrolSetup,patrolSetupView,patrolTerrainPiece} from './patrol-setup.mjs';
 import {validPatrolFormations} from './patrol-formations.mjs';
 import {createTable} from '../data/catalog.mjs';
-import {sightBoardMatches,sightHP} from './patrol-sight.mjs';
+import {patrolSightTarget,sightBoardMatches,sightHP} from './patrol-sight.mjs';
 import {plungingFireAtDeclaration} from './declarations.mjs';
 import {patrolAreaCover} from './patrol-area-cover.mjs';
 import {overwatchUnits,overwatchUnitReady,overwatchTargetEligible} from './overwatch.mjs';
 import {weaponSlot} from './battle.mjs';
+import {playerTurnNumber} from './ranged-history.mjs';
 
 const boolean = value => typeof value === 'boolean';
 const string = value => typeof value === 'string';
@@ -66,6 +67,7 @@ const attackRecord=fields({kind:oneOf(['attacks','hit','wound','save','damage','
   change:fields({index:int(0,39999),value:int(1,6)},['index','value'])},['kind']);
 const attackRoll=fields({index:int(0,275),preferred:model,records:list(attackRecord,500)},['index','preferred','records']);
 const declaration=fields({unit:group,mode:oneOf(['overwatch']),locked:boolean,didShoot:boolean,didFight:boolean,focus:nullable(group),rows:list(validRow,276),precisionRoll,attackRoll,
+  detectionMap:oneOf(['A','B','C']),
   coverBoard:v=>sightBoard(v)&&Object.keys(v).length===catalog.size},['unit','locked','focus','rows']);
 const characterId=oneOf(['captain-1','librarian-1','warboss-1','weirdboy-1']);
 const unit = fields({
@@ -105,6 +107,7 @@ const battle=fields({
   shootingReaction:nullable(reactionWindow),reactionPlan:nullable(fields(reactionFields,Object.keys(reactionFields))),
   reinforcePlan:nullable(fields({unit:group,mode:oneOf(['edge','deep-strike']),origins:map(model,pose)},['unit','mode','origins'])),
   reserves:map(group,list(model,46)),patrol,notes:string,mission:string,last:string,
+  rangedHistory:fields({since:int(1,41),last:map(group,int(1,40))},['since','last']),
   officialSetup:validatePatrolSetup,formations:validPatrolFormations,
   deployment:fields({defender:team,next:team,placed:list(group,12),pending:group},['defender','next','placed']),
   destroyedUnits:map(group,boolean),lossEvents:list(fields({id:group,faction:team,turn:int(1,40)},['id','faction','turn']),20000)
@@ -162,6 +165,25 @@ export function validateRulesState(value,pieceRecords=null,layout=undefined) {
   if (fields({hp},['hp'])(value)) return true;
   if(pieceRecords&&(!Array.isArray(pieceRecords)||pieceRecords.some(p=>!p||!catalog.has(p.id))))return false;
   if(!battle(value) || value.round>value.rounds||!officialStateOK(value,pieceRecords))return false;
+  if(value.rangedHistory){
+    const turn=playerTurnNumber(value),{since,last}=value.rangedHistory;
+    if(value.status==='setup'||since>turn+1||Object.values(last).some(t=>t>turn||t<since-1))return false;
+    for(const [unit,t] of Object.entries(last)){
+      const faction=groupTeam(unit),ownTurn=(t%2===1)===(faction===value.first);
+      if(ownTurn){
+        if(t===turn&&value.step<2)return false;
+        continue;
+      }
+      const key='overwatch-'+faction,stamp=value.patrol?.spent?.[key];
+      if(!stamp)return false;
+      const [round,active]=stamp.split('-');
+      const receiptTurn=playerTurnNumber({round:Number(round),first:value.first,active});
+      if(receiptTurn<t||receiptTurn===t&&value.patrol.tactics?.[key]!==stamp+'/'+unit)return false;
+    }
+    const d=value.declaration;
+    if(d&&(value.step===2||d.mode==='overwatch')&&(d.precisionRoll||d.attackRoll?.records.some(r=>r.kind!=='attacks'))&&
+      last[d.unit]!==turn)return false;
+  }
   const window=value.overwatch,shootingOverwatch=window?.stage==='shoot';
   const ranged=value.step===2||shootingOverwatch,shootingTeam=window?.team??value.active;
   const savedPieces=()=>pieceRecords.map(({id,x,z,elevation,yaw,removed})=>patrolTerrainPiece(
@@ -303,6 +325,7 @@ export function validateRulesState(value,pieceRecords=null,layout=undefined) {
   if(value.status!=='playing'||!attackStep(value.step)&&!window)return false;
   const plan=value.declaration;
   if(!plan)return true;
+  if(plan.detectionMap&&(!plan.locked||!ranged||layout!==undefined&&plan.detectionMap!==layout?.map))return false;
   if(shootingOverwatch){
     const selections=new Map();
     for(const r of plan.rows){
@@ -354,6 +377,14 @@ export function validateRulesState(value,pieceRecords=null,layout=undefined) {
   }))return false;
   // An intact sight record refers to this exact board. Once casualties or
   // movement invalidate it, original row qualifiers remain historical.
+  if(pieceRecords&&plan.detectionMap&&value.shootingSight&&!plan.attackRoll&&!plan.precisionRoll&&!plan.rows.some(r=>r.done)){
+    const pieces=savedPieces(),map={map:plan.detectionMap};
+    for(const row of plan.rows){
+      const targets=pieces.filter(p=>model(p.id)&&modelGroup(p.id)===row.target).map(p=>p.id);
+      const range=getProfile(models.get(row.actor)).weapons[row.weapon].range;
+      if(!patrolSightTarget(value,pieces,row.actor,targets,range,undefined,map).visible.length)return false;
+    }
+  }
   if(pieceRecords&&plan.locked&&value.shootingSight&&plan.rows.some(r=>r.manualCover)&&
     !sightBoardMatches(value,pieceRecords,plan.coverBoard))return false;
   if(pieceRecords&&plan.locked&&value.shootingSight&&(plan.rows.some(r=>r.plunging)||layout!==undefined&&coverByTarget.size)){

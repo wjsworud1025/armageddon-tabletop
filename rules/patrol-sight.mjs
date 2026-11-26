@@ -3,6 +3,7 @@ import {getProfile} from './profiles.mjs';
 import {measureFootprints} from '../ruler.mjs';
 import {createTable} from '../data/catalog.mjs';
 import {isOverwatchShooting,overwatchUnits} from './overwatch.mjs';
+import {patrolDetection} from './patrol-detection.mjs';
 
 const statuses=['visible','blocked','unknown'];
 const alive=(state,p)=>!!getProfile(p)&&currentHP(state,p)>0;
@@ -80,7 +81,7 @@ export function setPatrolSight(state,pieces,shooterId,targetId,status){
 
 // 04.02 applies both conditions to a target UNIT. Its nearest member and
 // the member visible to this particular model can be different miniatures.
-export function patrolSightTarget(state,pieces,shooterId,targetIds,range,distance){
+export function patrolSightTarget(state,pieces,shooterId,targetIds,range,distance,layout=null){
   const actor=pieces.find(p=>p.id===shooterId);
   const empty={distance:Infinity,visible:[]};
   if(!Number.isFinite(range)||range<=0||!alive(state,actor)||!current(state,pieces))return empty;
@@ -90,11 +91,14 @@ export function patrolSightTarget(state,pieces,shooterId,targetIds,range,distanc
   }else if(actor.faction!==state.active||state.units?.[unit]?.finishedAttack===2)return empty;
   const targets=pieces.filter(p=>targetIds.includes(p.id)&&p.faction!==actor.faction&&alive(state,p));
   if(!targets.length||targets.some(p=>groupId(state,p)!==groupId(state,targets[0])))return empty;
-  const measured=Math.min(...targets.map(t=>distance?distance(actor.id,t.id):measureFootprints(actor,t).distance));
+  const distances=new Map(targets.map(t=>[t.id,distance?distance(actor.id,t.id):measureFootprints(actor,t).distance]));
+  const measured=Math.min(...distances.values());
   const nearest=measured>range&&measured<=range+1e-7?range:measured;
   const pairs=state.shootingSight.pairs[actor.id];
-  return {distance:nearest,visible:nearest>=0&&nearest<=range?targets.filter(t=>pairs?.[t.id]==='visible').map(t=>t.id):[]};
+  const visible=nearest>=0&&nearest<=range?targets.filter(t=>pairs?.[t.id]==='visible'&&
+    patrolDetection(state,pieces,shooterId,t.id,layout,()=>distances.get(t.id)).status!=='hidden').map(t=>t.id):[];
+  return {distance:nearest,visible};
 }
-export function visibleInRange(state,pieces,shooterId,targetIds,range,distance){
-  return patrolSightTarget(state,pieces,shooterId,targetIds,range,distance).visible;
+export function visibleInRange(state,pieces,shooterId,targetIds,range,distance,layout=null){
+  return patrolSightTarget(state,pieces,shooterId,targetIds,range,distance,layout).visible;
 }

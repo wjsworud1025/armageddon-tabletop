@@ -16,9 +16,10 @@ import {newBattle,startBattle,advance,opposite,steps,teams,roll,currentHP,unitMe
   groupId,changeUnit,needsShock,shockTest,adjustHP,controlObjective,engaged,modelProfile,
   character,hazardCandidates,resolveHazard,attackSkill} from './battle.mjs';
 import {draftRestriction,appendSightedDeclaration,lockSightedDeclaration,attackPackets,resolvePacket,chooseSuppression,
-  plungingFireAtDeclaration,plungingSightCandidates,confirmPlungingSight,pendingManualCover,confirmDraftCover} from './declarations.mjs';
+  plungingFireAtDeclaration,plungingSightCandidates,confirmPlungingSight,pendingManualCover,confirmDraftCover,precisionCandidates} from './declarations.mjs';
 import {canSetPatrolSight,captureSightBoard,patrolSightStatus,setPatrolSight,sightBoardMatches,visibleInRange} from './patrol-sight.mjs';
 import {patrolAreaCover} from './patrol-area-cover.mjs';
+import {patrolDetection} from './patrol-detection.mjs';
 import {doctrines,enhancements,tactics,selectOrder,useTactic,inDoctrine,hasWaaagh,effectWeapon} from './patrol.mjs';
 import {patrolMissions,recordLosses,objectiveSnapshot,missionAward} from './missions.mjs';
 import {officialPreparing,remainingPatrolUnits,patrolPlacementError} from './official-deployment.mjs';
@@ -50,6 +51,19 @@ const unitLabel=(p)=>p.kind==='boy' ? '보이즈 '+(Math.floor(p.variant/10)+1)+
 const pieceLabel=p=>p.name+' · '+p.id;
 const chunk=(title,body)=>'<section class="br-card"><h3>'+title+'</h3>'+body+'</section>';
 const sightLabels={unknown:'미확인',visible:'보임',blocked:'가림'};
+export function detectionLabel(result){
+  const distance=Number.isFinite(result.distance)?'표적 모델까지 '+result.distance.toFixed(2)+'″ · ':'';
+  const range='탐지거리 '+result.range+'″';
+  if(result.status==='hidden')return distance+range+' 밖 · 표적은 지형 구역에 있고 분대가 이번 턴과 직전 턴에 사격하지 않아 은폐 중입니다.';
+  if(result.status==='detected')return distance+range+' 이내 · 사수 시점에서 실제 시야를 확인하세요.';
+  if(result.status==='manual'){
+    if(result.reason==='gone-to-ground')return distance+'밀집 지형 기물이 이 사수의 시야에서 표적 일부를 가리면 탐지거리가 12″로 줄어듭니다. 이 경우 가림으로 기록하세요.';
+    if(result.reason==='terrain')return distance+'지형 구역 경계와 기물 종류를 확인하세요. 경량·밀집 기물이 있는 구역에서는 은폐와 탐지거리를 확인해 시야를 기록하세요.';
+    return distance+range+' · 이 분대의 사격 기록이 부족합니다. 이번 턴과 직전 턴에 사격했는지 확인해 시야를 기록하세요.';
+  }
+  if(result.history==='fired'&&result.areas.length)return '이 분대가 이번 턴 또는 직전 턴에 사격해 은폐가 해제됐습니다.';
+  return '';
+}
 const snapWindow=state=>state.overwatch?.stage==='offer'||state.overwatch?.stage==='shoot';
 function shootingSkillLabel(weapon,skill,plunging,cover,snap=false){
   if(!weapon.range)return '';
@@ -149,8 +163,15 @@ export function mountRules(container,api) {
     if (!weapon.range) return targets.some(t=>inContact(actor,t))?'':'교전 거리 밖';
     if (dist>weapon.range+1e-7) return '사거리 밖';
     if(snap&&!overwatchTargetEligible(state,api.getPieces(),actor,targets[0],weapon))return '교전하지 않은 24″ 이내 적 분대를 선택하세요';
-    if (!(visible??visibleInRange(state,api.getPieces(),actor.id,targets.map(t=>t.id),weapon.range,api.getDistance)).length)
+    const pieces=api.getPieces(),layout=api.getTable().layout;
+    if (!(visible??visibleInRange(state,pieces,actor.id,targets.map(t=>t.id),weapon.range,api.getDistance,layout)).length){
+      if(targets.every(t=>patrolDetection(state,pieces,actor.id,t.id,layout,api.getDistance).status==='hidden'))
+        return '표적 분대 전원이 이 사수의 탐지거리 밖에서 은폐 중입니다';
+      if(targets.some(t=>patrolSightStatus(state,pieces,actor.id,t.id)==='visible'&&
+        patrolDetection(state,pieces,actor.id,t.id,layout,api.getDistance).status==='hidden'))
+        return '보임으로 기록한 모델이 은폐 중입니다. 다른 분대원의 시야를 확인하세요';
       return '이 사수에게 보이는 표적 모델을 기록하세요';
+    }
     if(snap)return '';
     if (order.movement==='fallback' && !inDoctrine(state,actor,'tactical')) return '후퇴한 분대';
     if (order.movement==='advance' && !weapon.assault && !inDoctrine(state,actor,'devastator') && !hasWaaagh(state,actor)) return '전력 이동 후 사용 불가';
@@ -172,7 +193,7 @@ export function mountRules(container,api) {
     return [actor,...friends.filter(p=>p.id!==actor.id)].filter(p=>getProfile(p).weapons
       .some(w=>JSON.stringify(effectWeapon(state,p,w,groupId(state,p)))===signature)).map(p=>{
       const distance=Math.min(...targets.map(t=>api.getDistance(p.id,t.id)));
-      const visible=weapon.range?visibleInRange(state,pieces,p.id,targetIds,weapon.range,api.getDistance):[];
+      const visible=weapon.range?visibleInRange(state,pieces,p.id,targetIds,weapon.range,api.getDistance,api.getTable().layout):[];
       const plunging=!snapWindow(state)&&plungingFireAtDeclaration(state,pieces,p,weapon,targets,visible.length>0);
       const manualCover=!!coverObservation?.shooters.has(p.id);
       const cover=!!weapon.range&&(areaCover.automatic||manualCover);
@@ -185,15 +206,18 @@ export function mountRules(container,api) {
     const rows=shooters.map(({p,distance,visible,skill,plunging,cover,problem},i)=>{
       const attrs=' data-shooter="'+esc(p.id)+'" data-target="'+esc(target.id)+'"';
       const status=patrolSightStatus(state,pieces,p.id,target.id);
+      const detection=patrolDetection(state,pieces,p.id,target.id,api.getTable().layout,api.getDistance);
+      const explanation=detectionLabel(detection);
       const enabled=canSetPatrolSight(state,pieces,p.id,target.id);
       const choices=Object.entries(sightLabels).map(([value,label])=>
         '<button type="button" data-act="shot-sight"'+attrs+' data-status="'+value+'" aria-pressed="'+
         (status===value)+'"'+(enabled?'':' disabled')+'>'+label+'</button>').join('');
       const view=api.inspectSight?'<button type="button" data-act="inspect-sight"'+attrs+'>사수 시점</button>':'';
-      const witness=status!=='visible'&&visible.length?' · '+getPiece(visible[0]).name+' 보임':'';
+      const witness=visible.length&&!visible.includes(target.id)?' · '+getPiece(visible[0]).name+' 보임':'';
       return '<div class="br-sight-pair" data-sight-row="'+esc(p.id)+'"><strong>'+esc(p.name)+'</strong>'+view+
         '<p class="br-sub">분대까지 '+distance.toFixed(1)+'″ · <span data-ballistic-skill="'+(weapon.torrent?'':skill)+'">'+
         shootingSkillLabel(weapon,skill,plunging,cover,snapWindow(state))+'</span> · '+esc((problem||'선언 가능')+witness)+'</p>'+
+        '<p class="br-sub" data-detection="'+detection.status+'" data-detection-target="'+esc(target.id)+'"'+(detection.reason?' data-detection-reason="'+esc(detection.reason)+'"':'')+(explanation?'':' hidden')+'>'+esc(explanation)+'</p>'+
         '<div class="br-row" role="group" aria-label="'+esc(p.name+' → '+target.name+' 시야')+'">'+choices+'</div>'+
         '<label><input type="checkbox" data-field="'+(i?'other-cover':'cover')+'" data-cover-shooter="'+esc(p.id)+'"'+
         (cover?' checked':'')+(areaCover.automatic?' disabled':'')+'>'+
@@ -300,7 +324,7 @@ export function mountRules(container,api) {
     const groups=attackPackets(state,api.getPieces());
     const rolled=plan.precisionRoll;
     const rechecks=plan.rows.map((r,i)=>{
-      const targets=plungingSightCandidates(state,api.getPieces(),i);
+      const targets=plungingSightCandidates(state,api.getPieces(),i,api.getTable().layout);
       if(!targets.length)return '';
       const fieldName='plunge-target-'+i;
       return '<p>'+esc(getPiece(r.actor).name)+'에게 보이던 적이 제거됐습니다. 같은 분대의 다른 모델이 보이면 고지 사격을 다시 적용할 수 있습니다.</p>'+
@@ -320,7 +344,7 @@ export function mountRules(container,api) {
           precision='<p>명중 '+rolled.hits+' · 상처 '+rolled.wounds+' · 방어 굴림 전 정밀 공격 배정</p>'+
             '<p>공격 측이 다음 모델 중 하나의 시야를 확인하세요. '+esc(attackers.map(pieceLabel).join(', '))+'</p>'+
             select('precision-target','그 모델에서 보이는 적 캐릭터',opt('','정밀 배정 생략','')+
-              defenders.filter(character).map(t=>opt(t.id,pieceLabel(t)+' · 시야 확인','')).join(''));
+              precisionCandidates(state,api.getPieces(),p).map(t=>opt(t.id,pieceLabel(t)+' · 시야 확인','')).join(''));
         }
         return precision+(defenders.length?select('allocate-'+p.index,'방어 측 일반 배정 우선순위',defenders.map(t=>opt(t.id,pieceLabel(t),pref)).join('')):'')+
           (!rolled&&defenders.length?btn('staged-'+p.index,label+' · 단계별 판정'):'')+
@@ -644,7 +668,7 @@ export function mountRules(container,api) {
       choices.fighter=actor?.id||'';
       const unitName=key=>unitLabel(all.find(p=>groupId(state,p)===key));
       let body='<p>'+esc(teams[team])+' · 남은 '+state.cp[team]+' CP'+(offer?'':' · 경계 사격 1 CP 지불')+'</p>'+
-        '<p>24″ 안의 보이는 적 한 분대에 사격합니다. 사수별 무기 사거리를 확인하세요. 은폐 중인 모델은 탐지 거리(기본 15″) 밖에서 ‘가림’으로 표시하세요.</p>'+
+        '<p>분대 사이 거리가 24″ 이내인 적 한 분대를 선택하세요. 각 사수는 무기 사거리와 은폐 표적의 탐지거리를 따로 확인합니다.</p>'+
         '<p>수정 전 6은 일반 명중이며 토렌트 무기는 자동 명중합니다.</p>';
       if(offer){
         body+=select('overwatch-unit','경계 사격할 분대',units.map(k=>opt(k,unitName(k),unit)).join(''))+
@@ -728,10 +752,10 @@ export function mountRules(container,api) {
     if(action.startsWith('plunge-view-')||action.startsWith('plunge-confirm-')){
       const index=Number(action.split('-').at(-1)),target=field('plunge-target-'+index)?.value;
       const pieces=api.getPieces();
-      if(!plungingSightCandidates(state,pieces,index).some(p=>p.id===target))return;
+      if(!plungingSightCandidates(state,pieces,index,api.getTable().layout).some(p=>p.id===target))return;
       const shooter=state.declaration.rows[index].actor;
       if(action.startsWith('plunge-view-'))return api.inspectSight?.(shooter,target);
-      const next=confirmPlungingSight(state,pieces,index,target);
+      const next=confirmPlungingSight(state,pieces,index,target,api.getTable().layout);
       if(next)return commit(next,getPiece(shooter).name+' → '+getPiece(target).name+' · 고지 사격 시야 재확인');
       return;
     }
@@ -871,7 +895,9 @@ export function mountRules(container,api) {
       if(!plan)return;
       if(action==='reopen'){
         if(!plan.locked||plan.rows.some(r=>r.done))return;
-        return commit({...state,declaration:{...plan,locked:false}},'표적 적격성 변경 · 공격 선언 수정');
+        const draft={...plan,locked:false};
+        delete draft.detectionMap;
+        return commit({...state,declaration:draft},'표적 적격성 변경 · 공격 선언 수정');
       }
       if(plan.locked)return;
       const rows=action==='cancel-plan'?[]:plan.rows.filter((_,i)=>String(i)!==action.slice(5));

@@ -1,6 +1,7 @@
 import {getProfile, unitId} from './profiles.mjs';
 import {freshPatrol,nextPatrolTurn,effectProfile,hasWaaagh} from './patrol.mjs';
 import {openOverwatch} from './overwatch.mjs';
+import {recoverRangedHistory} from './ranged-history.mjs';
 
 export const teams = {marines:'스페이스 마린',orks:'오크'};
 export const steps = ['지휘','이동','사격','돌격','근접전','턴 종료'];
@@ -13,11 +14,12 @@ export function newBattle() {
 }
 export function startBattle(state,first,rounds) {
   if (state.status !== 'setup' || !(first in teams) || !Number.isInteger(rounds) || rounds < 1 || rounds > 20) return state;
-  return {...state,status:'playing',first,active:first,rounds,cp:{marines:1,orks:1}};
+  return {...state,status:'playing',first,active:first,rounds,cp:{marines:1,orks:1},rangedHistory:{since:1,last:{}}};
 }
 export function advance(state,pieces) {
   if (state.status !== 'playing' || state.hazard || state.declaration || state.movePlan || state.reinforcePlan || state.chargePlan || state.fightPlan || state.fightSequence?.counterAfter || state.shootingReaction || state.reactionPlan || state.units?.wartrakk?.suppressionTargets?.length) return state;
   if(state.overwatch&&state.overwatch.stage!=='done')return state;
+  state=recoverRangedHistory(state);
   if(state.step===1&&pieces&&!state.overwatch){
     const offer=openOverwatch(state,pieces);
     if(offer)return offer;
