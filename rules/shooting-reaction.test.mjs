@@ -92,6 +92,9 @@ test('every surging model approaches as far as possible, including an unmoved me
 test('Rapid Reactions permits optional flight, retreating direction, one shared die and per-model limits',()=>{
   const g=rapid();g.pieces.push(model('captain',0,1.1));g.rules.attachments['captain-1']='vanguard';
   const h=start(opened(g,'warboss',['vanguard']),'vanguard',{d6:5,takeToSkies:true});
+  const airborne={'vanguard-1':[{x:-1,elevation:1}]};
+  assert.ok(assessShootingReaction(h,h.rules.reactionPlan,airborne,'path').ok);
+  assert.ok(codes(assessShootingReaction(h,h.rules.reactionPlan,airborne)).includes('unsupported-floor'));
   const args={'vanguard-1':[{x:-3,elevation:3}],'captain-1':[{x:-3,elevation:2}]};
   const a=assessShootingReaction(h,h.rules.reactionPlan,args,'path');
   assert.equal(a.limit,4);assert.equal(a.models['vanguard-1'].distance,3);assert.equal(a.models['captain-1'].distance,5);

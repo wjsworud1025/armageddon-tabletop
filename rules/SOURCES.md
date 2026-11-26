@@ -76,6 +76,8 @@ Heavy는 명중 굴림을 바꾼다. 엄폐와 고지 사격은 BS에 적용하�
 
 A/B/C 맵에서는 게임이 상대 배치 구역을 검사한다. 제품 전장이나 자유 배치에서 배치 구역 경계를 지정하지 않았으면 두 플레이어가 합의한 경계를 확인한다. 편대, 모델 받침대의 겹침, 적과의 수평 간격은 자동으로 검사한다. 지형과 받침대가 겹치는 곳에서는 벽·천장을 관통하는지, 상층에서는 모델이 안정적으로 서는지 확인한다. 상층의 높이가 가장자리 거리 판정을 바꿀 때도 화면에 확인 요청을 표시한다. [공식 코어 규칙 01.04, 03.01–03.03, 13.06](https://assets.warhammer-community.com/eng_01-06_warhammer40k_new40k_core_rules-was6fbu1ix-hfewhmxyiy.pdf)
 
+패트롤에서 이동·돌격·밀착·재정비·사격 반응 이동을 마치거나 증원을 배치할 때, 지면보다 높은 베이스는 전장에 놓인 지형의 실제 상판 안에 들어가야 한다. 게임은 지형의 현재 위치·회전·형상과 각 베이스의 크기로 높이, 벽 관통과 상판 밖 돌출을 검사한다. 비행 모델은 공중을 경유할 수 있고, 이동 종료 때는 같은 지지 조건을 적용한다. 경로를 오르내리는 동안 지형과 수평 ½″ 안에 있는지, 조형이 실제로 안정적인지는 플레이어가 확인한다. [공식 코어 규칙 §13.06, 48쪽](https://assets.warhammer-community.com/eng_01-06_warhammer40k_new40k_core_rules-was6fbu1ix-hfewhmxyiy.pdf#page=48) · [비행 §21.03, 71쪽](https://assets.warhammer-community.com/eng_01-06_warhammer40k_new40k_core_rules-was6fbu1ix-hfewhmxyiy.pdf#page=71)
+
 ### 사격 직후의 반응 이동
 
 1. **선택 시점.** 상대 사격 페이즈에 한 적 분대가 모든 원거리 공격을 마치면, 그 사격의 표적이었던 생존 분대에 반응 기회가 생긴다. 모든 명중 굴림이 실패해도 공격한 것으로 센다. 실제 공격 수가 0이면 기회가 열리지 않는다. 앱은 위험 무기 피해를 먼저 처리한 뒤 남은 모델로 반응 선택을 진행한다. 반응을 생략하면 지휘 포인트나 사용 횟수를 쓰지 않는다. 주사위를 굴린 뒤 경로를 취소하면 모델은 원점에 돌아가고 지불한 비용과 사용 횟수는 소비된 상태로 남는다. [공식 기본 규칙 04, 06, 24.15](https://assets.warhammer-community.com/eng_01-06_warhammer40k_new40k_core_rules-was6fbu1ix-hfewhmxyiy.pdf) · [사격 완료 시점에 관한 앱 부록 04.03.04](https://wahapedia.ru/wh40k11ed_cp/the-rules/rules-appendix/#Shot)

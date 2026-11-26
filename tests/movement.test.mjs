@@ -121,12 +121,12 @@ test('a free pivot sweeps the actual oval through the board edge even if both en
   assert.ok(codes(assessMove(swings)).includes('enemy-base'));
 });
 
-test('terrain walls and upstairs clearance are explicit physical checks',()=>{
+test('walls along a path need physical review; an upstairs endpoint requires an actual cast floor',()=>{
   const marine=model('intercessor-1',-3),ruin=model('largeRuin-1',0,0,{faction:'terrain',baseWidth:4,baseDepth:3});
   const args={game:board([marine,ruin]),pieces:[marine],type:'normal',paths:{[marine.id]:[{x:0},{elevation:2}]}};
   const walk=assessMove(args);
-  assert.ok(walk.ok);
-  assert.ok(['terrain-path','climb','terrain-end','supported-floor'].every(code=>manual(walk).includes(code)));
+  assert.ok(codes(walk).includes('unsupported-floor'));
+  assert.ok(['terrain-path','climb','terrain-end'].every(code=>manual(walk).includes(code)));
   const trakk=model('wartrakk-1',-3);
   assert.ok(codes(assessMove({...args,game:board([trakk,ruin]),pieces:[trakk],paths:{[trakk.id]:[{x:0,elevation:2}]}})).includes('upper-floor'));
 });
