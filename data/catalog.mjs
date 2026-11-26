@@ -1,3 +1,5 @@
+import {mapReliquarySize,reliquarySize} from './reliquary-dimensions.mjs';
+
 // World axes are x right, z toward the near edge of the assembled 44 × 30 inch board.
 // The four corners and ground contact points were digitised on the 1920 × 1212 July photograph.
 export const photoFrame = {
@@ -37,7 +39,7 @@ const layouts = {
     [1498,879,-14], [1543,895,-18], [1583,879,8], [1514,916,-18], [1570,913,18]
   ],
   wartrakk: [[981,744,-26]],
-  largeRuin: [[366,848,165], [570.31,970.76,132.10], [768,739,80], [1130,814,-102]],
+  largeRuin: [[366,848,165], [560.30,968.34,129.69], [768,739,80], [1130,814,-102]],
   smallRuin: [[933,822,-21], [779,969,12], [832,1052,66], [1312.2,940.4,-48]],
   shockArray: [[1094,982,-32]],
   capacitorStack: [[312,1064,55]],
@@ -72,16 +74,25 @@ export function createTable() {
     layouts[kind].map(([u,v,angle], variant) => {
       const nob = kind === 'boy' && (variant === 0 || variant === 10);
       const baseWidth = nob ? mm(40) : width;
-      const baseDepth = kind==='largeRuin'&&variant===1 ? 4.22
-        : kind==='smallRuin'&&variant===0 ? 1.25 : (depth??baseWidth);
+      const baseDepth = kind==='smallRuin'&&variant===0 ? 1.25 : (depth??baseWidth);
       const ordinal = variant + 1;
       const name = nob ? '보스 놉 ' + (variant === 0 ? '1' : '2')
         : (layouts[kind].length === 1 ? label : label + ' ' + ordinal);
       return {
         id: kind + '-' + ordinal, kind, name, faction, variant,
-        baseWidth, baseDepth, ...photoToBoard(u,v), yaw: angle * Math.PI / 180
+        baseWidth, baseDepth, ...(kind==='largeRuin'&&variant===1?reliquarySize:{}),
+        ...photoToBoard(u,v), yaw: angle * Math.PI / 180
       };
     })
   );
   return {width: 44, depth: 30, pieces};
+}
+
+// The display combines the C door wall and B saint wall. The printed games
+// retain their established wall assembly, geometry and ground coordinates.
+export function createMapTable(){
+  const table=createTable();
+  Object.assign(table.pieces.find(p=>p.id==='largeRuin-2'),mapReliquarySize,
+    photoToBoard(570.31,970.76),{yaw:132.10*Math.PI/180});
+  return table;
 }

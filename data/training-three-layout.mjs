@@ -1,4 +1,4 @@
-import {createTable} from './catalog.mjs';
+import {createMapTable} from './catalog.mjs';
 import {
   trainingTwoMapPoint as toMap,trainingTwoWorldPoint as toWorld,
   trainingTwoSurfaceUV as surfaceUV,trainingTwoWallSegments as cornerVertices,handbookBaseDepth,
@@ -38,7 +38,7 @@ export const trainingThreePlan={
 
 export function createTrainingThreeTable(){
   const {width,depth,modelCenters,walls}=trainingThreePlan;
-  const catalog=new Map(createTable().pieces.map(p=>[p.id,p]));
+  const catalog=new Map(createMapTable().pieces.map(p=>[p.id,p]));
   const poses=modelCenters.map(([id,x,z])=>{
     const side=catalog.get(id).faction;
     return [id,x,z,side==='marines'?2:2-Math.PI];
@@ -83,7 +83,7 @@ export function validateTrainingThreeLayout(table){
   const expected=[...modelCenters.map(([id])=>id),...wallZones.keys()];
   const ids=new Set(table.pieces.map(p=>p?.id));
   if(table.pieces.length!==expected.length||expected.some(id=>!ids.has(id)))return ['roster'];
-  const stock=new Map(createTable().pieces.map(p=>[p.id,p]));
+  const stock=new Map(createMapTable().pieces.map(p=>[p.id,p]));
   const fighters=[],segments=[],errors=[];
   const board={left:0,right:width,top:0,bottom:depth};
   for(const p of table.pieces){

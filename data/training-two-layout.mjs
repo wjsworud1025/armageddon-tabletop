@@ -1,4 +1,4 @@
-import {createTable} from './catalog.mjs';
+import {createMapTable} from './catalog.mjs';
 
 // Map inches start at the upper left of the handbook diagram. World inches
 // share its +X (right) and +Z (down) axes, with the origin at the mat centre.
@@ -46,7 +46,7 @@ export function trainingTwoSurfaceUV({x,z}){
 
 export function createTrainingTwoTable(){
   const {width,depth,modelCenters,walls}=trainingTwoPlan;
-  const catalog=new Map(createTable().pieces.map(p=>[p.id,p]));
+  const catalog=new Map(createMapTable().pieces.map(p=>[p.id,p]));
   const pieces=modelCenters.map(([id,x,z])=>{
     const model=catalog.get(id);
     // The diagram does not specify model facing. Face both groups inward.
@@ -105,7 +105,7 @@ export function validateTrainingTwoLayout(table){
   const faults=[];
   if(table?.width!==width||table.depth!==depth||table.surface!==trainingTwoPlan.panel.surface||!Array.isArray(table.pieces))return ['board'];
   const expected=[...modelCenters.map(([id])=>id),...walls.map(w=>w.id)];
-  const catalog=new Map(createTable().pieces.map(p=>[p.id,p]));
+  const catalog=new Map(createMapTable().pieces.map(p=>[p.id,p]));
   const ids=new Set(table.pieces.map(p=>p.id));
   if(ids.size!==expected.length||table.pieces.length!==expected.length||expected.some(id=>!ids.has(id)))return ['roster'];
   const fighters=[],segments=[];

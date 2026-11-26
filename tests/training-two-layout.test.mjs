@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createTable} from '../data/catalog.mjs';
+import {createMapTable} from '../data/catalog.mjs';
 import {
   createTrainingTwoTable,trainingTwoMapPoint,trainingTwoPlan,trainingTwoSurfaceUV,
   trainingTwoWorldPoint,validateTrainingTwoLayout,
@@ -26,7 +26,7 @@ test('one rotated reverse panel maps 30 x 22 inches into the right half of the o
 });
 
 test('the exact measured centers admit all 17 physical bases, including the optional identification of the Nob',()=>{
-  const t=createTrainingTwoTable(),source=createTable();
+  const t=createTrainingTwoTable(),source=createMapTable();
   const counts={};
   for(const p of t.pieces)counts[p.kind]=(counts[p.kind]??0)+1;
   assert.deepEqual(counts,{captain:1,intercessor:5,warboss:1,boy:10,largeRuin:1,smallRuin:2});

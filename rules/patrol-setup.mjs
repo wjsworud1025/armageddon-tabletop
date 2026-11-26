@@ -1,5 +1,6 @@
 import {opposite,roll} from './battle.mjs';
 import {createTable} from '../data/catalog.mjs';
+import {mapReliquarySize,reliquarySize} from '../data/reliquary-dimensions.mjs';
 
 // Combat Patrol Mission Sequence 2–8, Warhammer 40,000 app 2.7.1:
 // https://wahapedia.ru/wh40k11ed_cp/the-rules/combat-patrol-mission/
@@ -29,7 +30,12 @@ export function applyWartrakkEdition(model,version){
   if(Number.isInteger(version)&&version>=1&&version<8)model.previousWartrakkBanner=true;
   else delete model.previousWartrakkBanner;
 }
-export function patrolTerrainPiece(piece,version){
+export function patrolTerrainPiece(piece,version,displayReliquary=true){
+  if(piece.id==='largeRuin-2'){
+    const model={...piece,...(Number.isInteger(version)||!displayReliquary?mapReliquarySize:reliquarySize)};
+    delete model.previousSecondRuin;
+    return model;
+  }
   if(piece.id==='wartrakk-1'){
     const model={...piece};
     applyWartrakkEdition(model,version);

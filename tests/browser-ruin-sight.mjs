@@ -15,7 +15,10 @@ function acrossRuin(start,end){
 function aimFixture(save,offset,y,wall,pickY,alongX,viewLine){
   const data=structuredClone(save),pieces=createTable().pieces;
   data.training=undefined;data.layout=null;data.rules=startBattle(newBattle(),'marines',5);data.rules.step=2;
-  const surfacePoints=viewLine?.map(p=>new T.Vector3(...p));
+  const scale=wall==='largeRuin-2'?3/2.30:1;
+  if(wall==='largeRuin-2')data.reliquaryRevision=2;
+  offset*=scale;y*=scale;
+  const surfacePoints=viewLine?.map(p=>new T.Vector3(...p).multiplyScalar(scale));
   const models=[observer,target].map((id,i)=>{
     const piece=pieces.find(p=>p.id===id),obj=createPiece(T,piece);
     const distance=i?6:-6;

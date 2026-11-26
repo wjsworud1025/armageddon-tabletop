@@ -87,7 +87,7 @@ export async function buildScene(canvas,api) {
   let usePaint=localArt;
   for(let i=0;i<game.pieces.length;i++){
     const p=game.pieces[i];
-    const current=p.previousBarricade?api.template.pieces.find(piece=>piece.id===p.id):p;
+    const current=p.previousBarricade||p.id==='largeRuin-2'?api.template.pieces.find(piece=>piece.id===p.id):p;
     const obj=(localArt?await loadReconstruction(T,current):null) ?? createPiece(T,current);
     // The photo build also needs the terrain surface used for placement and combat.
     if(p.faction==='terrain'&&obj.userData.reconstruction)pieceGeometry(T,p);
@@ -218,7 +218,9 @@ export async function buildScene(canvas,api) {
       if(edition){
         // The earlier photo edition already displayed scans of these pieces.
         const previous=p.previousSecondRuin||p.previousPipeRuin||((p.previousSmallRuin||p.previousBarricade||p.previousWartrakkBanner)&&!edition.current.userData.reconstruction);
-        const required=previous?(edition.previous??=createPiece(T,p)):edition.current;
+        let required=edition.current;
+        if(previous)required=edition.previous??=createPiece(T,p);
+        else if(p.id==='largeRuin-2'&&p.baseWidth===5.2)required=edition.intermediate??=createPiece(T,p);
         if(required!==objects.get(p.id)){
           scene.remove(objects.get(p.id));required.userData.pieceId=p.id;
           scene.add(required);objects.set(p.id,required);

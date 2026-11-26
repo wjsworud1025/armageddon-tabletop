@@ -6,6 +6,7 @@ import {reliquaryRuin} from './reliquary-ruin.mjs';
 import {votiveWall} from './votive-wall.mjs';
 import {conduitRuin} from './conduit-ruin.mjs';
 import {lockcreteBarricade} from './lockcrete-barricade.mjs';
+import {mapReliquarySize} from '../data/reliquary-dimensions.mjs';
 
 const frame=0x464647, edge=0x69635b, panel=0x664332, inset=0x302e2c;
 
@@ -205,8 +206,9 @@ function registeredScenery(s,item,draw) {
   const size=bounds.getSize(new T.Vector3());
   const center=bounds.getCenter(new T.Vector3());
   const sx=(item.baseWidth||size.x)/size.x, sz=(item.baseDepth||size.z)/size.z;
-  model.group.scale.set(sx,1,sz);
-  model.group.position.set(-center.x*sx,-bounds.min.y,-center.z*sz);
+  const sy=item.kind==='largeRuin'&&item.variant===1&&item.baseWidth?item.baseWidth/mapReliquarySize.baseWidth:1;
+  model.group.scale.set(sx,sy,sz);
+  model.group.position.set(-center.x*sx,-bounds.min.y*sy,-center.z*sz);
 }
 
 export function scenery(s,item) {

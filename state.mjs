@@ -1,4 +1,5 @@
 import {validateRulesState} from './rules/validate.mjs';
+import {isDisplayReliquary} from './data/reliquary-dimensions.mjs';
 import {validatePendingRally} from './rules/rally-placement.mjs';
 import {recoverRangedHistory} from './rules/ranged-history.mjs';
 import {reconcilePatrolSight} from './rules/patrol-sight.mjs';
@@ -53,6 +54,7 @@ export function snapshot(game) {
   return {version:1, pieces:game.pieces.map(({id,x,z,yaw,removed,elevation}) =>
     ({id,x,z,yaw,removed:!!removed,elevation:elevation||0})), rules:structuredClone(reconcilePatrolSight(game.rules,game.pieces)),
     logs:[...game.logs], layout:game.layout?{...game.layout}:null,surface:game.surface||'front',
+    ...(!game.rules?.officialSetup&&!game.layout?.map&&game.pieces.some(isDisplayReliquary)?{reliquaryRevision:2}:{}),
     ...(!game.rules?.officialSetup&&!game.pieces.some(p=>p.kind==='barricade'&&p.previousBarricade)?{barricadeRevision:2}:{}),
     ...(game.rules?.officialSetup&&game.rules.status==='setup'?{terrainRevision:2}:{}),
     ...(game.training?{training:structuredClone(game.training)}:{})};
@@ -61,7 +63,10 @@ export function snapshot(game) {
 export function restore(template, save) {
   if (save?.version !== 1 || !Array.isArray(save.pieces) || save.pieces.length !== template.pieces.length)
     throw new Error('이 스타터 세트의 저장 파일이 아닙니다.');
-  if(!validateRulesState(save.rules,save.pieces,save.layout??null))throw new Error('저장 파일의 대전 규칙 데이터가 올바르지 않습니다.');
+  if(save.reliquaryRevision!==undefined&&(save.reliquaryRevision!==2||save.rules?.officialSetup))
+    throw Error('알 수 없는 대형 폐허 판본입니다.');
+  const displayReliquary=save.reliquaryRevision===2&&!save.layout?.map;
+  if(!validateRulesState(save.rules,save.pieces,save.layout??null,displayReliquary))throw new Error('저장 파일의 대전 규칙 데이터가 올바르지 않습니다.');
   if(save.barricadeRevision!==undefined&&save.barricadeRevision!==2)
     throw new Error('알 수 없는 바리케이드 판본입니다.');
   if(save.training!=null){
@@ -79,7 +84,7 @@ export function restore(template, save) {
     // Official games carry their complete layout edition. Older custom saves
     // lack a cast revision and retain the ground contact and sight they used.
     const customEdition=p.kind==='barricade'&&save.barricadeRevision===undefined?5:undefined;
-    return patrolTerrainPiece(p,save.rules?.officialSetup?.version??customEdition);
+    return patrolTerrainPiece(p,save.rules?.officialSetup?.version??customEdition,displayReliquary);
   });
   for (const piece of game.pieces) {
     const record = records.get(piece.id);

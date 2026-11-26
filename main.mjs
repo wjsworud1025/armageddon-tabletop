@@ -1,4 +1,4 @@
-import {createTable} from './data/catalog.mjs';
+import {createMapTable,createTable} from './data/catalog.mjs';
 import {drawDeploymentDiagram} from './data/deployment-diagram.mjs';
 import {createTrainingOne,rollTrainingOne,trainingOneView} from './rules/training-one.mjs';
 import {actTrainingTwo,createTrainingTwo,trainingTwoPieces,trainingTwoView} from './rules/training-two.mjs';
@@ -625,7 +625,7 @@ const api={
     }
     if(action.act==='official-new'){
       if(game.training||game.rules&&game.rules.status!=='setup'||officialPreparing(game.rules))return;
-      next=fresh();next.rules={...newBattle(),officialSetup:newPatrolSetup()};
+      next=fresh();next.pieces=createMapTable().pieces;next.rules={...newBattle(),officialSetup:newPatrolSetup()};
     }else next=advanceOfficialSetup(game,action);
     const setup=next.rules.officialSetup;
     const messages={

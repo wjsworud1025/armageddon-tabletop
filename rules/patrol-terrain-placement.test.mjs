@@ -1,10 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createTable} from '../data/catalog.mjs';
+import {createMapTable} from '../data/catalog.mjs';
 import {patrolTerrainPlacement as check,patrolTerrainLevels as levels,patrolHighGround,patrolGroundLevel} from './patrol-terrain-placement.mjs';
 import {applyLayout} from '../layouts.mjs';
 
-const catalog=createTable().pieces;
+const catalog=createMapTable().pieces;
 const piece=(id,x=0,z=0,elevation=0)=>({...catalog.find(p=>p.id===id),x,z,elevation,yaw:0});
 const small=(x,z,h=0)=>piece('gretchin-1',x,z,h);
 const turn=(p,angle,dx,dz)=>({...p,x:dx+Math.cos(angle)*p.x+Math.sin(angle)*p.z,
@@ -127,7 +127,7 @@ test('the ground-level target condition uses the model base, including terrain g
 test('recommended patrol placements avoid cast walls on every deployment map',()=>{
   for(const map of ['A','B','C']){
     for(const blue of ['marines','orks']){
-      const game=createTable();
+      const game=createMapTable();
       applyLayout(game,map,blue);
       const terrain=game.pieces.filter(p=>p.faction==='terrain');
       for(const model of game.pieces.filter(p=>p.faction!=='terrain')){

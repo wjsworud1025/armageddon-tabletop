@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createTable} from '../data/catalog.mjs';
+import {createMapTable} from '../data/catalog.mjs';
 import {
   createTrainingThreeTable,trainingThreeMapPoint,trainingThreePlan,trainingThreeSurfaceUV,
   trainingThreeWallSegments,trainingThreeWorldPoint,validateTrainingThreeLayout,
@@ -26,7 +26,7 @@ test('page 67 uses one crosswise 30 x 22 reverse board and separate areas for th
 });
 
 test('all 22 decoded base centres are legal simultaneously and the four terrain pieces retain their catalog dimensions',()=>{
-  const t=createTrainingThreeTable(),stock=new Map(createTable().pieces.map(p=>[p.id,p]));
+  const t=createTrainingThreeTable(),stock=new Map(createMapTable().pieces.map(p=>[p.id,p]));
   const people=t.pieces.filter(p=>p.faction!=='terrain');
   let minGap=Infinity;
   for(const [id,x,z] of trainingThreePlan.modelCenters){

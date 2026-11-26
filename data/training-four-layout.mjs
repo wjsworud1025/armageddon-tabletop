@@ -1,4 +1,4 @@
-import {createTable} from './catalog.mjs';
+import {createMapTable} from './catalog.mjs';
 import {handbookBaseDepth} from './training-two-layout.mjs';
 import {
   trainingThreeMapPoint as toMap,trainingThreeWorldPoint as toWorld,
@@ -55,7 +55,7 @@ export const trainingFourPlan={
 const vehicleHeadings=new Map([lowerLeft[0],orks.at(-1)].map(([id,,,yaw])=>[id,yaw]));
 export function createTrainingFourTable(){
   const {width,depth,modelCenters,walls}=trainingFourPlan;
-  const catalog=new Map(createTable().pieces.map(p=>[p.id,p]));
+  const catalog=new Map(createMapTable().pieces.map(p=>[p.id,p]));
   const poses=modelCenters.map(([id,x,z])=>{
     const yaw=vehicleHeadings.get(id)??(catalog.get(id).faction==='marines'?2:2-Math.PI);
     return [id,x,z,yaw];
@@ -106,7 +106,7 @@ export function validateTrainingFourLayout(table){
   const ids=new Set(table.pieces.map(p=>p?.id));
   const expected=[...modelCenters.map(([id])=>id),...walls.map(w=>w.id)];
   if(table.pieces.length!==expected.length||expected.some(id=>!ids.has(id)))return ['roster'];
-  const stock=new Map(createTable().pieces.map(p=>[p.id,p])),issues=[],fighters=[],ribbons=[];
+  const stock=new Map(createMapTable().pieces.map(p=>[p.id,p])),issues=[],fighters=[],ribbons=[];
   const epsilon=1e-6;
   for(const p of table.pieces){
     const original=stock.get(p.id);

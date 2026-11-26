@@ -22,7 +22,7 @@ if(process.argv[1]===path&&process.argv[2]==='--check-ruin-windows'){
   function blocked(face,u,y,side){
     const origin=face==='door'?new T.Vector3(u,y,side*5):new T.Vector3(side*5,y,u);
     const direction=face==='door'?new T.Vector3(0,0,-side):new T.Vector3(-side,0,0);
-    ray.set(origin,direction);
+    ray.set(origin.multiplyScalar(3/2.30),direction);
     return ray.intersectObject(mesh,true).length>0;
   }
   for(const side of [-1,1]){
@@ -55,7 +55,7 @@ if(process.argv[1]===path&&process.argv[2]==='--check-ruin-windows'){
     wall.rotation.y=piece.yaw;
     wall.updateMatrixWorld(true);
     for(const [name,start,end,centreBlocked,cylinderBlocked] of samples){
-      const from=wall.localToWorld(new T.Vector3(...start)),to=wall.localToWorld(new T.Vector3(...end));
+      const from=wall.localToWorld(new T.Vector3(...start).multiplyScalar(3/2.30)),to=wall.localToWorld(new T.Vector3(...end).multiplyScalar(3/2.30));
       for(const [a,b] of [[from,to],[to,from]]){
         const delta=b.clone().sub(a),length=delta.length();
         const centre=new T.Raycaster(a,delta.normalize(),0,length);

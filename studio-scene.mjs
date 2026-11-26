@@ -1,4 +1,6 @@
 import {studioGroupFor,studioFrame} from './assets/turntable.mjs';
+import {reliquaryCameras} from './assets/reliquary-camera.mjs';
+import {isDisplayReliquary} from './data/reliquary-dimensions.mjs';
 
 // Frame 01 is the studio's chosen three-quarter product view. These offsets
 // describe its approximate camera bearing relative to each model's front.
@@ -42,8 +44,10 @@ export function studioScene(T,scene,pieces,ready){
     const sheet=request(String(f.url));if(!sheet.texture)return false;
     if(item.url!==f.url){item.texture?.dispose();item.texture=sheet.texture.clone();item.texture.needsUpdate=true;item.url=f.url;sprite.material.map=item.texture;sprite.material.needsUpdate=true}
     item.texture.repeat.set(1/f.columns,1/f.rows);item.texture.offset.set(f.col/f.columns,1-(f.row+1)/f.rows);
-    sprite.position.set(p.x,p.elevation||0,p.z);sprite.center.set(f.anchor[0],1-f.anchor[1]);
-    sprite.scale.set(f.widthInches,f.widthInches,1);sprite.renderOrder=200-distance;sprite.visible=true;
+    const registration=isDisplayReliquary(p)?reliquaryCameras[f.elevationIndex*12+f.azimuthIndex]:null;
+    const [u,v,width]=registration??[...f.anchor,f.widthInches];
+    sprite.position.set(p.x,p.elevation||0,p.z);sprite.center.set(u,1-v);
+    sprite.scale.set(width,width,1);sprite.renderOrder=200-distance;sprite.visible=true;
     sprite.userData.opaque=uv=>{
       const x=Math.min(255,Math.max(0,Math.floor((f.col+uv.x)*256/f.columns)));
       const y=Math.min(191,Math.max(0,Math.floor((f.row+1-uv.y)*192/f.rows)));

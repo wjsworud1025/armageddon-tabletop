@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createTable,photoFrame,photoToBoard} from '../data/catalog.mjs';
+import {createTable,createMapTable,photoFrame,photoToBoard} from '../data/catalog.mjs';
 import {baseDistance,place,restore,snapshot} from '../state.mjs';
 import * as T from '../vendor/three.module.min.js';
 import {photoCamera,photoFit} from '../photo-camera.mjs';
@@ -141,7 +141,7 @@ test('printed walls and open courtyards on the three patrol maps align with the 
   ];
   const down=new T.Vector3(0,-1,0);
   for(const [map,id,wall,yard] of marks){
-    const model=createPiece(T,board.pieces.find(p=>p.id===id));
+    const model=createPiece(T,createMapTable().pieces.find(p=>p.id===id));
     const at=layoutGeometry(map).terrain.find(p=>p.id===id);
     model.position.set(at.x,0,at.z);model.rotation.y=at.yaw;model.updateMatrixWorld(true);
     function surface([u,v]){

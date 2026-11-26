@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import {newBattle,startBattle} from '../rules/battle.mjs';
+import {createTable} from '../data/catalog.mjs';
+import {patrolTerrainPlacement} from '../rules/patrol-terrain-placement.mjs';
 import {sightButton} from './browser-shooter-sight.mjs';
 
 const upper='intercessor-2',ground='intercessor-3',enemy='gretchin-1';
@@ -14,7 +16,12 @@ function battlefield(save,upstairsTarget){
   const poses={'largeRuin-1':[0,0,0],[upper]:[-.9,-.55,3.37],[ground]:[.65,.9,0],[enemy]:[8,1,0]};
   if(upstairsTarget){
     poses['largeRuin-2']=[9,0,0];
-    poses[enemy]=[8.05,.5,2.31];
+    fixture.reliquaryRevision=2;
+    poses[enemy]=[7.70,.65,3.02];
+    const items=createTable().pieces;
+    const ruin={...items.find(p=>p.id==='largeRuin-2'),x:9,z:0,yaw:0};
+    const target={...items.find(p=>p.id===enemy),x:7.70,z:.65,elevation:3.02,yaw:0};
+    assert.equal(patrolTerrainPlacement(target,[ruin]).error,'');
   }
   for(const p of fixture.pieces){
     p.removed=!poses[p.id];
@@ -36,7 +43,7 @@ export async function checkPlungingFire({save,upload,state,js,click,reload,scree
     await click('[data-tab=battle]');
     await choose('fighter',upper);await choose('weapon','0');await choose('target',enemy);
     for(const who of [upper,ground])await click(sightButton(who,enemy));
-    for(const [who,height] of [[upper,3.37],[ground,0],[enemy,upstairsTarget?2.31:0]]){
+    for(const [who,height] of [[upper,3.37],[ground,0],[enemy,upstairsTarget?3.02:0]]){
       const pose=await js('tabletopView.pose('+JSON.stringify(who)+')');
       assert.ok(pose&&Math.abs(pose.elevation-height)<1e-7,'Rendered base height: '+who);
     }

@@ -1,6 +1,7 @@
 import {groupId} from './rules/battle.mjs';
 import {applyWartrakkEdition} from './rules/patrol-setup.mjs';
 import {patrolTerrainAreas} from './data/patrol-terrain-areas.mjs';
+import {mapReliquarySize} from './data/reliquary-dimensions.mjs';
 
 // Board edges in the 1535 x 1961 reference diagrams. Rotate the portrait sheet
 // onto the long horizontal axis of the digital table.
@@ -83,7 +84,7 @@ export function layoutScenery(game,geo){
   const poses=new Map(geo.terrain.map(at=>[at.id,at]));
   return game.pieces.filter(p=>p.faction==='terrain').map(p=>{
     const at=poses.get(p.id);
-    return [p,at?{...at,elevation:0,removed:false}:{removed:true}];
+    return [p,at?{...at,...(p.id==='largeRuin-2'?mapReliquarySize:{}),elevation:0,removed:false}:{removed:true}];
   });
 }
 function inside(x,z,poly){

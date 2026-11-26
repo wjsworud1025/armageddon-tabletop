@@ -1,3 +1,5 @@
+import {isDisplayReliquary} from './data/reliquary-dimensions.mjs';
+
 let mapped;
 export async function loadPortraitMap(){
   if(!mapped){
@@ -11,7 +13,7 @@ export function matchesPortraitPose(piece,initialYaw){
   // The single reliquary portrait shows the red door. Retain it for the old
   // display pose. The corrected opening view faces the landing and saints.
   let bearing=initialYaw;
-  if(piece.id==='largeRuin-2')bearing=76*Math.PI/180;
+  if(piece.id==='largeRuin-2')bearing=isDisplayReliquary(piece)?null:76*Math.PI/180;
   if(piece.id==='smallRuin-4')bearing=piece.previousPipeRuin?163*Math.PI/180:null;
   return bearing!=null&&Math.abs(Math.sin((piece.yaw-bearing)/2))<.001;
 }
