@@ -15,38 +15,65 @@ function section(s,color,from,to,radii){
   node.quaternion.setFromUnitVectors(new s.T.Vector3(0,1,0),delta.normalize());
 }
 
-function solid(s,color,positions,faces){
+function leather(s,positions,faces,checks){
   const g=new s.T.BufferGeometry();
   g.setAttribute('position',new s.T.Float32BufferAttribute(positions.flat(),3));
   g.setIndex(faces.flat());g.computeVertexNormals();
-  s.part(g,color,[0,0,0],[1,1,1]);
+  const painted=g.toNonIndexed(),colors=[];
+  const dark=new s.T.Color(vest),wornCheck=new s.T.Color(0x746f70);
+  for(let i=0;i<faces.length;i++){
+    const pigment=checks.has(i)?wornCheck:dark;
+    for(let j=0;j<3;j++)colors.push(pigment.r,pigment.g,pigment.b);
+  }
+  painted.setAttribute('color',new s.T.Float32BufferAttribute(colors,3));
+  s.part(painted,vest,[0,0,0],[1,1,1]);
 }
 
 function waistcoat(s){
   // A slit down the front exposes the belly. The side seams dip beneath
   // each arm; the back hem hangs below the belt on the knife side.
   const shape=s.child([.075,0,-.090],[0,-.24,0]);
-  const angles=[24,48,69,91,117,145,178,211,240,267,291,316,339];
+  const angles=[24,48,69,91,106,117,145,178,211,240,267,291,316,339];
+  // The free leather corner turns out beside the hip. The underside at
+  // the fold can be seen from the front and the slit opens below it.
+  const hem={
+    24:[.118,.471,.110],48:[.145,.448,.080],69:[.180,.418,.045],
+    91:[.218,.399,-.007],106:[.203,.399,-.043],117:[.180,.402,-.092],
+    145:[.112,.397,-.134],
+  };
   const rings=[],positions=[],faces=[];
   for(const [row,y,rx,rz] of [[0,.378,.152,.113],[1,.414,.134,.106],[2,.495,.125,.101],[3,.590,.133,.083]]){
     const ring=angles.map((deg,i)=>{
       const a=deg*Math.PI/180;
-      // The corner below the raised arm kicks out behind the hip. Both the
-      // front and the rear show daylight between its edge and the trousers.
-      const spread=Math.max(0,1-Math.abs(deg-117)/54);
-      const flare=[1,.63,.20,0][row]*spread;
-      const x=rx*Math.sin(a)+.045*flare,z=rz*Math.cos(a)-.145*flare;
-      let h=y;
-      if(row===0)h+=.014*Math.sin(3*a)-.024*Math.max(0,Math.sin(a))+.061*flare;
-      if(row===1)h+=.045*flare;
+      let x=rx*Math.sin(a),z=rz*Math.cos(a),h=y;
+      const scallop=.014*Math.sin(3*a)-.024*Math.max(0,Math.sin(a));
+      if(row===0)h+=scallop;
+      if(hem[deg]){
+        const w=[1,.70,.27,0][row],edge=hem[deg];
+        x+=w*(edge[0]-.152*Math.sin(a));
+        h+=w*(edge[1]-.378-scallop);
+        z+=w*(edge[2]-.113*Math.cos(a));
+      }
+      const side=Math.max(0,1-Math.abs(deg-94)/65);
+      const back=Math.max(0,1-Math.abs(deg-164)/78);
+      x+=[0,.029,.026,0][row]*side;
+      z-=[.017,.038,.038,0][row]*back;
+      const shoulder=Math.max(0,1-Math.abs(deg-152)/56);
+      z-=[0,0,.016,.040][row]*shoulder;
+      h+=[0,0,.004,.013][row]*shoulder;
       if(row===3)h+=.033*Math.cos(2*a)+.015*Math.sin(a)-(i===0||i===angles.length-1?.028:0);
       return [x,h,z];
     });rings.push(ring);positions.push(...ring);
   }
   const n=angles.length,outer=positions.length;
   for(const r of rings)for(const [x,h,z] of r)positions.push([x*.90,h,z*.90]);
+  const checks=new Set();
   const quad=(a,b,c,d)=>faces.push([a,b,c],[a,c,d]);
   for(let k=0;k<3;k++)for(let j=0;j<n-1;j++){
+    // Two staggered rows of faded checks on the outward fold.
+    if((k===0&&(j===1||j===3))||(k===1&&j===2)){
+      checks.add(faces.length);checks.add(faces.length+1);
+    }
     const a=k*n+j;quad(a,a+1,a+n+1,a+n);
     quad(outer+a,outer+a+n,outer+a+n+1,outer+a+1);
   }
@@ -58,7 +85,7 @@ function waistcoat(s){
     const a=k*n+j;
     if(j===0)quad(a,a+n,outer+a+n,outer+a);else quad(a,outer+a,outer+a+n,a+n);
   }
-  solid(shape,vest,positions,faces);
+  leather(shape,positions,faces,checks);
   for(const k of [0,3])for(let j=1;j<n;j++)shape.link(seam,rings[k][j-1],rings[k][j],.005,.005,6);
   for(const j of [0,n-1])for(let k=0;k<3;k++)
     shape.link(seam,rings[k][j],rings[k+1][j],.006,.005,6);

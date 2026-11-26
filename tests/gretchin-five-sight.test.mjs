@@ -29,3 +29,21 @@ test('front and side sight lines pass through gaps between the Gretchin’s rais
     assert.deepEqual(sightObstructions(b,a,[model]),expected);
   }
 });
+
+test('the turned coat hem blocks a frontal ray and leaves clearance below it from both sides',()=>{
+  const piece=createTable().pieces.find(p=>p.id==='gretchin-5');
+  const model=createPiece(T,piece);
+  model.userData.pieceId=piece.id;
+  model.updateMatrixWorld(true);
+  // The low front view shows leather at (476,372) and clear space at
+  // (472,423). The reverse oblique view also shows space at (250,413).
+  for(const [start,end,expected] of [
+    [[.19707,.80486,1.88256],[.25771,.48390,-2.04516],[piece.id]],
+    [[.18841,.69528,1.89639],[.24638,.34060,-2.02708],[]],
+    [[-.69365,.71677,-1.78615],[1.34641,.36870,1.56741],[]],
+  ]){
+    const a=new T.Vector3(...start),b=new T.Vector3(...end);
+    assert.deepEqual(sightObstructions(a,b,[model]),expected);
+    assert.deepEqual(sightObstructions(b,a,[model]),expected);
+  }
+});
