@@ -95,7 +95,7 @@ for(const map of ['A','B','C']){
     const activeSave=snapshot(game);
     Object.assign(piece(activeSave,'captain-1'),{x:1.7,z:1.9,yaw:.27});
     Object.assign(piece(activeSave,'largeRuin-1'),{x:1.7,z:1.9,yaw:-.76});
-    for(const version of [1,2,3,4,5,6]){
+    for(const version of [1,2,3,4,5,6,7]){
       activeSave.rules.officialSetup.version=version;
       piece(activeSave,'shockArray-1').removed=version!==1;
       const loaded=restore(createTable(),activeSave),small=piece(loaded,'smallRuin-1');
@@ -130,8 +130,8 @@ test('saved map, defender, turn, terrain and revealed reserve records agree with
 });
 
 test('the box shows all 15 terrain pieces before the draw; each saved map version restores its own structures and resumes through placement',()=>{
-  assert.equal(fresh().rules.officialSetup.version,6);
-  for(const version of [1,2,3,4,5,6])for(const [map,die] of [['A',1],['B',3],['C',5]]){
+  assert.equal(fresh().rules.officialSetup.version,7);
+  for(const version of [1,2,3,4,5,6,7])for(const [map,die] of [['A',1],['B',3],['C',5]]){
     let game=fresh();game.rules.officialSetup.version=version;
     assert.equal(game.pieces.filter(p=>visiblePatrolPiece(game.rules,p)).length,15);
     const tooEarly=snapshot(game);piece(tooEarly,'shockArray-1').removed=true;
@@ -164,7 +164,7 @@ test('the box shows all 15 terrain pieces before the draw; each saved map versio
       const wrongPipe=snapshot(game);wrongPipe.rules.officialSetup.version=version===4?5:4;
       assert.throws(()=>restore(createTable(),wrongPipe),'the registered pipe wall changes between v4 and v5');
     }
-    const unsupported=snapshot(game);unsupported.rules.officialSetup.version=7;
+    const unsupported=snapshot(game);unsupported.rules.officialSetup.version=8;
     assert.throws(()=>restore(createTable(),unsupported));
     game=step(step(game,'official-roll-role',{},[1,4]),'official-defend');
     game=step(game,'form-enhance',{team:'marines',enhancement:'veterans'});
@@ -357,4 +357,35 @@ test('older manual and HP-only saves continue restoring without official formati
   assert.deepEqual(checkpoint(table).rules,table.rules);
   table.rules={hp:{'warboss-1':2}};
   assert.deepEqual(checkpoint(table).rules,table.rules);
+});
+
+test('migrating the second ruin leaves an earlier v2 vehicle placement on the first ruin committed',()=>{
+  let game=fresh();game.rules.officialSetup.version=2;
+  game=step(game,'official-roll-layout',{},[1]);
+  game=step(game,'official-roll-role',{},[2,6]);
+  game=step(game,'official-defend');
+  game=step(game,'form-enhance',{team:'marines',enhancement:'veterans'});
+  game=step(step(game,'form-lock',{team:'marines'}),'form-open',{team:'orks'});
+  game=step(game,'form-enhance',{team:'orks',enhancement:'warcry'});
+  game=step(game,'form-lock',{team:'orks'});
+  for(const unit of ['wartrakk','captain'])
+    game=step(step(game,'official-select',{unit}),'official-place');
+  const old=snapshot(game);delete old.terrainRevision;
+  const first=piece(game,'largeRuin-1'),second=piece(game,'largeRuin-2');
+  const vehicle=piece(old,'wartrakk-1'),captain=piece(old,'captain-1');
+  // Map A v2 first ruin faces +Z. The old oval fits underneath the landing
+  // while some of the tracked vehicle's upper equipment meets its underside.
+  Object.assign(vehicle,{x:first.x-.8,z:first.z+1.4,yaw:0});
+  const posed={...piece(game,vehicle.id),...vehicle};
+  assert.ok(validDeployment(game,posed));
+  assert.equal(patrolTerrainPlacement(posed,[first],{checkVehicleBody:false}).error,'');
+  assert.deepEqual(patrolTerrainPlacement(posed,[first]).contacts,[first.id]);
+  // The second ruin faces -Z. This captain was supported by its former shelf.
+  Object.assign(captain,{x:second.x+1.4,z:second.z+.5,elevation:2.35});
+  const loaded=restore(createTable(),old);
+  assert.deepEqual(loaded.rules.deployment,game.rules.deployment);
+  const resumed=snapshot(loaded);
+  assert.deepEqual(piece(resumed,vehicle.id),vehicle);
+  assert.notEqual(piece(resumed,captain.id).elevation,captain.elevation);
+  assert.deepEqual(snapshot(restore(createTable(),resumed)),resumed);
 });

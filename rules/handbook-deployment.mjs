@@ -13,6 +13,7 @@ export function handbookFacing(origin,yaw){
 
 // Histories replay against the exact obstacles for their printed-layout fit.
 // Revision 2 replaced the second large ruin, revision 3 the first small ruin.
+// In training four revision 4 also checks vehicle bodies at endpoints.
 export function handbookEditions(scenario,field,build){
   const latest=field.handbookRevision??2;
   const editions=new Map([[latest,build(field)]]);
@@ -77,6 +78,7 @@ function buildDeployment(scenario,table,validateLayout){
     if(error.startsWith('zone '))return '이 부대의 인쇄된 배치 구역 안에 놓으세요.';
     if(error.startsWith('overlap '))return '다른 모델의 베이스와 겹칩니다.';
     if(error.startsWith('wall overlap '))return '폐허의 벽과 겹칩니다.';
+    if(error.startsWith('vehicle contact '))return error.slice('vehicle contact '.length);
     return invalidState;
   }
 

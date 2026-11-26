@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {newBattle,startBattle} from './battle.mjs';
 import {trainingFourVP} from './training-four-objectives.mjs';
+import {trainingFourDeployment} from './training-four-battle.mjs';
 
 export async function checkTrainingFour({save,upload,click,state,js,reload,send}){
   const fixture=structuredClone(save),speeder='landSpeeder-1',wartrakk='wartrakk-1';
@@ -36,10 +37,14 @@ export async function checkTrainingFour({save,upload,click,state,js,reload,send}
   assert.deepEqual([displayed.w,displayed.h,displayed.panels,displayed.surface,displayed.visible],[30,22,1,'reverse',28]);
   assert.ok(displayed.speeder&&displayed.trakk);
   if(await js('document.querySelector("#camera").textContent.trim()==="탑뷰"'))await click('#camera');
-  const trakkScreen=await js('(()=>{const r=document.querySelector("#view").getBoundingClientRect(),p=tabletopView.screen("wartrakk-1");return {x:r.left+p.x,y:r.top+p.y}})()');
-  for(const type of ['mousePressed','mouseReleased'])await send('Input.dispatchMouseEvent',{
-    type,...trakkScreen,button:'left',buttons:type==='mousePressed'?1:0,clickCount:1,
-  });
+  async function selectTrakk(){
+    await world();
+    const at=await js('(()=>{const r=document.querySelector("#view").getBoundingClientRect(),p=tabletopView.screen("wartrakk-1");return {x:r.left+p.x,y:r.top+p.y}})()');
+    for(const type of ['mousePressed','mouseReleased'])await send('Input.dispatchMouseEvent',{
+      type,...at,button:'left',buttons:type==='mousePressed'?1:0,clickCount:1,
+    });
+  }
+  await selectTrakk();
   assert.ok(await js('document.querySelector("#training-four-right").checkVisibility()'));
   await click('#training-four-right');
   const rotated=await drill();
@@ -98,5 +103,28 @@ export async function checkTrainingFour({save,upload,click,state,js,reload,send}
   assert.ok(!restored.training);
   const normal=await world();
   assert.deepEqual([normal.w,normal.h,normal.panels,normal.surface,normal.speeder],[44,30,2,'front',null]);
+  // A 15° pivot into small ruin 2 is an illegal placement, but the same
+  // facing is a permissible intermediate waypoint in an actual move.
+  const fresh=trainingFourDeployment.create(),start=trainingFourDeployment.pieces(fresh).find(p=>p.id===wartrakk);
+  const parked=trainingFourDeployment.move(fresh,wartrakk,start.x,start.z-.25,start.yaw+Math.PI/6);
+  await upload({...original,training:parked});await click('[data-tab=battle]');
+  if(await js('document.querySelector("#camera").textContent.trim()==="탑뷰"'))await click('#camera');
+  await selectTrakk();
+  await click('#training-four-left');
+  assert.match(await js('document.querySelector("#notice").textContent'),/워트랙.*차체.*폐허 2.*관통/);
+  assert.deepEqual(await drill(),parked);
+  await click('#training-four-begin');await click(action('four-score'));
+  await click(action('move','[data-unit="wartrakk"][data-mode="normal"]'));
+  await selectTrakk();await click('#training-four-left');
+  const inside=await drill();assert.equal(inside.plan.paths[wartrakk].length,1);
+  await click(action('finish'));
+  assert.deepEqual(await drill(),inside);
+  assert.match(await js('document.querySelector("#notice").textContent'),/워트랙.*차체.*폐허 2.*관통/);
+  await click('#training-four-right');await click(action('finish'));
+  const done=await drill();
+  assert.equal(done.plan,null);
+  assert.deepEqual(done.poses[wartrakk],parked.positions[wartrakk]);
+  await reload();assert.deepEqual(await drill(),done);
+  await click('#training-four-exit');
   await upload(save);await click('[data-tab=battle]');
 }

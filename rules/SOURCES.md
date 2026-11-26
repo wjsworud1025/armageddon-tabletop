@@ -76,7 +76,7 @@ Heavy는 명중 굴림을 바꾼다. 엄폐와 고지 사격은 BS에 적용하�
 
 A/B/C 맵에서는 게임이 상대 배치 구역을 검사한다. 제품 전장이나 자유 배치에서 배치 구역 경계를 지정하지 않았으면 두 플레이어가 합의한 경계를 확인한다. 편대, 모델 받침대의 겹침, 적과의 수평 간격은 자동으로 검사한다. 지형과 받침대가 겹치는 곳에서는 벽·천장을 관통하는지, 상층에서는 모델이 안정적으로 서는지 확인한다. 상층의 높이가 가장자리 거리 판정을 바꿀 때도 화면에 확인 요청을 표시한다. [공식 코어 규칙 01.04, 03.01–03.03, 13.06](https://assets.warhammer-community.com/eng_01-06_warhammer40k_new40k_core_rules-was6fbu1ix-hfewhmxyiy.pdf)
 
-패트롤에서 이동·돌격·밀착·재정비·사격 반응 이동을 마치거나 증원을 배치할 때, 지면보다 높은 베이스는 전장에 놓인 지형의 실제 상판 안에 들어가야 한다. 게임은 지형의 현재 위치·회전·형상과 각 베이스의 크기로 높이, 벽 관통과 상판 밖 돌출을 검사한다. 보병은 밀집 지형의 벽을 수평으로 통과해 반대편에 멈출 수 있다. 지상 종료점에서는 받침대가 실제 벽·기둥과 겹치면 이동을 확정할 수 없다. 열린 안뜰과 기둥 사이는 받침대가 들어갈 공간이 있으면 허용한다. 모델 상체·무기와 장식의 간섭, Solid 지형에 있는 낮은 폐쇄형 개구부는 양측이 현물을 기준으로 확인한다. 비행 모델은 공중을 경유할 수 있고, 이동 종료 때는 같은 지지 조건을 적용한다. 경로를 오르내리는 동안 지형과 수평 ½″ 안에 있는지, 조형이 실제로 안정적인지는 플레이어가 확인한다. [공식 코어 규칙 §13.06, 48쪽](https://assets.warhammer-community.com/eng_01-06_warhammer40k_new40k_core_rules-was6fbu1ix-hfewhmxyiy.pdf#page=48) · [비행 §21.03, 71쪽](https://assets.warhammer-community.com/eng_01-06_warhammer40k_new40k_core_rules-was6fbu1ix-hfewhmxyiy.pdf#page=71)
+패트롤에서 이동·돌격·밀착·재정비·사격 반응 이동을 마치거나 증원을 배치할 때, 지면보다 높은 베이스는 전장에 놓인 지형의 실제 상판 안에 들어가야 한다. 게임은 지형의 현재 위치·회전·형상과 각 베이스의 크기로 높이, 벽 관통과 상판 밖 돌출을 검사한다. 보병은 밀집 지형의 벽을 수평으로 통과해 반대편에 멈출 수 있다. 지상 종료점에서는 받침대가 실제 벽·기둥과 겹치면 이동을 확정할 수 없다. 열린 안뜰과 기둥 사이는 받침대가 들어갈 공간이 있으면 허용한다. 보병의 상체·무기와 장식의 간섭, Solid 지형에 있는 낮은 폐쇄형 개구부는 양측이 현물을 기준으로 확인한다. 비행 모델은 공중을 경유할 수 있고, 이동 종료 때는 같은 지지 조건을 적용한다. 경로를 오르내리는 동안 지형과 수평 ½″ 안에 있는지, 조형이 실제로 안정적인지는 플레이어가 확인한다. [공식 코어 규칙 §13.06, 48쪽](https://assets.warhammer-community.com/eng_01-06_warhammer40k_new40k_core_rules-was6fbu1ix-hfewhmxyiy.pdf#page=48) · [비행 §21.03, 71쪽](https://assets.warhammer-community.com/eng_01-06_warhammer40k_new40k_core_rules-was6fbu1ix-hfewhmxyiy.pdf#page=71)
 
 ### 사격 직후의 반응 이동
 
@@ -95,6 +95,14 @@ A/B/C 맵에서는 게임이 상대 배치 구역을 검사한다. 제품 전장
 정밀 무기가 여러 모델이 남은 캐릭터 분대에 상처를 입히면 방어 주사위를 굴리기 전에 멈춘다. 공격 측이 해당 공격자 중 하나에게 보이는 적 캐릭터 한 명을 직접 확인해 정밀 배정을 선택하거나 생략한다. 선택한 캐릭터가 제거된 뒤의 공격은 일반 배정 순서를 따른다. 중간 저장에는 명중과 상처 결과가 포함된다. [공식 기본 규칙 05.03–05.04, 24.28](https://assets.warhammer-community.com/eng_01-06_warhammer40k_new40k_core_rules-was6fbu1ix-hfewhmxyiy.pdf)
 
 위어드보이의 근접 무기가 영웅적 도전으로 정밀을 얻으면 같은 공격 묶음에서 일반 피해를 먼저 해결한다. 치명상으로 발생한 모탈 운드도 앞서 선택한 캐릭터가 살아 있으면 그 캐릭터에게 먼저 배정한다. [패트롤 앱 부록 전사본 24.28.01](https://wahapedia.ru/wh40k11ed_cp/the-rules/rules-appendix/#Precision-and-Devastating-Wounds)
+
+## 차량 조형과 이동 종료
+
+§03.01은 이동 중 베이스가 들어가는 공간을 통과할 수 있다고 규정한다. 회전은 베이스 중심에서 하고 거리 비용은 0이다. 분대가 이동이나 배치를 마칠 때는 모델의 어느 부분도 벽·천장 등 지형 표면을 관통할 수 없다. 랜드 스피더와 워트랙은 이때 받침대에 더해 차체·날개·탑승원·장비의 조형을 검사한다. 각도나 높이를 바꿔 돌출부가 지형을 벗어나면 이동을 완료할 수 있다. 베이스가 지나온 경로의 지형 종류·높이 제한은 계속 적용된다. [공식 기본 규칙 §03.01, 12쪽](https://assets.warhammer-community.com/eng_01-06_warhammer40k_new40k_core_rules-was6fbu1ix-hfewhmxyiy.pdf#page=12) · [지형 §13.06, 48쪽](https://assets.warhammer-community.com/eng_01-06_warhammer40k_new40k_core_rules-was6fbu1ix-hfewhmxyiy.pdf#page=48)
+
+Assault Force 랜드 스피더는 VEHICLE·FLY, ’Ardmob 워트랙은 MOUNTED다. 랜드 스피더가 비행을 선언하면 경유 중 지형을 통과할 수 있고, 지형과 겹치는 위치에서 이동을 끝내려 하면 같은 종료 검사를 받는다. 정식 배치 판본 1–6에서 이미 확정한 차량은 저장한 좌표로 복원한다. 이어서 배치하는 차량과 판본 7에서 확정한 배치에는 차체 검사를 적용한다. 접촉만 한 부분, 조형의 재현 정도가 불확실한 미세 장식과 Solid의 낮은 폐쇄형 개구부는 현물을 대조할 수 있다. [비행 §21.03, 71쪽](https://assets.warhammer-community.com/eng_01-06_warhammer40k_new40k_core_rules-was6fbu1ix-hfewhmxyiy.pdf#page=71) · [공식 컴뱃 패트롤 앱 배포 공지](https://www.warhammer-community.com/en-gb/articles/2akzkx92/combat-patrol-is-now-live-in-your-app/) · [Assault Force 데이터시트 전사](https://wahapedia.ru/wh40k11ed_cp/factions/assault-force/) · [’Ardmob 데이터시트 전사](https://wahapedia.ru/wh40k11ed_cp/factions/ardmob/)
+
+핸드북 훈련 4의 인쇄 배치에는 워트랙과 랜드 스피더가 한 대씩 있다. 디지털 훈련 4의 판본 4부터 초기 배치를 조정하거나 이동·돌격·근접 이동을 완료할 때 차량과 폐허의 실제 조형이 관통하는지 검사한다. 경유 중에는 종전의 핸드북 베이스·벽 경로 조건을 사용한다. 이전 디지털 판본 1–3의 배치와 이동 기록은 저장한 판본의 판정으로 재생한다. [실물 핸드북 72–75쪽, Strategic Objective](https://www.youtube.com/watch?v=TKObcaZUZbw&t=933s) · [모델의 이동 종료 조건 §03.01, 12쪽](https://assets.warhammer-community.com/eng_01-06_warhammer40k_new40k_core_rules-was6fbu1ix-hfewhmxyiy.pdf#page=12)
 
 ## 반격 전술
 

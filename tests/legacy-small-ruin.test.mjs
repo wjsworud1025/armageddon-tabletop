@@ -21,7 +21,7 @@ test('the fourth ruin carries its own edition when switching between official, h
   const manual=saveTable();
   Object.assign(pipe(manual.pieces),poses);
   const trainings=[createTrainingTwo(),createTrainingThreeDeployment(),trainingFourDeployment.create()];
-  assert.deepEqual(trainings.map(s=>s.version),[2,3,3]);
+  assert.deepEqual(trainings.map(s=>s.version),[2,3,4]);
   for(const pieces of [trainingTwoPieces(trainings[0]),trainingThreeDeploymentPieces(trainings[1]),trainingFourDeployment.pieces(trainings[2])])
     assert.equal(pipe(pieces),undefined);
   for(const version of [1,2,3,4]){
@@ -77,7 +77,7 @@ test('handbook deployment revisions keep each physical wall independently across
     [trainingFourDeployment.create,trainingFourDeployment.validate,trainingFourDeployment.pieces],
   ]){
     const current=create();
-    assert.equal(current.version,3);
+    assert.equal(current.version,current.scenario===4?4:3);
     assert.equal(!!wall(pieces(current)).previousSmallRuin,false);
     assert.equal(validate({...current,positions:{'gretchin-1':courtyard}}),false);
     for(const version of [1,2]){

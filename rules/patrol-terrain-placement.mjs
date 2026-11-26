@@ -1,5 +1,6 @@
 import * as T from '../vendor/three.module.min.js';
 import {pieceGeometry} from '../assets/pieces.mjs';
+import {vehicleTerrainContacts} from '../assets/vehicle-clearance.mjs';
 
 // Core Rules 13.06, p.48: a non-ground surface must support the model
 // stably with its entire base inside the outer edge. Of these patrols'
@@ -173,12 +174,20 @@ function hitsBase(site,y){
   return cutsBase(site,local+.105,.95)||(y===0&&cutsBase(site,local+.025,.985));
 }
 
-export function patrolTerrainPlacement(p,terrain){
+export function patrolTerrainPlacement(p,terrain,{checkVehicleBody=true}={}){
   const y=p.elevation??0;
   if(!Number.isFinite(y)||y<0)return fail('베이스에 올바른 지면 높이를 지정하세요.');
   if(y>0&&!upperFloorKinds.has(p.kind))return fail('이 모델은 지면에 배치해야 합니다. 상층 배치에 필요한 키워드가 없습니다.');
   const sites=nearby(p,terrain);
   if(sites.some(site=>hitsBase(site,y)))return fail('베이스가 지형의 벽이나 구조물 안에 들어갑니다.');
+  // A wing or gun can extend past the base, even when nearby() found no sites.
+  if(checkVehicleBody){
+    const contacts=vehicleTerrainContacts(p,terrain);
+    if(contacts.length){
+      const names=contacts.map(id=>terrain.find(item=>item.id===id)?.name||id);
+      return {...fail('차체 또는 장비가 '+names.join(', ')+'의 표면을 관통합니다. 위치나 방향을 조정하세요.'),contacts};
+    }
+  }
   if(!sites.length)return y===0?allowed:fail('이 높이에 베이스를 지지할 지형이 없습니다.');
   if(y===0)return review('지면에 놓은 모델의 무기·차체가 벽, 장식 또는 위층 바닥을 뚫지 않는지 확인하세요.');
   if(sites.some(site=>supported(site,y-site.ground))){
@@ -209,7 +218,7 @@ export function patrolHighGround(piece,terrain){
   return sites.some(site=>site.ground===0 && supported(site,y));
 }
 
-export function patrolTerrainLevels(p,terrain){
+export function patrolTerrainLevels(p,terrain,{checkVehicleBody=true}={}){
   const levels=[0];
   if(!upperFloorKinds.has(p.kind))return levels;
   const sites=nearby(p,terrain);
@@ -218,7 +227,7 @@ export function patrolTerrainLevels(p,terrain){
     for(const local of [...site.shape.tops.keys()].sort((a,b)=>b-a)){
       const y=roundHeight(site.ground+local);
       if(levels.some(h=>Math.abs(h-y)<=ribDepth)||!supported(site,local))continue;
-      if(!sites.some(other=>hitsBase(other,y)))levels.push(y);
+      if(!sites.some(other=>hitsBase(other,y))&&(!checkVehicleBody||!vehicleTerrainContacts({...p,elevation:y},terrain).length))levels.push(y);
     }
   }
   return levels.sort((a,b)=>a-b);

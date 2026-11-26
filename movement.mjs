@@ -209,7 +209,8 @@ export function assessMove({game,pieces,origins={},paths={},type,advanceRoll=0,p
     ends.push(position);
     if(phase==='finish' && type!=='remain') {
       const support=patrolTerrainPlacement(position,others);
-      if(position.elevation>0){
+      if(support.contacts) fail('vehicle-terrain',[p.id,...support.contacts],support.error);
+      else if(position.elevation>0){
         if(support.error) fail(p.kind==='wartrakk'?'upper-floor':'unsupported-floor',[p.id],support.error);
         else if(support.manual) check('supported-floor',[p.id],support.manual);
       }else if(support.error) fail('terrain-base',[p.id],support.error);
@@ -222,7 +223,12 @@ export function assessMove({game,pieces,origins={},paths={},type,advanceRoll=0,p
     for (const other of [...ends.slice(i+1),...others]) {
       const pair=[p.id,other.id];
       if(other.faction==='terrain') {
-        if(sweptGap(p,p,other)<-EPS) check('terrain-end',pair,'최종 베이스와 조형이 실제 벽·천장에 걸치지 않는지 확인하세요.');
+        if(sweptGap(p,p,other)<-EPS){
+          const hint=p.kind==='landSpeeder'||p.kind==='wartrakk'
+            ?'Solid 지형이라면 지면에서 3″ 이하인 벽의 닫힌 문·창문 윤곽을 차량 일부가 관통하는지 확인하세요.'
+            :'최종 베이스와 조형이 실제 벽·천장에 걸치지 않는지 확인하세요.';
+          check('terrain-end',pair,hint);
+        }
         continue;
       }
       if(sweptGap(p,p,other)<-EPS) {

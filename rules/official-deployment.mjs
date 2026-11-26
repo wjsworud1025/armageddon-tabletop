@@ -24,14 +24,14 @@ export function patrolPlacementError(game){
   const r=game.rules,d=r.deployment,all=fighters(game),unit=all.filter(p=>pendingPatrolPiece(r,p));
   return unitPlacementError(game,unit,all.filter(p=>d.placed.includes(groupId(r,p))));
 }
-function unitPlacementError(game,unit,bodies){
+function unitPlacementError(game,unit,bodies,options){
   if(!unit.length)return '배치할 분대를 고르세요.';
   if(unit.some(p=>!validDeployment(game,p)))return '모든 베이스를 배치 구역 안에 놓으세요.';
   const formation=coherency(unit);
   if(!formation.ok)return formation.errors[0].message;
   const terrain=game.pieces.filter(p=>p.faction==='terrain');
   for(const p of unit){
-    const support=patrolTerrainPlacement(p,terrain);
+    const support=patrolTerrainPlacement(p,terrain,options);
     if(support.error)return support.error;
     if(bodies.some(q=>Math.abs((q.elevation??0)-(p.elevation??0))<baseThickness-1e-6&&sweptGap(p,p,q)<-1e-6))
       return '다른 모델의 베이스와 겹칩니다.';
@@ -39,12 +39,15 @@ function unitPlacementError(game,unit,bodies){
   }
   return '';
 }
+// Import and ruin migration both inspect a previously committed placement.
+// New placement actions in every edition use the current body checks.
+const savedPlacementChecks=r=>({checkVehicleBody:r.officialSetup.version>=7});
 export function validPlacedPatrolUnits(game){
   const r=game.rules;
   if(!officialPreparing(r)||!r.deployment)return true;
-  const all=fighters(game),bodies=[];
+  const all=fighters(game),bodies=[],options=savedPlacementChecks(r);
   for(const key of r.deployment.placed){
-    if(unitPlacementError(game,all.filter(p=>groupId(r,p)===key),bodies))return false;
+    if(unitPlacementError(game,all.filter(p=>groupId(r,p)===key),bodies,options))return false;
   }
   return true;
 }
@@ -57,11 +60,11 @@ export function recoverPreviousRuinDeployment(game){
   const ruin=game.pieces.find(p=>p.id==='largeRuin-2');
   const previous={...ruin,baseWidth:5.2,baseDepth:4.10,previousSecondRuin:true};
   if(!validPlacedPatrolUnits({...game,pieces:game.pieces.map(p=>p===ruin?previous:p)}))return false;
-  const bodies=[];
+  const bodies=[],options=savedPlacementChecks(r);
   for(const [index,key] of d.placed.entries()){
     const members=fighters(game).filter(p=>groupId(r,p)===key);
-    if(!unitPlacementError(game,members,[...bodies])){bodies.push(...members);continue;}
-    const elevated=members.filter(p=>p.elevation>0&&!patrolTerrainPlacement(p,[previous]).error);
+    if(!unitPlacementError(game,members,[...bodies],options)){bodies.push(...members);continue;}
+    const elevated=members.filter(p=>p.elevation>0&&!patrolTerrainPlacement(p,[previous],options).error);
     let fitted=false;
     // Retain centres wherever possible. If the broken edge moved, test the
     // corresponding position across the ruin's local z axis instead.
@@ -71,11 +74,11 @@ export function recoverPreviousRuinDeployment(game){
         const c=Math.cos(ruin.yaw),s=Math.sin(ruin.yaw),localZ=s*(p.x-ruin.x)+c*(p.z-ruin.z);
         const offset=mirror?-2*localZ:0;
         const q={...p,x:p.x+s*offset,z:p.z+c*offset};
-        const h=patrolTerrainLevels(q,[ruin]).filter(h=>h>0&&Math.abs(h-p.elevation)<.15)
+        const h=patrolTerrainLevels(q,[ruin],options).filter(h=>h>0&&Math.abs(h-p.elevation)<.15)
           .sort((a,b)=>Math.abs(a-p.elevation)-Math.abs(b-p.elevation))[0];
         if(h!==undefined)proposed.set(p,{...q,elevation:h});
       }
-      if(!proposed.size||unitPlacementError(game,members.map(p=>proposed.get(p)??p),[...bodies]))continue;
+      if(!proposed.size||unitPlacementError(game,members.map(p=>proposed.get(p)??p),[...bodies],options))continue;
       for(const [p,q] of proposed)Object.assign(p,{x:q.x,z:q.z,elevation:q.elevation});
       fitted=true;break;
     }

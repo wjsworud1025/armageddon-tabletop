@@ -14,7 +14,7 @@ const fields=(value,keys)=>value!==null&&typeof value==='object'&&
   Object.keys(value).length===keys.length&&keys.every(k=>Object.hasOwn(value,k));
 
 export function newPatrolSetup(){
-  return {version:6,layoutDie:null,roleRolls:[],roleChoice:null,
+  return {version:7,layoutDie:null,roleRolls:[],roleChoice:null,
     formationsRevealed:false,deploymentComplete:false,firstRolls:[]};
 }
 
@@ -54,7 +54,7 @@ function validRolls(rolls){
 
 export function validatePatrolSetup(s){
   if(!fields(s,['version','layoutDie','roleRolls','roleChoice','formationsRevealed','deploymentComplete','firstRolls'])||
-    ![1,2,3,4,5,6].includes(s.version)||s.layoutDie!==null&&!die(s.layoutDie)||
+    ![1,2,3,4,5,6,7].includes(s.version)||s.layoutDie!==null&&!die(s.layoutDie)||
     !validRolls(s.roleRolls)||!validRolls(s.firstRolls)||
     typeof s.formationsRevealed!=='boolean'||typeof s.deploymentComplete!=='boolean')return false;
   if(s.roleRolls.length&&s.layoutDie===null)return false;

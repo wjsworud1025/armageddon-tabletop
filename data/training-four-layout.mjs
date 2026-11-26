@@ -6,6 +6,7 @@ import {
 } from './training-three-layout.mjs';
 import {measureFootprints} from '../ruler.mjs';
 import {overlapsArea} from '../layouts.mjs';
+import {vehicleTerrainContacts} from '../assets/vehicle-clearance.mjs';
 
 export {toMap as trainingFourMapPoint,toWorld as trainingFourWorldPoint,
   surfaceUV as trainingFourSurfaceUV,wallVertices as trainingFourWallSegments};
@@ -63,7 +64,7 @@ export function createTrainingFourTable(){
   const pieces=poses.map(([id,x,z,yaw])=>({
     ...catalog.get(id),...toWorld({x,z}),yaw,elevation:0,removed:false,
   }));
-  return {width,depth,surface:'reverse',handbookRevision:3,pieces};
+  return {width,depth,surface:'reverse',handbookRevision:4,pieces};
 }
 
 const areaByKind={
@@ -88,6 +89,15 @@ function wallRibbons(wall){
 // interiors. Inset one footprint by a microscopic tolerance to distinguish them.
 function overlapInterior(a,b){
   return measureFootprints({...a,baseWidth:a.baseWidth-.00001,baseDepth:a.baseDepth-.00001},b).horizontal<1e-7;
+}
+
+// Earlier records are replayed with the printed wall ribbons alone.
+export function trainingFourVehicleError(field,model){
+  if(field.handbookRevision<4)return '';
+  const contacts=vehicleTerrainContacts(model,field.pieces);
+  if(!contacts.length)return '';
+  const names=contacts.map(id=>field.pieces.find(p=>p.id===id).name);
+  return model.name+'의 차체 또는 장비가 '+names.join(', ')+'의 표면을 관통합니다. 위치나 방향을 조정하세요.';
 }
 
 export function validateTrainingFourLayout(table){
@@ -119,6 +129,8 @@ export function validateTrainingFourLayout(table){
       issues.push('overlap '+p.id+' '+other.id);
     for(const wall of ribbons)if(overlapInterior(p,wall))
       issues.push('wall overlap '+p.id+' '+wall.id);
+    const error=trainingFourVehicleError(table,p);
+    if(error)issues.push('vehicle contact '+error);
   }
   for(const [i,a] of ribbons.entries())for(const b of ribbons.slice(0,i))
     if(a.id!==b.id&&overlapInterior(a,b))issues.push('wall clash '+a.id+' '+b.id);

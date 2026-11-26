@@ -102,11 +102,15 @@ function bake(T, group) {
   const lib = resources(T);
   const positions = [], normals = [], colors = [], uvs = [], indices = [];
   const supportBridges = [];
+  const partIndexOffsets = [];
+  let vehicleBodyIndexOffset;
   const v = new T.Vector3(), n = new T.Vector3(), nm = new T.Matrix3();
   group.updateMatrixWorld(true);
   group.traverse(node => {
+    if(node.userData.vehicleBody)vehicleBodyIndexOffset=indices.length;
     const {geometry,color} = node.userData;
     if (!geometry) return;
+    partIndexOffsets.push(indices.length);
     for (const edge of node.userData.supportBridges ?? []) {
       supportBridges.push(edge.map(point => {
         v.fromArray(point).applyMatrix4(node.matrixWorld);
@@ -143,6 +147,9 @@ function bake(T, group) {
   combined.setAttribute('color',new T.Float32BufferAttribute(colors,3));
   combined.setAttribute('uv',new T.Float32BufferAttribute(uvs,2));
   combined.setIndex(indices);
+  combined.userData.partIndexOffsets=partIndexOffsets;
+  // The vehicle body follows its plinth and basing sand in the same draw.
+  if(vehicleBodyIndexOffset!==undefined)combined.userData.vehicleBodyIndexOffset=vehicleBodyIndexOffset;
   combined.computeBoundingBox();
   combined.computeBoundingSphere();
   return combined;

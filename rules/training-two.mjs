@@ -8,7 +8,7 @@ import {opposite, woundThreshold} from './battle.mjs';
 export function handbookBattleEngine(options){
   return handbookEditions(options.scenario,options.field,field=>buildBattle({...options,field}));
 }
-function buildBattle({scenario,field,names,validateLayout,wallSegments,shooting=null,command=null}){
+function buildBattle({scenario,field,names,validateLayout,wallSegments,shooting=null,command=null,endpointError=null}){
   const version=field.handbookRevision??2;
   const models=field.pieces.filter(p=>p.faction!=='terrain');
   const keys=Object.keys(names);
@@ -215,6 +215,10 @@ function buildBattle({scenario,field,names,validateLayout,wallSegments,shooting=
       return end;
     });
     if(!finish)return;
+    if(endpointError)for(const end of ends){
+      const error=endpointError(field,end);
+      req(!error,error);
+    }
     req(coherent(ends),'같은 분대가 2″ 간격으로 하나의 연결된 무리를 이루어야 합니다.');
     if(p.mode==='charge')req(ends.some(m=>distanceTo(m,members(all,p.target))<=2+eps),'돌격 표적의 교전 거리 안에서 끝내세요.');
     if(p.mode==='fallback')req(ends.every(m=>distanceTo(m,opponents)>2+eps),'적 교전 거리 밖에서 후퇴를 마치세요.');

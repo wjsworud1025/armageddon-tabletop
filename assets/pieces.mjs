@@ -46,6 +46,7 @@ function buildPiece(THREE,item,cast) {
     const depth=item.baseDepth || (vehicle?105:32)/25.4;
     plinth(s,width,depth,variant+item.kind.charCodeAt(0));
     const body=s.child([0,.14,0]);
+    if(vehicle)body.group.userData.vehicleBody=true;
     if(marines.has(item.kind)) marine(body,item.kind,variant);
     else if(orks.has(item.kind)) greenskin(body,item.kind,variant);
     else if(item.kind==='landSpeeder') speeder(body);
