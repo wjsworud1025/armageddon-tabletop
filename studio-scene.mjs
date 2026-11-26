@@ -2,8 +2,15 @@ import {studioGroupFor,studioFrame} from './assets/turntable.mjs';
 
 // Frame 01 is the studio's chosen three-quarter product view. These offsets
 // describe its approximate camera bearing relative to each model's front.
-const firstBearing={1:10,2:0,3:0,4:10,5:30,6:5,7:0,8:0,9:0,10:0,11:30,12:35,13:0,14:20,15:15};
+// The two ground walls fix group 12's local axes across the three camera rings.
+const firstBearing={1:10,2:0,3:0,4:10,5:30,6:5,7:0,8:0,9:0,10:0,11:30,12:124.4,13:0,14:20,15:15};
 const rad=Math.PI/180;
+
+export function studioViewFrame(group,relativeYaw,pitch){
+  const row=pitch<20*rad?0:pitch<40*rad?1:2;
+  const col=Math.round((relativeYaw-(firstBearing[group]||0)*rad)/(30*rad));
+  return studioFrame(group,row,col);
+}
 
 export function studioScene(T,scene,pieces,ready){
   const sheets=new Map(),figures=new Map();
@@ -31,9 +38,7 @@ export function studioScene(T,scene,pieces,ready){
     const item=figures.get(p.id);if(!item)return false;
     const {sprite,group}=item;sprite.visible=false;
     if(!enabled||p.removed||pitch>65*rad)return false;
-    const row=pitch<20*rad?0:pitch<40*rad?1:2;
-    const col=(Math.round((cameraYaw-p.yaw-(firstBearing[group]||0)*rad)/(30*rad))%12+12)%12;
-    const f=studioFrame(group,row,col);if(!f||!(f.widthInches>0))return false;
+    const f=studioViewFrame(group,cameraYaw-p.yaw,pitch);if(!f||!(f.widthInches>0))return false;
     const sheet=request(String(f.url));if(!sheet.texture)return false;
     if(item.url!==f.url){item.texture?.dispose();item.texture=sheet.texture.clone();item.texture.needsUpdate=true;item.url=f.url;sprite.material.map=item.texture;sprite.material.needsUpdate=true}
     item.texture.repeat.set(1/f.columns,1/f.rows);item.texture.offset.set(f.col/f.columns,1-(f.row+1)/f.rows);
