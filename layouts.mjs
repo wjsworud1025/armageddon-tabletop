@@ -46,6 +46,13 @@ const registeredRuins={
 // Group 18's centre lines meet inside the casting, at (+0.526, -0.340).
 // These centres place that elbow on the printed inside corner of each map.
 const smallShrinePoses={A:[1192.43,285.50,58.34],B:[796.43,326.50,58.34],C:[1021.50,275.54,148.34]};
+// The red-home pipe wall is the same icon on all maps, rotated 180° on C.
+// On A/B the other corner occupies the second position on the same mat.
+const pipeRuinPoses={
+  A:{'smallRuin-3':[339.12,1628.78,180],'smallRuin-4':[366.85,1468.74,270]},
+  B:{'smallRuin-3':[728.12,1594.78,180],'smallRuin-4':[760.85,1426.74,270]},
+  C:{'smallRuin-4':[470.15,1691.26,90]},
+};
 // Earlier official-setup saves recorded all three industrial pieces. Keep
 // their original positions and headings when resuming those tables.
 const originalPlants={
@@ -54,17 +61,19 @@ const originalPlants={
   C:{'shockArray-1':[766,1323,90],'capacitorStack-1':[768,622,90],'generatorShrine-1':[769,679,90]}
 };
 const terrainAreas=Object.fromEntries(Object.entries(layouts).map(([code,data])=>[code,patrolTerrainAreas(code,data.areas,world)]));
-export function layoutGeometry(code,version=4){
+export function layoutGeometry(code,version=5){
   const data=layouts[code];if(!data)return null;
   const blue=points(data.zone),red=blue.map(([x,z])=>[-x,-z]);
   const ruins=version>=3?registeredRuins[code]:[];
   const positions=Object.fromEntries(ids.map((id,i)=>[id,ruins[i]??data.positions[i]]));
   if(version>=4)positions['smallRuin-1']=smallShrinePoses[code];
+  if(version>=5)Object.assign(positions,pipeRuinPoses[code]);
   if(version===1)Object.assign(positions,originalPlants[code]);
   return {blue,red,areas:data.areas,terrainAreas:terrainAreas[code],terrain:Object.entries(positions).map(([id,[u,v,deg]])=>{
     const [x,z]=world([u,v]);
     const pose={id,x,z,yaw:deg*Math.PI/180};
     if(id==='smallRuin-1')Object.assign(pose,{baseDepth:version>=4?1.25:1.4,previousSmallRuin:version<4});
+    if(id==='smallRuin-4')pose.previousPipeRuin=version<5;
     return pose;
   })};
 }

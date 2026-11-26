@@ -5,7 +5,7 @@ import {restore,snapshot} from '../state.mjs';
 import {newBattle} from '../rules/battle.mjs';
 import {newPatrolSetup} from '../rules/patrol-setup.mjs';
 import {patrolTerrainPlacement} from '../rules/patrol-terrain-placement.mjs';
-import {createTrainingTwo} from '../rules/training-two.mjs';
+import {createTrainingTwo,trainingTwoPieces} from '../rules/training-two.mjs';
 import {createTrainingThreeDeployment,trainingThreeDeploymentPieces,validateTrainingThreeDeployment} from '../rules/training-three-deployment.mjs';
 import {actTrainingThreeBattle,createTrainingThreeBattle,validateTrainingThreeBattle} from '../rules/training-three-battle.mjs';
 import {trainingFourDeployment,trainingFourBattle} from '../rules/training-four-battle.mjs';
@@ -14,6 +14,39 @@ const model=(pieces,id)=>pieces.find(p=>p.id===id);
 const wall=pieces=>model(pieces,'smallRuin-1');
 const saveTable=()=>({...createTable(),logs:[],rules:newBattle()});
 const courtyard={x:.9,z:5.65};
+
+test('the fourth ruin carries its own edition when switching between official, handbook, and custom tables',()=>{
+  const fresh=saveTable(),pipe=pieces=>model(pieces,'smallRuin-4');
+  const poses={x:-11.72,z:4.63,elevation:0,yaw:.64};
+  const manual=saveTable();
+  Object.assign(pipe(manual.pieces),poses);
+  const trainings=[createTrainingTwo(),createTrainingThreeDeployment(),trainingFourDeployment.create()];
+  assert.deepEqual(trainings.map(s=>s.version),[2,3,3]);
+  for(const pieces of [trainingTwoPieces(trainings[0]),trainingThreeDeploymentPieces(trainings[1]),trainingFourDeployment.pieces(trainings[2])])
+    assert.equal(pipe(pieces),undefined);
+  for(const version of [1,2,3,4]){
+    const old=saveTable();
+    old.rules.officialSetup={...newPatrolSetup(),version};
+    const training=trainings[(version-1)%trainings.length];
+    const withTraining=snapshot({...old,training});
+    const loaded=restore(createTable(),withTraining);
+    assert.equal(pipe(loaded.pieces).previousPipeRuin,true);
+    assert.deepEqual([pipe(loaded.pieces).baseWidth,pipe(loaded.pieces).baseDepth],[2.5,1.4]);
+    assert.equal(!!wall(loaded.pieces).previousSmallRuin,version<=3);
+    assert.deepEqual(snapshot(loaded),withTraining);
+    const malformed=structuredClone(withTraining);
+    pipe(malformed.pieces).previousPipeRuin=false;
+    assert.equal(pipe(restore(createTable(),malformed).pieces).previousPipeRuin,true);
+    const official=saveTable();
+    official.rules.officialSetup=newPatrolSetup();
+    for(const next of [manual,official]){
+      const save=snapshot(next),switched=restore(loaded,save),p=pipe(switched.pieces);
+      assert.equal(!!p.previousPipeRuin,false);
+      assert.deepEqual([p.baseWidth,p.baseDepth],[pipe(fresh.pieces).baseWidth,pipe(fresh.pieces).baseDepth]);
+      assert.deepEqual(snapshot(switched),save);
+    }
+  }
+});
 
 test('switching from a prior official table to a current patrol or custom save restores the current cast at its own recorded pose',()=>{
   const template=createTable(),old=saveTable();

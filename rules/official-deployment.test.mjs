@@ -95,12 +95,13 @@ for(const map of ['A','B','C']){
     const activeSave=snapshot(game);
     Object.assign(piece(activeSave,'captain-1'),{x:1.7,z:1.9,yaw:.27});
     Object.assign(piece(activeSave,'largeRuin-1'),{x:1.7,z:1.9,yaw:-.76});
-    for(const version of [1,2,3,4]){
+    for(const version of [1,2,3,4,5]){
       activeSave.rules.officialSetup.version=version;
       piece(activeSave,'shockArray-1').removed=version!==1;
       const loaded=restore(createTable(),activeSave),small=piece(loaded,'smallRuin-1');
       assert.equal(!!small.previousSmallRuin,version<4);
       assert.equal(small.baseDepth,version<4?1.4:1.25);
+      assert.equal(!!piece(loaded,'smallRuin-4').previousPipeRuin,version<5);
       assert.deepEqual(snapshot(loaded),activeSave,'Restore the ongoing battle in place, including overlapping pieces');
       const handbook={...activeSave,training:createTrainingOne()};
       assert.deepEqual(snapshot(restore(createTable(),handbook)),handbook,'Preserve the underlying patrol poses while a handbook mission is open');
@@ -129,14 +130,15 @@ test('saved map, defender, turn, terrain and revealed reserve records agree with
 });
 
 test('the box shows all 15 terrain pieces before the draw; each saved map version restores its own structures and resumes through placement',()=>{
-  assert.equal(fresh().rules.officialSetup.version,4);
-  for(const version of [1,2,3,4])for(const [map,die] of [['A',1],['B',3],['C',5]]){
+  assert.equal(fresh().rules.officialSetup.version,5);
+  for(const version of [1,2,3,4,5])for(const [map,die] of [['A',1],['B',3],['C',5]]){
     let game=fresh();game.rules.officialSetup.version=version;
     assert.equal(game.pieces.filter(p=>visiblePatrolPiece(game.rules,p)).length,15);
     const tooEarly=snapshot(game);piece(tooEarly,'shockArray-1').removed=true;
     assert.throws(()=>restore(createTable(),tooEarly));
     game=checkpoint(step(game,'official-roll-layout',{},[die]));
     assert.equal(!!piece(game,'smallRuin-1').previousSmallRuin,version<4);
+    assert.equal(!!piece(game,'smallRuin-4').previousPipeRuin,version<5);
     assert.equal(game.pieces.filter(p=>visiblePatrolPiece(game.rules,p)).length,version===1?15:14);
     const switched=snapshot(game);
     switched.rules.officialSetup.version=version===1?2:1;
@@ -154,7 +156,11 @@ test('the box shows all 15 terrain pieces before the draw; each saved map versio
       const wrongSmall=snapshot(game);wrongSmall.rules.officialSetup.version=version===3?4:3;
       assert.throws(()=>restore(createTable(),wrongSmall),'the two editions register a different small ruin');
     }
-    const unsupported=snapshot(game);unsupported.rules.officialSetup.version=5;
+    if(version>=4){
+      const wrongPipe=snapshot(game);wrongPipe.rules.officialSetup.version=version===4?5:4;
+      assert.throws(()=>restore(createTable(),wrongPipe),'the registered pipe wall changes between v4 and v5');
+    }
+    const unsupported=snapshot(game);unsupported.rules.officialSetup.version=6;
     assert.throws(()=>restore(createTable(),unsupported));
     game=step(step(game,'official-roll-role',{},[1,4]),'official-defend');
     game=step(game,'form-enhance',{team:'marines',enhancement:'veterans'});
@@ -166,6 +172,23 @@ test('the box shows all 15 terrain pieces before the draw; each saved map versio
     game=checkpoint(step(game,'official-place'));
     assert.deepEqual(game.rules.deployment.placed,['warboss']);
     assert.equal(piece(game,'warboss-1').yaw,.27,'a committed player rotation survives reload');
+    game=step(game,'official-select',{unit:'captain'});
+    const pipe=piece(game,'smallRuin-4'),captain=piece(game,'captain-1');
+    const localZ=version<5?1.1:-.7;
+    const byWall={...captain,x:pipe.x+Math.sin(pipe.yaw)*localZ,z:pipe.z+Math.cos(pipe.yaw)*localZ};
+    assert.equal(patrolTerrainPlacement(byWall,[pipe]).error,'');
+    assert.ok(patrolTerrainPlacement(byWall,[{...pipe,previousPipeRuin:version>=5}]).error,'the opposite casting obstructs this same base');
+    // On corrected map B this spot sits beyond the printed deployment diagonal.
+    if(version===5&&map==='B')assert.equal(validDeployment(game,byWall),false);
+    else Object.assign(captain,byWall);
+    assert.equal(patrolPlacementError(game),'');
+    game=checkpoint(step(game,'official-place'));
+    assert.deepEqual(game.rules.deployment.placed,['warboss','captain']);
+    assert.equal(piece(game,'captain-1').x,captain.x);
+    assert.equal(piece(game,'captain-1').z,captain.z);
+    const obstructed=snapshot(game),wrongZ=version<5?-.7:1.1;
+    Object.assign(piece(obstructed,'captain-1'),{x:pipe.x+Math.sin(pipe.yaw)*wrongZ,z:pipe.z+Math.cos(pipe.yaw)*wrongZ});
+    assert.throws(()=>restore(createTable(),obstructed),'a committed base may not be forged inside its own wall');
     for(const at of layoutGeometry(map,version).terrain){
       const model=piece(game,at.id);
       assert.equal(model.removed,false);
@@ -192,6 +215,15 @@ test('pre-correction saves still use their eight recorded ruin positions and rot
       assert.ok(Math.abs(pose.z-(15-(u-203)*30/1129))<1e-9,map+' '+id+' v'+version+' z');
       assert.ok(Math.abs(pose.yaw-degrees*Math.PI/180)<1e-9,map+' '+id+' v'+version+' yaw');
     }
+  }
+});
+
+test('v3 and v4 keep the recorded pipe-wall centre, including the large offset on map C',()=>{
+  for(const version of [3,4])for(const [map,[u,v]] of Object.entries({A:[359,1664],B:[747,1630],C:[475,1701]})){
+    const pipe=layoutGeometry(map,version).terrain.find(p=>p.id==='smallRuin-4');
+    assert.ok(Math.abs(pipe.x-((v-154)*44/1654-22))<1e-9);
+    assert.ok(Math.abs(pipe.z-(15-(u-203)*30/1129))<1e-9);
+    assert.equal(pipe.yaw,270*Math.PI/180);
   }
 });
 

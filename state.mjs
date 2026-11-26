@@ -94,6 +94,7 @@ export function restore(template, save) {
   game.rules = save.rules && typeof save.rules === 'object' ? structuredClone(save.rules) : null;
   game.rules = reconcilePatrolSight(game.rules,game.pieces);
   if(save.training)game.training=structuredClone(save.training);
+  else delete game.training;
   game.logs = Array.isArray(save.logs) ? save.logs.filter(s=>typeof s==='string').slice(-100) : [];
   game.surface = ['left','right','reverse'].includes(save.surface) ? save.surface : 'front';
   game.layout = ['A','B','C'].includes(save.layout?.map)&&['marines','orks'].includes(save.layout?.blue)?{map:save.layout.map,blue:save.layout.blue}:null;

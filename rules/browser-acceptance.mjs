@@ -90,9 +90,9 @@ try {
     await send('Page.reload');await until(()=>js('!!window.tabletopView'));await click('[data-tab=battle]');
   }};
   await checkSmallRuin(trainingTools);
-  console.log('Passed small ruin return, courtyard and legacy table picking');
+  console.log('Passed shrine and pipe ruin wall, courtyard and archived table picking');
   await checkRuinSight(trainingTools);
-  console.log('Passed shooter-view checks through the large ruin window, into its crossbar, into the short return, and above it');
+  console.log('Passed shooter-view checks for the large ruin window and crossbar, and both small ruin returns');
   await checkShooterSight(trainingTools);
   console.log('Passed individual sight records, unit range, declaration locks and persistence');
   const shootingTools={...trainingTools,screenshot:async name=>{

@@ -10,6 +10,12 @@
 
 소형 제조공장 폐허 1번은 긴 성상벽과 낮은 환기구벽이 모서리에서 만난다. 게임에서는 폭 2.50″를 기준으로 공식 회전 사진의 비례를 맞춰 전체 높이를 약 1.70″, 깊이를 약 1.25″로 정했다. 바닥에서 0.28″인 단면의 두 벽 중심선은 약 92°로 만난다. 실물에서 직접 잰 절대 치수는 아니다. 같은 카메라로 낮은·중간·높은 시점 두 장씩을 대조한 결과 공개 조형과 사진 외곽의 겹침률(IoU) 평균은 종전 52.1%에서 85.9%로 개선됐다. 정면과 뒷면에서 성상과 가로살 사이로 보이는 흰 배경도 따로 확인했다. 원본 800 × 533픽셀 사진에서는 각각 131·113픽셀, 같은 시점으로 렌더링한 조형에서는 124·118픽셀이었다. [공식 회전 사진](https://www.warhammer.com/app/resources/catalog/product/threeSixty/99120199169_WH40KCombatPatrolBattlezone2026OTT6360/03-07.jpg) · [패트롤 지도에서 두 벽의 방향](PATROL-TERRAIN-AREAS.md)
 
+## 소형 폐허 4번의 조형과 전장 위치
+
+도색 사진의 붉은 주름관과 부러진 청록색 관, 제어함, 기둥의 순서를 실물 러너 앞면에서 확인했다. 같은 러너 뒷면에는 윗부분이 꺾인 긴 배관과 두 연결 홈이 있다. 설명서 2단계는 소형 폐허 한 점에 벽 두 장이 연결되는 것을 보여 준다. 조립된 전장 사진에서도 우측 기둥 뒤로 두 번째 벽이 보인다. 그 벽의 부품 번호와 안쪽 세부는 가려져 있어 깊이와 안쪽 패널은 추정했다. 게임상의 외부 치수는 폭 2.50″, 깊이 1.40″, 높이 1.64″다. [공식 도색 사진](https://www.warhammer.com/app/resources/catalog/product/920x950/60010199082_WH40KStarterSet04.jpg) · [러너 앞면](https://www.brueckenkopf-online.com/wp-content/uploads/2026/07/Brueckenkopf-Online_Unboxing-Warhammer-40.000-%E2%80%93-Starterset-11.-Edition-22-e1785093940523.jpeg) · [러너 뒷면](https://www.brueckenkopf-online.com/wp-content/uploads/2026/07/Brueckenkopf-Online_Unboxing-Warhammer-40.000-%E2%80%93-Starterset-11.-Edition-25-e1785093999543.jpeg) · [조립 설명서](https://www.brueckenkopf-online.com/wp-content/uploads/2026/07/Brueckenkopf-Online_Unboxing-Warhammer-40.000-%E2%80%93-Starterset-11.-Edition-18-e1785093867161.jpeg)
+
+기본 전장은 양쪽 발, 두 관의 꼭대기, 앞 기둥 윗단을 1920 × 1212 사진에 맞췄다. 기물 원점은 사진의 (1312.2, 940.4), 보드 회전은 −48°다. 다섯 점의 좌표축당 평균제곱근 오차는 약 2.1픽셀이다. 별도의 도색 사진에서는 여덟 지점에 맞춘 시점으로 구형·신형을 투영했다. 해당 시점의 사진 윤곽과 겹치는 비율(IoU)은 각각 38.9%, 89.5%였다. 이 비교의 측정 범위는 도색 사진에 노출된 한쪽 면이다. [공식 전장 사진](https://assets.warhammer-community.com/articles/0-2026/june/wc29-06/sundaypreview-jul05-40k_01-starterset-2kklbdlero.jpg) · [패트롤 지도 배치](PATROL-TERRAIN-AREAS.md)
+
 ## 사진에 보이는 보드 면
 
 보드의 이음매를 기준으로 양쪽 인쇄면을 따로 대조했다. 왼쪽 판은 제조사 Battlefields Armageddon 카탈로그 사진 07의 위쪽 직사각형을 시계 방향으로 90도 회전한 면이다. 오른쪽 판은 Combat Patrol Battlezone 사진 7의 앞쪽 사각형에서 원근을 보정한 뒤 180도 회전한 면이다. 두 부분을 접합해 1760 × 1200픽셀의 오프라인 텍스처로 저장했다. 모래의 얼룩, 해골 구덩이, 포장석의 균열과 경계가 스타터 세트 홍보 사진의 노출된 부분에 맞는지 확인했다. [왼쪽 인쇄면 원본](https://www.warhammer.com/app/resources/catalog/product/920x950/99120199167_BattlefieldsArmageddon07.jpg) · [오른쪽 인쇄면 원본](https://www.warhammer.com/app/resources/catalog/product/920x950/99120199169_CombatPatrolBattlezone7.jpg)

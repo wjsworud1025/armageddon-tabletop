@@ -23,7 +23,7 @@ test('the two sides of the blue-home corner follow both printed wall bands and l
     ['C',[1021,252],[1021,292],[1042,252],[1042,288]],
   ];
   for(const [map,corner,long,short,court] of samples){
-    const geo=layoutGeometry(map),wall=shrine(geo.terrain);
+    const geo=layoutGeometry(map,4),wall=shrine(geo.terrain);
     const [a,b,c]=trainingThreeWallSegments(wall).map(toUV);
     const point=([x,z])=>({x,z});
     assert.ok(Math.hypot(b.x-corner[0],b.z-corner[1])<1,map);

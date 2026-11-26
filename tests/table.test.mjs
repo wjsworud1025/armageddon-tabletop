@@ -23,6 +23,34 @@ test('Published roster counts, individual heights, unique ids and oriented photo
   const foot=new T.Vector3().project(view.camera),head=new T.Vector3(0,2,0).project(view.camera);
   assert.ok(head.y>foot.y);
 });
+test('the opening table registers the pipe wall feet, broken pipe, red manifold and pillar to the set photograph',()=>{
+  const p=board.pieces.find(piece=>piece.id==='smallRuin-4');
+  const view=photoCamera(T,44,30);view.fit(1920,1212);
+  const {px,uMid,vMid}=photoFit(1920,1212),mesh=createPiece(T,p);
+  mesh.position.set(p.x,0,p.z);mesh.rotation.y=p.yaw;mesh.updateMatrixWorld(true);
+  const marks=[
+    [[-1.190,.040,.402],[1266,934]],[[1.165,.032,.493],[1349,957]],
+    [[-.275,1.578,.550],[1295,888]],[[1.165,1.622,.493],[1352,897]],
+    [[-.698,1.508,.470],[1278,883]]
+  ];
+  const geometry=mesh.children[0].geometry,vertices=geometry.attributes.position,indices=geometry.index;
+  const triangle=new T.Triangle(),closest=new T.Vector3();
+  let squaredError=0;
+  for(const [local,[u,v]] of marks){
+    const point=new T.Vector3(...local);
+    let gap=Infinity;
+    for(let i=0;i<indices.count;i+=3){
+      triangle.setFromAttributeAndIndices(vertices,indices.getX(i),indices.getX(i+1),indices.getX(i+2));
+      gap=Math.min(gap,triangle.closestPointToPoint(point,closest).distanceTo(point));
+    }
+    assert.ok(gap<.035,'A registered landmark is missing from the cast');
+    point.applyMatrix4(mesh.matrixWorld).project(view.camera);
+    const error=Math.hypot(uMid+point.x*960/px-u,vMid-point.y*606/px-v);
+    assert.ok(error<6,'Photographic landmark offset in pixels: '+error);
+    squaredError+=error**2;
+  }
+  assert.ok(Math.sqrt(squaredError/marks.length)<3.5);
+});
 test('close-up frames the elevated shrine and both wing tips in wide and tall viewports',()=>{
   const p=board.pieces.find(p=>p.kind==='generatorShrine'),obj=createPiece(T,p);
   obj.position.set(p.x,2,p.z);obj.rotation.y=p.yaw;obj.updateMatrixWorld(true);

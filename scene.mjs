@@ -94,7 +94,7 @@ export async function buildScene(canvas,api) {
     objects.set(p.id,obj);scene.add(obj);
     if(i%5===0){api.progress(i,game.pieces.length);await new Promise(requestAnimationFrame)}
   }
-  const revisedRuins=new Map(['largeRuin-2','smallRuin-1'].map(id=>[id,{current:objects.get(id)}]));
+  const revisedRuins=new Map(['largeRuin-2','smallRuin-1','smallRuin-4'].map(id=>[id,{current:objects.get(id)}]));
   const halo=new T.Mesh(new T.RingGeometry(.96,1.08,72),new T.MeshBasicMaterial({color:0xffd773,side:T.DoubleSide,depthTest:false,transparent:true,opacity:.9}));
   const ringRoot=new T.Group();halo.rotation.x=-Math.PI/2;halo.renderOrder=10;ringRoot.add(halo);scene.add(ringRoot);
   const tape=new T.Line(new T.BufferGeometry(),new T.LineBasicMaterial({color:0xffe189,depthTest:false}));tape.renderOrder=11;scene.add(tape);
@@ -202,7 +202,7 @@ export async function buildScene(canvas,api) {
       const edition=revisedRuins.get(p.id);
       if(edition){
         // Earlier photo games already rendered the scanned small wall.
-        const previous=p.previousSecondRuin||(p.previousSmallRuin&&!edition.current.userData.reconstruction);
+        const previous=p.previousSecondRuin||p.previousPipeRuin||(p.previousSmallRuin&&!edition.current.userData.reconstruction);
         const required=previous?(edition.previous??=createPiece(T,p)):edition.current;
         if(required!==objects.get(p.id)){
           scene.remove(objects.get(p.id));required.userData.pieceId=p.id;
@@ -210,7 +210,11 @@ export async function buildScene(canvas,api) {
         }
       }
       const obj=objects.get(p.id),portrait=painted.get(p.id);
-      const matchingPose=Math.abs(Math.sin((p.yaw-initialYaw.get(p.id))/2))<.001;
+      // The single studio shot of the pipe wall looks along the pipes. The
+      // assembled battlefield shows the decorated wall broadside. Keep that
+      // photograph available at its old bearing and render the cast elsewhere.
+      const portraitYaw=p.id==='smallRuin-4'?(p.previousPipeRuin?163*Math.PI/180:null):initialYaw.get(p.id);
+      const matchingPose=portraitYaw!=null&&Math.abs(Math.sin((p.yaw-portraitYaw)/2))<.001;
       if(portrait)portrait.visible=!p.removed&&photo&&usePaint&&matchingPose&&!sightPair&&!p.previousSecondRuin;
       const viewYaw=photo?Math.atan2(promo.camera.position.x-p.x,promo.camera.position.z-p.z):yaw;
       const pos=photo?promo.camera.position:orbitCamera.position;
