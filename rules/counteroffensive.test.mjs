@@ -74,7 +74,7 @@ test('only surviving eligible unspent units qualify; cost, shock, phase use, no 
       locked.hp['librarian-1']=4;
       assert.equal(resolvePacket(locked,removed,0).state.fightSequence.counterAfter,undefined);
     }else{
-      const dice=[.99,.99,0];
+      const dice=[.5,.99,0]; // Ordinary hit, wound, failed invulnerable save.
       const result=rollAttack(game,condition==='dead'?{random:()=>dice.shift()??0}:{});
       assert.equal(result.fightSequence.counterAfter,undefined,condition);
     }

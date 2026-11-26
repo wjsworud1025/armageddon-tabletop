@@ -136,6 +136,12 @@ A/B/C 맵에서는 게임이 상대 배치 구역을 검사한다. 제품 전장
 
 훈련 3·4의 시점은 각 훈련의 인쇄 편성을 사용한다. 핸드북 65쪽은 보이는 모델과 엄폐를 설명하며, 게임은 위 코어 규칙에 따라 두 분대의 다른 모델을 숨겨 그 판단을 돕는다. 시점 열기와 닫기는 플레이어가 선택한 가시성이나 엄폐를 변경하지 않는다. [훈련 3 가시성 및 엄폐](TRAINING-THREE-SHOOTING.md) · [훈련 4 사격](TRAINING-FOUR-SHOOTING.md)
 
+## 워보스의 근접 효과 선택
+
+워보스가 살아 있는 분대를 전투에 선택할 때 *Smash ’Em Up*으로 **치명적 명중** 또는 **추가 명중 1** 중 하나를 고른다. 분대가 이 전투에서 하는 모든 근접 공격은 같은 효과를 받는다. 커스텀 초파를 두 적 분대에 나눠도, 합류한 보이즈가 다른 무기로 공격해도 선택은 같다. 일반 전투와 돌파 전투 모두 분대를 선택하는 버튼에 두 선택지가 표시된다. 선언을 지우거나 표적을 다시 정해도 이미 선택한 효과는 유지된다. 전투 선택 자체를 되돌리면 다른 효과를 고를 수 있다. [’Ardmob 워보스 앱 데이터시트 전사본](https://wahapedia.ru/wh40k11ed_cp/factions/ardmob/#Ardmob-Warboss) · [Combat Patrol Archive의 별도 앱 채록](https://combat-patrol-companion.pages.dev/) · [공식 합류 분대의 능력 §19.04](https://assets.warhammer-community.com/eng_01-06_warhammer40k_new40k_core_rules-was6fbu1ix-hfewhmxyiy.pdf#page=67)
+
+구판 저장은 공격 행마다 효과가 기록돼 있어, 같은 워보스가 서로 다른 효과로 선언한 대전도 있다. 이미 확정한 공격과 노출된 주사위는 예전 기록으로 재생한다. 확정 전인 구판 전투는 분대 효과를 한 번 고르면 기존 초안 전체와 이후 공격에 반영된다.
+
 ## 보이즈의 교전 점유력
 
 보이즈의 *Grab Dat Scrap*은 그 분대가 교전하는 동안 각 모델에 OC +1을 준다. 워보스나 위어드보이가 보이즈에 합류해 적의 교전 거리 안에 들어가면 분대 전체가 교전한다. 이때 거점 안의 보이는 자신이 적과 2″ 넘게 떨어져 있어도 OC 3을 낸다. 거점 밖 분대원의 OC는 더하지 않는다. 전장 충격 중에는 거점을 통제할 수 없고, 보이즈 호위대의 마지막 모델까지 파괴되어 공격이 모두 끝나면 이 능력도 사라진다. [공식 교전 거리 §03.04, 14쪽](https://assets.warhammer-community.com/eng_01-06_warhammer40k_new40k_core_rules-was6fbu1ix-hfewhmxyiy.pdf#page=14) · [공식 합류 분대의 능력 §19.04, 67쪽](https://assets.warhammer-community.com/eng_01-06_warhammer40k_new40k_core_rules-was6fbu1ix-hfewhmxyiy.pdf#page=67) · [’Ardmob 보이즈 데이터시트 및 임무 앱 전사본](https://wahapedia.ru/wh40k11ed_cp/factions/ardmob/)

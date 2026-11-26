@@ -2,7 +2,7 @@ import {getProfile} from './profiles.mjs';
 import {recordRangedAttack} from './ranged-history.mjs';
 import {attackSkill,character,currentHP,groupId,weaponSlot,diceValue,resolveAttack,queueHazard} from './battle.mjs';
 import {effectWeapon} from './patrol.mjs';
-import {openCounteroffensive} from '../fight-sequence.mjs';
+import {openCounteroffensive,needsLegacyBossStyle} from '../fight-sequence.mjs';
 import {captureSightBoard,forgetPatrolSightUnit,patrolSightStatus,patrolSightTarget,sightBoardMatches} from './patrol-sight.mjs';
 import {patrolHighGround,patrolGroundLevel} from './patrol-terrain-placement.mjs';
 import {patrolAreaCover} from './patrol-area-cover.mjs';
@@ -50,6 +50,8 @@ function appendRows(state,pieces,rows){
     if(!p||!target||!currentHP(state,p)||!currentHP(state,target)||p.faction===target.faction||
        groupId(state,target)!==row.target || (state.step===2 && state.active!==p.faction)) return null;
     const w=weaponFor(state,p,row.weapon),unit=groupId(state,p);
+    const selected=state.fightSequence?.active;
+    if(!w.range&&selected&&(unit!==selected.unit||needsLegacyBossStyle(state,pieces,selected)))return null;
     if(snap&&!overwatchTargetEligible(next,pieces,p,target,w))return null;
     if((state.step===2||snap)!==!!w.range || !snap&&unitOrder(state,unit).finishedAttack===state.step ||
         draftRestriction(next,pieces,p,row.weapon,row.target)) return null;
@@ -59,7 +61,9 @@ function appendRows(state,pieces,rows){
         row.assigned+prior.reduce((n,r)=>n+r.assigned,0)>meleeLimit(w,row))return null;
     }
     const old=next.declaration||{unit,locked:false,focus:null,rows:[],...(snap?{mode:'overwatch'}:{})};
-    next={...next,declaration:{...old,rows:[...old.rows,{...row,done:false}]}};
+    const style=!w.range&&selected?.bossStyle;
+    const effect=style?{lethal:style==='lethal',sustained:style==='sustained'}:{};
+    next={...next,declaration:{...old,rows:[...old.rows,{...row,...effect,done:false}]}};
   }
   return next;
 }
@@ -77,6 +81,9 @@ function lockRows(state,pieces,eligibleMelee) {
     return overwatchTargetEligible(state,pieces,actor,target,weapon);
   })))return null;
   if(state.step===4) {
+    const selected=state.fightSequence?.active,style=selected?.bossStyle;
+    if(selected&&(selected.unit!==plan.unit||needsLegacyBossStyle(state,pieces,selected)))return null;
+    if(style&&plan.rows.some(r=>r.lethal!==(style==='lethal')||r.sustained!==(style==='sustained')))return null;
     for(const actor of eligibleMelee){
       const rows=plan.rows.filter(r=>r.actor===actor.id);
       if(!rows.length || rows.reduce((n,r)=>n+r.assigned,0)!==meleeLimit(weaponFor(state,actor,rows[0].weapon),rows[0]))return null;

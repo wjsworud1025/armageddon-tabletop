@@ -18,6 +18,7 @@ import {checkOverwatch} from '../tests/browser-overwatch.mjs';
 import {checkDetection} from '../tests/browser-detection.mjs';
 import {checkCommandShock} from '../tests/browser-command-shock.mjs';
 import {checkOrkObjective} from '../tests/browser-ork-objective.mjs';
+import {checkWarbossChoice} from '../tests/browser-warboss-choice.mjs';
 import {checkCoreStratagems} from './browser-core-stratagems.mjs';
 import {checkTraining} from './browser-training.mjs';
 import {checkTrainingTwo} from './browser-training-two.mjs';
@@ -112,6 +113,8 @@ try {
   }};
   await checkAreaCover(shootingTools);
   console.log('Passed automatic terrain cover and separate cover decisions for each shooter');
+  await checkWarbossChoice(shootingTools);
+  console.log('Passed Warboss split melee attacks, fight choices, undo and reload');
   await checkPlungingFire(shootingTools);
   console.log('Passed upper-floor and ground shooters, locked BS packets, and hit-roll outcomes');
   await checkPatrolSetup(trainingTools);

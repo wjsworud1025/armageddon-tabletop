@@ -1,4 +1,5 @@
-import {beginFightSequence,fightOptions,fightMoveOptions,transitionFight,resolveCounteroffensive} from '../fight-sequence.mjs';
+import {beginFightSequence,fightOptions,fightMoveOptions,transitionFight,resolveCounteroffensive,
+  bossStyles,hasFightingWarboss,needsLegacyBossStyle,chooseLegacyBossStyle} from '../fight-sequence.mjs';
 import {teams,groupId,opposite} from './battle.mjs';
 
 const stages={pile:'밀착 이동',first:'선제 공격',remaining:'일반 근접전',consolidate:'재정비',done:'근접전 완료'};
@@ -40,6 +41,11 @@ export function createFightControls({getGame,getObjectives=()=>[],commit,startMo
   function render(){
     const v=view();if(!v.options)return '';
     const {game,objectives,options}=v,{unit,move}=input(v);
+    if(needsLegacyBossStyle(game.rules,game.pieces,options.active)){
+      return '<section class="br-card"><h3>'+escape(label(game,unit))+' · 워보스 근접 효과</h3>'+
+        '<p>이 저장에는 분대의 효과 선택이 없습니다. 이번 전투의 모든 근접 공격에 적용할 효과를 고르세요.</p>'+
+        Object.entries(bossStyles).map(([key,name])=>button('style-'+key,name)).join('')+'</section>';
+    }
     if(v.sequence.counterAfter&&!game.rules.hazard){
       const defender=teams[opposite(game.rules.active)];
       const choices=options.counters.map(key=>button('counter-'+key,label(game,key)+' · 2 CP')).join('');
@@ -53,6 +59,7 @@ export function createFightControls({getGame,getObjectives=()=>[],commit,startMo
     if(!v.done){
       if(options.active){
         body+='<p>'+escape(label(game,unit))+' · '+(options.active.kind==='overrun'?'돌파 전투':'일반 전투')+'</p>';
+        if(options.active.bossStyle)body+='<p>분대 근접 효과 · '+bossStyles[options.active.bossStyle]+'</p>';
       }else{
         body+='<label>분대<select data-field="fight-unit">'+options.units.map(k=>'<option value="'+escape(k)+'"'+(unit===k?' selected':'')+'>'+escape(label(game,k))+'</option>').join('')+'</select></label>';
       }
@@ -70,8 +77,12 @@ export function createFightControls({getGame,getObjectives=()=>[],commit,startMo
         if(v.attackUnit)body+='<p>아래에서 이 분대의 근접 무기와 표적을 선언하세요.</p>';
         body+=button('finish','이 분대 전투 마침',!options.canFinish||busy);
       }else{
-        if(options.kinds[unit]?.includes('normal'))body+=button('normal','일반 전투 선택',busy);
-        if(options.kinds[unit]?.includes('overrun'))body+=button('overrun','돌파 전투 선택',busy);
+        for(const kind of options.kinds[unit]??[]){
+          const name=kind==='normal'?'일반 전투':'돌파 전투';
+          if(hasFightingWarboss(game.rules,game.pieces,unit)){
+            body+=button(kind,name+' · '+bossStyles.lethal,busy)+button(kind+'-sustained',name+' · '+bossStyles.sustained,busy);
+          }else body+=button(kind,name+' 선택',busy);
+        }
         if(options.canPass)body+=button('pass',options.stage==='pile'?'이 진영 밀착 마침':options.stage==='consolidate'?'이 진영 재정비 마침':'이번 선택 넘기기',busy);
       }
     }
@@ -91,6 +102,12 @@ export function createFightControls({getGame,getObjectives=()=>[],commit,startMo
     refresh?.();return true;
   }
   function dispatch(action){
+    if(action.startsWith('fight-style-')){
+      const v=view(),style=action.slice('fight-style-'.length);
+      const next=chooseLegacyBossStyle(v.game,style);
+      if(!next)throw Error('이번 분대의 근접 효과를 다시 정할 수 없습니다.');
+      commit(next,'이전 저장의 분대 근접 효과 · '+bossStyles[style]);return true;
+    }
     if(action.startsWith('fight-counter-')){
       const game=getGame(),key=action.slice('fight-counter-'.length);
       const next=resolveCounteroffensive(game,key==='decline'?null:key);
@@ -98,7 +115,7 @@ export function createFightControls({getGame,getObjectives=()=>[],commit,startMo
       commit(next,key==='decline'?'반격 전술 생략':label(game,key)+' · 반격 전술 (2 CP) · 다음 전투 선택');
       return true;
     }
-    if(!['fight-normal','fight-overrun','fight-finish','fight-skip','fight-pass','fight-move'].includes(action))return false;
+    if(!['fight-normal','fight-normal-sustained','fight-overrun','fight-overrun-sustained','fight-finish','fight-skip','fight-pass','fight-move'].includes(action))return false;
     const v=view();if(!v.options)throw Error('근접전 페이즈에서 선택하세요.');
     const {game,objectives,sequence}=v,{unit,move}=input(v);
     if(game.rules.fightPlan)throw Error('현재 이동 경로를 먼저 마치세요.');
@@ -107,9 +124,9 @@ export function createFightControls({getGame,getObjectives=()=>[],commit,startMo
       startMove({unit,targets:[...chosenTargets],type:move.mode==='pile-in'?'pile-in':'consolidate',mode:move.mode,limit:move.limit},sequence);
       selectUnit?.(unit);return true;
     }
-    const kind=action==='fight-normal'?'normal':'overrun';
+    const kind=action.startsWith('fight-normal')?'normal':'overrun';
     const event=action==='fight-pass'?{type:'pass'}:action==='fight-skip'?{type:'skip-overrun'}:
-      action==='fight-finish'?{type:'finish'}:{type:'select',unit,kind};
+      action==='fight-finish'?{type:'finish'}:{type:'select',unit,kind,...(action.endsWith('-sustained')?{bossStyle:'sustained'}:{})};
     const next=transitionFight(game,sequence,event,objectives);
     const message=event.type==='pass'?teams[v.options.team]+' · '+stages[v.options.stage]+' 선택 마침':
       label(game,unit)+' · '+({select:kind==='normal'?'일반 전투 선택':'돌파 전투 선택',finish:'근접전 마침','skip-overrun':'추가 밀착 생략'}[event.type]);

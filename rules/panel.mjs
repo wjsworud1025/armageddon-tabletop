@@ -2,6 +2,7 @@ import {getProfile,unitId} from './profiles.mjs';
 import {brokenFormations,removeForCoherency} from './end-turn.mjs';
 import {chargeActions,chargeControls} from './charge-controls.mjs';
 import {createFightControls} from './fight-controls.mjs';
+import {needsLegacyBossStyle} from '../fight-sequence.mjs';
 import {reinforcementOptions,expiringReserves,reserveCapacity} from './reinforcements.mjs';
 import {attachForDeployment} from './reinforcement-session.mjs';
 import {openShootingReaction,shootingReactionOptions} from './shooting-reaction.mjs';
@@ -257,7 +258,7 @@ export function mountRules(container,api) {
       (weapon.range?coverStatus(areaCover)+renderShooterSight(state,shooters,target,weapon,areaCover):'');
     if(preview)return chunk('사수와 표적 확인',controls);
     const modifiers=snapWindow(state)?'':detail('mods','무기 및 분대 보정',row(number('hitMod','명중 보정',-1,1,choices.hitMod)+number('woundMod','상처 보정',-1,1,choices.woundMod)+number('extra','추가 공격',0,30,choices.extra))+
-      '<label><input type="checkbox" data-field="lethal"'+(choices.lethal?' checked':'')+'>치명적 명중 (Lethal Hits)</label>');
+      (fightView?.sequence.active?.bossStyle?'':'<label><input type="checkbox" data-field="lethal"'+(choices.lethal?' checked':'')+'>치명적 명중 (Lethal Hits)</label>'));
     return chunk('무기 공격',controls+modifiers+
       (!weapon.range?number('allocation','이 표적에 배정할 근접 공격',1,availableAttacks,choices.allocation||availableAttacks):'')+
       row(btn('attack',blocked || (weapon.range?'이 사수의 무기 선언':'이 근접 무기 선언'),Boolean(blocked))+
@@ -423,9 +424,6 @@ export function mountRules(container,api) {
       !state.patrol.warcryUsed && members.some(p=>p.kind==='boy' && !currentHP(state,p)) && alive.some(p=>p.kind==='boy')) {
       action+=btn('warcry','전투 함성 · D3+2명 복귀',pending.length>0);
     }
-    if (state.status==='playing' && state.step===4 && members.some(p=>p.kind==='warboss' && currentHP(state,p))) {
-      action+=select('bossStyle','워보스 분대 근접 효과',opt('lethal','치명적 명중',choices.bossStyle||'lethal')+opt('sustained','추가 명중 1',choices.bossStyle));
-    }
     if(state.step===3&&currentHP(state,actor)>0)action+=chargeActions(api.getTable(),actor);
     if (state.status==='playing' && mine && state.step===2 && actor.kind==='wartrakk' && unit.finishedAttack===2 && !unit.suppressionTargets && unit.hitTargets?.length && !unit.suppressedEnemy) {
       const hit=unit.hitTargets.map(id=>living(state).find(p=>groupId(state,p)===id)).filter(Boolean);
@@ -537,6 +535,9 @@ export function mountRules(container,api) {
     const dispersed=brokenFormations(state,all);
     const pending=pendingCommandShock(state,all);
     fightView=state.step===4&&state.status==='playing'?fights.view():null;
+    if(fightView&&needsLegacyBossStyle(state,all,fightView.sequence.active)){
+      root.innerHTML=fights.render();return;
+    }
     const reservedIds=new Set(Object.values(state.reserves).flat());
     const selector=select('fighter','현재 모델',opt('','미니어처 선택',actor?.id||'')+all.map(p=>opt(p.id,pieceLabel(p)+(reservedIds.has(p.id)?' (예비대)':p.removed?' (제거됨)':''),actor?.id||'')).join(''));
     let top='';
@@ -748,6 +749,7 @@ export function mountRules(container,api) {
     const button=event.target.closest('button'),action=button?.dataset.act;
     if (!action) return;
     const state=read();
+    if(state.step===4&&fightView&&needsLegacyBossStyle(state,contents(),fightView.sequence.active)&&!action.startsWith('fight-style-'))return;
     if(action==='official-new'||officialPreparing(state)){
       if(action==='official-new'||action.startsWith('official-')||action.startsWith('form-')){
         feedback='';
@@ -1109,15 +1111,14 @@ export function mountRules(container,api) {
       const shooters=(action==='volley'?candidates:candidates.slice(0,1)).filter(s=>!s.problem);
       if(!shooters.length){feedback=candidates[0].problem;return refresh();}
       const blades=state.patrol.enhanced.blades && targets.some(t=>t.kind==='vanguard') && unit.charged && !selected.w.range;
-      const withWarboss=!selected.w.range && members.some(p=>p.kind==='warboss' && currentHP(state,p)>0);
       const withLibrarian=!!selected.w.range && members.some(p=>p.kind==='librarian' && currentHP(state,p)>0);
       const snap=snapWindow(state);
       const rows=shooters.map(({p,distance,manualCover})=>({actor:p.id,weapon:getProfile(p).weapons.findIndex(w=>w.name===selected.w.name),
         target:groupId(state,target),preferred:target.id,distance,size:targets.length,
         assigned:selected.w.range?0:integer('allocation',1,selected.w.attacks+integer('extra',0,30)),
         hit:snap?0:integer('hitMod',-1,1)-Number(state.patrol.suppressed===groupId(state,actor)),wound:snap?0:integer('woundMod',-1,1)-Number(Boolean(blades)),
-        extra:snap?0:integer('extra',0,30),cover:!!(selected.w.range&&manualCover),lethal:!snap&&!!(choices.lethal || (withWarboss&&choices.bossStyle!=='sustained')),
-        sustained:!!(withWarboss&&choices.bossStyle==='sustained'),ignore:withLibrarian,guard:false}));
+        extra:snap?0:integer('extra',0,30),cover:!!(selected.w.range&&manualCover),lethal:!snap&&!!choices.lethal,
+        sustained:false,ignore:withLibrarian,guard:false}));
       const next=appendSightedDeclaration(state,api.getPieces(),rows,api.getDistance,api.getTable().layout);
       if(!next){feedback='선언할 수 없는 배정입니다. 모델별 근접 공격 수와 이미 선택한 무기를 확인하세요.';return refresh();}
       return commit(next,unitLabel(actor)+' · '+selected.w.name+' × '+rows.length+' → '+unitLabel(target)+' 선언');

@@ -165,6 +165,13 @@ export function validateRulesState(value,pieceRecords=null,layout=undefined) {
   if (fields({hp},['hp'])(value)) return true;
   if(pieceRecords&&(!Array.isArray(pieceRecords)||pieceRecords.some(p=>!p||!catalog.has(p.id))))return false;
   if(!battle(value) || value.round>value.rounds||!officialStateOK(value,pieceRecords))return false;
+  const activation=value.fightSequence?.active;
+  if(activation?.bossStyle){
+    if(value.step!==4||activation.unit!==(value.attachments?.['warboss-1']??'warboss'))return false;
+    const plan=value.declaration;
+    if(plan&&(plan.unit!==activation.unit||plan.rows.some(r=>
+      r.lethal!==(activation.bossStyle==='lethal')||r.sustained!==(activation.bossStyle==='sustained'))))return false;
+  }
   // A completed Command-phase test belongs to the active player's current
   // turn. The flag survives its later phases and is cleared at handover.
   if(Object.entries(value.units??{}).some(([key,u])=>u.shockChecked&&

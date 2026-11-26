@@ -18,6 +18,29 @@ const phases=['pile','first','remaining','consolidate','done'];
 const ids=Object.keys(profiles).filter(k=>k!=='boy').concat(['boy-0','boy-1']);
 const unique=a=>[...new Set(a)];
 const elevation=p=>p.elevation??0;
+export const bossStyles={lethal:'치명적 명중',sustained:'추가 명중 1'};
+export function hasFightingWarboss(state,pieces,unit){
+  return state.step===4&&pieces.some(p=>p.kind==='warboss'&&groupId(state,p)===unit&&currentHP(state,p)>0);
+}
+// A previous version saved the effect on attack rows instead of the
+// activation. Unresolved drafts must choose once; locked dice replay as saved.
+export function needsLegacyBossStyle(state,pieces,active){
+  return !!active&&!active.bossStyle&&!state.declaration?.locked&&!state.hazard&&
+    state.units?.[active.unit]?.finishedAttack!==4&&hasFightingWarboss(state,pieces,active.unit);
+}
+export function chooseLegacyBossStyle(game,style){
+  const {rules,pieces}=game;
+  if(rules.status!=='playing'||rules.step!==4||!rules.fightSequence&&!rules.declaration)return null;
+  const sequence=rules.fightSequence??beginFightSequence(game),active=sequence.active;
+  if(typeof style!=='string'||!Object.hasOwn(bossStyles,style)||!needsLegacyBossStyle(rules,pieces,active))return null;
+  const next={...rules,fightSequence:{...sequence,active:{...active,bossStyle:style}}};
+  if(rules.declaration){
+    if(rules.declaration.unit!==active.unit)return null;
+    next.declaration={...rules.declaration,rows:rules.declaration.rows.map(r=>
+      ({...r,lethal:style==='lethal',sustained:style==='sustained'}))};
+  }
+  return next;
+}
 function gap(a,b){
   if(a.baseWidth===a.baseDepth&&b.baseWidth===b.baseDepth)
     return Math.max(0,Math.hypot(a.x-b.x,a.z-b.z)-(a.baseWidth+b.baseWidth)/2);
@@ -329,8 +352,12 @@ export function transitionFight(game,sequence,action,objectives=[]){
   }else if(action.type==='select'){
     const kind=action.kind||'normal';
     if(!options.kinds[action.unit]?.includes(kind))return invalid();
+    const hasBoss=hasFightingWarboss(game.rules,game.pieces,action.unit);
+    const style=action.bossStyle??'lethal';
+    if(typeof style!=='string'||!Object.hasOwn(bossStyles,style)||!hasBoss&&action.bossStyle!==undefined)return invalid();
     seq={...seq,fought:unique([...seq.fought,action.unit]),eligibleDuringFight:unique([...seq.eligibleDuringFight,action.unit]),
-      active:{unit:action.unit,kind,extraPile:kind==='overrun',reaction:seq.reactions.includes(action.unit)},passes:0};
+      active:{unit:action.unit,kind,extraPile:kind==='overrun',reaction:seq.reactions.includes(action.unit),
+        ...(hasBoss?{bossStyle:style}:{})},passes:0};
   }else if(action.type==='skip-overrun'){
     if(!seq.active?.extraPile)return invalid();
     seq={...seq,active:{...seq.active,extraPile:false}};
@@ -372,7 +399,8 @@ export function validFightSequence(value){
   if(value.fought.some(k=>!value.eligibleDuringFight.includes(k))||value.consolidated.some(k=>!value.eligibleDuringFight.includes(k)))return false;
   const a=value.active;
   if(a===null)return true;
-  return !!a&&typeof a==='object'&&Object.keys(a).every(k=>['unit','kind','extraPile','reaction'].includes(k))&&
+  return !!a&&typeof a==='object'&&Object.keys(a).every(k=>['unit','kind','extraPile','reaction','bossStyle'].includes(k))&&
+    (!Object.hasOwn(a,'bossStyle')||typeof a.bossStyle==='string'&&Object.hasOwn(bossStyles,a.bossStyle))&&
     (a.reaction?value.stage==='consolidate'&&value.reactions.includes(a.unit):combat)&&
     unit(a.unit)&&['normal','overrun'].includes(a.kind)&&typeof a.extraPile==='boolean'&&typeof a.reaction==='boolean'&&
     (!a.extraPile||a.kind==='overrun')&&value.fought.includes(a.unit);
