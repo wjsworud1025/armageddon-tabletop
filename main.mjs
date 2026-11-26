@@ -102,7 +102,52 @@ function canRestoreFrom(stack){
   const from=game.rules?.formations?.stage,to=target.rules?.formations?.stage;
   return !(from==='handoff'&&to==='marines'||from==='orks'&&to==='handoff'||from==='revealed'&&to==='orks');
 }
-function redraw(){scene?.sync();roster();selection();history();$('undo').disabled=!canRestoreFrom(past);$('redo').disabled=!canRestoreFrom(future);
+let battlePanelMode='',trainingReturn=null,lastRuleControl=null;
+const battlePane=$('battle'),rulesPane=$('rules');
+document.addEventListener('focusin',event=>{
+  lastRuleControl=rulesPane.contains(event.target)&&event.target.matches('[data-act],[data-field]')?event.target:null;
+});
+// The rules panel replaces its controls after a decision. Keep keyboard focus
+// on the matching control, or the new decision region when that action ends.
+new MutationObserver(()=>{
+  if(!lastRuleControl||lastRuleControl.isConnected||battlePane.hidden||game.training||
+    document.activeElement!==document.body)return;
+  const old=lastRuleControl;
+  lastRuleControl=null;
+  const selector=Object.entries(old.dataset).map(([key,value])=>
+    '[data-'+key.replace(/[A-Z]/g,c=>'-'+c.toLowerCase())+'="'+CSS.escape(value)+'"]').join('');
+  const next=rulesPane.querySelector(selector);
+  if(next&&!next.disabled)next.focus({preventScroll:true});
+  else{
+    rulesPane.focus({preventScroll:true});
+    if(battlePane.firstElementChild===rulesPane)battlePane.scrollTop=0;
+  }
+}).observe(rulesPane,{childList:true,subtree:true});
+
+function syncBattlePanel(){
+  const inBattle=officialPreparing(game.rules)||['playing','finished'].includes(game.rules?.status);
+  const mode=game.training?'training-'+game.training.scenario:inBattle?'battle':'setup';
+  if(mode===battlePanelMode)return;
+  const previous=battlePanelMode;
+  battlePanelMode=mode;
+  if(inBattle&&battlePane.firstElementChild!==rulesPane)battlePane.prepend(rulesPane);
+  else if(!inBattle&&battlePane.lastElementChild!==rulesPane)battlePane.append(rulesPane);
+  if(mode.startsWith('training-')){
+    if(!previous.startsWith('training-')){
+      const opener=document.activeElement;
+      trainingReturn=opener?.id?.match(/^training(?:-two|-three|-four)?-start$/)?{opener,scroll:battlePane.scrollTop}:null;
+    }
+    return;
+  }
+  if(previous.startsWith('training-')&&trainingReturn){
+    const {opener,scroll}=trainingReturn;trainingReturn=null;
+    requestAnimationFrame(()=>{
+      if(battlePanelMode!==mode||battlePane.hidden)return;
+      opener.focus({preventScroll:true});battlePane.scrollTop=scroll;
+    });
+  }else battlePane.scrollTop=0;
+}
+function redraw(){syncBattlePanel();scene?.sync();roster();selection();history();$('undo').disabled=!canRestoreFrom(past);$('redo').disabled=!canRestoreFrom(future);
   document.body.classList.toggle('official-preparing',officialPreparing(game.rules)&&!game.training);
   renderTraining();
   for(const side of ['left','right'])$('flip-'+side).setAttribute('aria-pressed',String(game.surface===side||game.surface==='reverse'));
@@ -275,6 +320,11 @@ function renderTraining(){
   $('training-intro').hidden=enabled;
   if(previous!==scenario&&(previous!==undefined||enabled)){
     active=null;scene?.select(null);setMode('pick');reference(false);switchTab('battle');
+    if(enabled){
+      const title=battlePane.querySelector('section:not([hidden]) > h2');
+      if(title){title.tabIndex=-1;title.focus({preventScroll:true})}
+      battlePane.scrollTop=0;
+    }
     scene?.home();$('camera').textContent='탑뷰';
     if(scenario==='1')$('hint').textContent='두 베이스가 맞닿은 상태에서 싸웁니다. 드래그로 시점 회전 · 휠로 확대';
     if(scenario==='2')$('hint').textContent='분대의 행동을 선택한 뒤 미니어처를 드래그하세요. 경유지가 필요하면 경로 도구를 사용하세요.';

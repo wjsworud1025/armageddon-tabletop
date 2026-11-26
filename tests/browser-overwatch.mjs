@@ -25,6 +25,11 @@ export async function checkOverwatch({save,upload,click,state,js,reload,screensh
     assert.equal(result,value,'Available '+name+' option');
   }
   const available=selector=>js('(()=>{const el=document.querySelector('+JSON.stringify(selector)+');return !!el&&!el.disabled&&!el.closest("[hidden]")})()');
+  async function capture(name,selector){
+    if(!screenshot)return;
+    await js('document.querySelector('+JSON.stringify(selector)+').scrollIntoView({block:"center"})');
+    await screenshot(name);
+  }
   async function fixed(action,rolls){
     const faces=JSON.stringify(rolls);
     await js(`(()=>{const original=Math.random,faces=${faces};Math.random=()=>((faces.shift()??1)-.5)/6;
@@ -32,7 +37,11 @@ export async function checkOverwatch({save,upload,click,state,js,reload,screensh
   }
   async function offer(active){
     await upload(movementEnd(save,active));await click('[data-tab=battle]');
-    await choose('fighter',active==='marines'?rifle:boy);await click(act('next'));
+    await choose('fighter',active==='marines'?rifle:boy);
+    await js('document.querySelector("[data-act=next]").focus()');
+    await click(act('next'));
+    assert.equal(await js('document.querySelector("#battle").firstElementChild.id'),'rules');
+    assert.equal(await js('document.querySelector("#rules").contains(document.activeElement)'),true);
     const s=(await state()).rules;
     assert.equal(s.step,1);assert.equal(s.active,active);assert.equal(s.overwatch.stage,'offer');
     assert.equal(s.overwatch.team,active==='orks'?'marines':'orks');
@@ -46,7 +55,7 @@ export async function checkOverwatch({save,upload,click,state,js,reload,screensh
   await offer('orks');await choose('overwatch-unit','intercessor');await choose('fighter',rifle);
   await choose('weapon','0');await choose('target',boy);
   await click(sightButton(rifle,boy));
-  if(screenshot)await screenshot('06-overwatch-offer.png');
+  await capture('06-overwatch-offer.png',act('overwatch-begin'));
   await click(act('overwatch-begin'));
   let paid=await state();assert.equal(paid.rules.cp.marines,1);assert.equal(paid.rules.cp.orks,2);
   assert.equal(paid.rules.overwatch.unit,'intercessor');assert.equal(paid.rules.active,'orks');
@@ -59,8 +68,9 @@ export async function checkOverwatch({save,upload,click,state,js,reload,screensh
     'The 5 misses, the 6 hits normally, and only one wound and save are rolled');
   assert.match(await js('document.querySelector("[data-overwatch-hit]").textContent'),/1\s*명중|명중\s*1/);
   assert.equal(await available(act('packet-reroll')),true,'The targeted Ork unit can reroll its save');
-  if(screenshot)await screenshot('06-overwatch-hit.png');
+  await capture('06-overwatch-hit.png','[data-overwatch-hit]');
   await reload();assert.deepEqual(await state(),rolled);
+  assert.equal(await js('document.querySelector("#battle").firstElementChild.id'),'rules','Resume the pending dice above the training shortcuts');
   await click(act('packet-keep'));
   const ended=await state();
   assert.equal(ended.rules.hp[boy],0);assert.equal(ended.pieces.find(p=>p.id===boy).removed,true);

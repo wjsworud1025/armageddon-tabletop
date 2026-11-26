@@ -630,7 +630,8 @@ export function mountRules(container,api) {
       choices.fighter=actor?.id||'';
       const unitName=key=>unitLabel(all.find(p=>groupId(state,p)===key));
       let body='<p>'+esc(teams[team])+' · 남은 '+state.cp[team]+' CP'+(offer?'':' · 경계 사격 1 CP 지불')+'</p>'+
-        '<p>24″ 안의 보이는 적 한 분대에 사격합니다. 사수별 무기 사거리와 시야를 확인하세요. 수정 전 6은 일반 명중이며 토렌트 무기는 자동 명중합니다.</p>';
+        '<p>24″ 안의 보이는 적 한 분대에 사격합니다. 사수별 무기 사거리를 확인하세요. 은폐 중인 모델은 탐지 거리(기본 15″) 밖에서 ‘가림’으로 표시하세요.</p>'+
+        '<p>수정 전 6은 일반 명중이며 토렌트 무기는 자동 명중합니다.</p>';
       if(offer){
         body+=select('overwatch-unit','경계 사격할 분대',units.map(k=>opt(k,unitName(k),unit)).join(''))+
           row(btn('overwatch-begin','1 CP · 경계 사격 선언',!unit)+btn('overwatch-decline','경계 사격 포기 · 사격 단계로'));

@@ -104,7 +104,7 @@ A/B/C 맵에서는 게임이 상대 배치 구역을 검사한다. 제품 전장
 
 ## 상대 이동 종료 시의 경계 사격
 
-11판 기본 규칙 15.08–15.09에 따라 상대 이동 단계가 끝날 때 1 CP를 써서 교전 중이 아닌 아군 분대 한 곳이 스냅 사격한다. 24″ 제한은 분대 간 최단 거리다. 각 사수에서 보이는 모델과 해당 무기의 사거리는 기존 사격 절차에서 확인한다. 실제 턴과 페이즈를 유지하므로 자기 사격 페이즈에만 발동하는 능력은 적용 대상에서 빠진다. [공식 기본 규칙 57쪽](https://assets.warhammer-community.com/eng_01-06_warhammer40k_new40k_core_rules-was6fbu1ix-hfewhmxyiy.pdf#page=57) · [공식 컴뱃 패트롤 앱 안내](https://www.warhammer-community.com/en-gb/articles/2akzkx92/combat-patrol-is-now-live-in-your-app/)
+11판 기본 규칙 15.08–15.09에 따라 상대 이동 단계가 끝날 때 1 CP를 써서 교전 중이 아닌 아군 분대 한 곳이 스냅 사격한다. 24″ 제한은 분대 간 최단 거리다. 각 사수에서 보이는 모델과 해당 무기의 사거리는 기존 사격 절차에서 확인한다. 13.09의 은폐 여부와 탐지 거리는 플레이어가 판정해 시야에 반영한다. 실제 턴과 페이즈를 유지하므로 자기 사격 페이즈에만 발동하는 능력은 적용 대상에서 빠진다. [공식 기본 규칙 57쪽](https://assets.warhammer-community.com/eng_01-06_warhammer40k_new40k_core_rules-was6fbu1ix-hfewhmxyiy.pdf#page=57) · [공식 컴뱃 패트롤 앱 안내](https://www.warhammer-community.com/en-gb/articles/2akzkx92/combat-patrol-is-now-live-in-your-app/)
 
 명중 굴림은 수정 전 6만 일반 명중으로 처리하고 명중 재굴림은 생략한다. 토렌트는 24.37에 따라 명중 굴림을 건너뛴다. 최초 인쇄 규칙 이후에 추가된 ‘스냅 사격의 명중은 치명타가 되지 않는다’는 조건은 현재 패트롤 앱 규칙의 공개 전사에서 확인했다. 따라서 연속 명중과 치명타에 의한 자동 상처는 이 사격에서 발생하지 않는다. [기본 규칙과 무기 능력 원본](https://assets.warhammer-community.com/eng_01-06_warhammer40k_new40k_core_rules-was6fbu1ix-hfewhmxyiy.pdf) · [패트롤판 15.09 전사](https://wahapedia.ru/wh40k11ed_cp/the-rules/core-rules/#Snap-Shooting)
 
