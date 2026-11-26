@@ -45,6 +45,27 @@ test('front central fissure and reverse bone pits stay on their respective panel
   }
 });
 
+test('the torn reverse decks expose a dark diagonal break with intact ironwork beside it',()=>{
+  const {pixels,width,height}=createFieldPixels(true);
+  function shadow(cx,cy,direction,x0,y0,x1,y1){
+    let dark=0,count=0;
+    for(let y=y0;y<y1;y+=1/30)for(let x=x0;x<x1;x+=1/30){
+      const col=Math.floor((cx+direction*x)*width/44),row=Math.floor((cy+direction*y)*height/30);
+      const i=(row*width+col)*4;
+      if(.299*pixels[i]+.587*pixels[i+1]+.114*pixels[i+2]<50)dark++;
+      count++;
+    }
+    return dark/count;
+  }
+  for(const [x,y,dir] of [[6.4,8.15,1],[37.6,21.85,-1]]){
+    const shade=(...bounds)=>shadow(x,y,dir,...bounds);
+    const exposed=shade(.59,-.5,1.75,.5),intact=shade(-1.75,-.5,-.59,.5);
+    assert.ok(exposed>intact+.25,'the deepest break sits on the correct side of each panel');
+    const total=shade(-1.75,-2.5,1.75,2.5);
+    assert.ok(total>.25&&total<.46,'the surrounding broken deck still reads as open metalwork');
+  }
+});
+
 test('front soil varies at gravel and weathered-patch scales across the two printed panels',()=>{
   const {pixels,width,height}=createFieldPixels(false);
   const stride=width+1,sum=new Float64Array(stride*(height+1));

@@ -346,6 +346,83 @@ function rubble(d,cx,cy,spreadX,spreadY,n,rand,chunk=.38){
     d.poly([p[0],p[1],p[2],[x+s*.1,y+s*.05]],mix(color,32),.81);
   }
 }
+
+function brokenDeck(d,rand){
+  // The surviving drain plates have concentric interrupted slots. A diagonal
+  // collapse crosses their middle, with part of the grating still suspended.
+  const recess=[32,30,26],lip=[159,138,108];
+  for(const [x,width] of [[-3.34,.77],[2.12,1.20]]){
+    for(let row=0;row<7;row++){
+      const y=-5.55+row*1.58;
+      d.rect(x,y,width,1.56,[100,98,84]);
+      d.rect(x+.035,y+.045,width-.077,1.46,[121,115,93]);
+      for(const u of [x+.09,x+width-.1])for(const v of [y+.10,y+1.43]){
+        d.oval(u,v,.049,.052,[52,53,47]);d.oval(u-.014,v-.024,.031,.021,[162,152,125]);
+      }
+    }
+  }
+  for(let row=0;row<6;row++)for(let col=0;col<3;col++){
+    const x=-2.54+col*1.55,y=-4.95+row*1.59;
+    d.rect(x,y,1.50,1.53,[124,103,82]);
+    for(let slot=0;slot<4;slot++){
+      const inset=.09+slot*.16,u=x+inset,v=y+inset,side=1.5-2*inset,gap=.12+slot*.035;
+      d.line([u+gap,v],[u+side,v],.095,recess);
+      d.line([u+side,v],[u+side,v+side-gap],.092,recess);
+      d.line([u+side-gap,v+side],[u,v+side],.10,recess);
+      d.line([u,v+side],[u,v+gap],.089,recess);
+      d.line([u+gap,v-.068],[u+side,v-.068],.034,lip);
+      d.rect(u+.32*side,v-.065,.12,.12,[124,103,82]);
+      d.rect(u+side-.063,v+.52*side,.125,.13,[124,103,82]);
+    }
+  }
+  const breakline=[[-2.48,-2.36],[-1.25,-2.58],[-.69,-1.83],[-.28,-1.17],[.44,-1.65],
+    [1.06,-1.53],[1.25,-.88],[1.97,-.67],[2.17,-.19],[1.81,.14],[2.31,.73],
+    [1.37,.77],[1.13,1.27],[.47,1.24],[-.06,2.06],[-.43,2.43],[-.69,1.75],
+    [-.54,.94],[-1.13,.72],[-.70,.17],[-.94,-.33],[-.31,-.51],[-.89,-1.05],[-1.64,-1.13]];
+  d.poly(breakline,[15,15,14]);
+  for(let i=0;i<breakline.length;i+=2){
+    const p=breakline[i],q=breakline[(i+1)%breakline.length];
+    d.line(p,q,.085,[62,50,39]);
+    d.line([p[0],p[1]-.052],[q[0],q[1]-.052],.036,lip);
+  }
+  for(let n=0;n<10;n++){
+    const x=-.57+n*.26,y=-1.19+n*.105;
+    const length=.28+rand()*.37;
+    d.line([x,y],[x+.035,y+length],.075,mix([39,36,31],rand()*17));
+    d.line([x-.024,y],[x-.024,y+length*.68],.025,[96,75,56]);
+  }
+  for(let row=0;row<4;row++){
+    const y=-.59+row*.43,start=row===3?-.63:-1.02,end=.57+row*.14;
+    d.line([start,y],[end,y],.09,[69,57,46]);
+    d.line([start,y-.035],[end-.14,y-.035],.027,[132,102,76]);
+    d.line([end,y],[end+.12,y+.16],.075,[72,60,48]);
+  }
+}
+
+function fallenTruss(d,x,y,length,angle){
+  const c=Math.cos(angle),s=Math.sin(angle);
+  const point=(along,across)=>[x+c*along-s*across,y+s*along+c*across];
+  for(const offset of [-.21,.21]){
+    d.line(point(0,offset),point(length,offset),.13,[42,43,39]);
+    d.line(point(0,offset-.055),point(length,offset-.055),.042,[147,143,123]);
+  }
+  const spans=Math.ceil(length/.48);
+  for(let j=0;j<spans;j++){
+    const from=j*length/spans,to=(j+1)*length/spans,side=j%2===0?.21:-.21;
+    d.line(point(from,side),point(to,-side),.074,[87,91,81]);
+  }
+}
+
+function scree(d,cx,cy,rx,ry,seed){
+  const rand=random(seed);
+  for(let i=0;i<420;i++){
+    const a=rand()*TAU,r=Math.sqrt(rand()),x=cx+Math.cos(a)*rx*r,y=cy+Math.sin(a)*ry*r;
+    const size=(.05+rand()*.17)*(1-.55*r),warmth=rand()*48;
+    d.oval(x,y,size*1.4,size,[170+warmth,132+warmth,92+warmth],.86);
+    d.line([x-size*.60,y-size*.17],[x+size*.24,y-size*.51],.024,sandLight,.96);
+  }
+}
+
 function platform(brush,rand,x,y,w,h,angle,type){
   const d=brush(x,y,angle),left=-w/2,top=-h/2;
   d.rect(left+.03,top+.06,w,h,[126,101,71],.77);
@@ -372,16 +449,23 @@ function platform(brush,rand,x,y,w,h,angle,type){
       else d.rect(u+.16,v+.15,cw-.32,.09,oxide);
     }
     if(type==='large'){
-      // Torn deck plates, fallen beams and two distinct rubble piles interrupt the floor.
-      const hole=[[left+.5,-2.3],[-.7,-1.8],[.65,-2.4],[1.33,-.8],[.45,.27],[1.1,1.0],[-.8,1.68],[-1.8,.96],[-2.0,-.6]];
-      d.poly(hole,soot,.95);
-      for(let n=0;n<10;n++){
-        const yy=-1.8+n*.32;
-        d.line([-1.9,yy],[.8+rand()*.2,yy-.07],.067,mix(iron,rand()*23),.91);
+      brokenDeck(d,rand);
+      scree(d,1.55,-4.22,1.52,1.46,31);
+      scree(d,-2.46,-.16,1.14,2.65,53);
+      scree(d,1.94,2.62,1.02,1.74,61);
+      scree(d,-.66,4.84,2.04,.74,83);
+      rubble(d,-2.24,3.37,1.35,1.84,300,rand,.53);rubble(d,2.04,-3.99,1.41,1.53,290,rand,.36);
+      rubble(d,-2.54,-1.24,.84,2.07,76,rand,.39);
+      for(let n=0;n<14;n++){
+        const end=n%2===0?1:-1;
+        beam(d,end*(1.5+rand()*1.04),-end*(2.55+rand()*1.93),.54+rand()*.96,.07+rand()*.12,rand()*TAU);
       }
-      rubble(d,-1.15,2.85,2.4,2.4,300,rand,.73);rubble(d,1.04,-3.25,2.25,1.98,290,rand,.69);
-      rubble(d,-1.57,-.05,1.28,2.22,76,rand,.42);
-      for(let n=0;n<14;n++)beam(d,(rand()-.5)*4.2,(rand()-.5)*6.7,1+rand()*1.4,.09+rand()*.11,rand()*TAU);
+      fallenTruss(d,-2.65,1.36,2.34,.53);
+      fallenTruss(d,-1.01,2.40,1.92,1.61);
+      fallenTruss(d,.84,-3.29,1.86,1.74);
+      d.poly([[1.70,-2.55],[2.70,-2.78],[2.91,-1.86],[1.92,-1.61]],[71,76,69]);
+      d.poly([[1.91,-2.41],[2.57,-2.56],[2.70,-2.05],[2.03,-1.88]],[38,41,38]);
+      d.line([1.90,-1.65],[2.91,-1.89],.095,[157,155,131]);
     }else{
       rubble(d,-w*.21,h*.19,w*.28,h*.22,97,rand,.49);
       rubble(d,w*.20,-h*.26,w*.25,h*.16,80,rand,.49);
