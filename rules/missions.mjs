@@ -28,8 +28,14 @@ export function objectiveSnapshot(state,pieces,areas,distance) {
   const byId=new Map(live.map(p=>[p.id,p]));
   const engagedGroups=new Set();
   if (distance) {
-    for (const a of live.filter(p=>p.faction==='orks' && p.kind==='boy')) {
-      if (!engagedGroups.has(groupId(state,a)) && live.some(b=>a.faction!==b.faction && engaged(a,b,distance(a.id,b.id)))) engagedGroups.add(groupId(state,a));
+    // Grab Dat Scrap comes from the Boyz bodyguard. Any living member of
+    // their attached unit can put that unit in engagement (03.04, 19.04).
+    const boyz=new Set(live.filter(p=>p.kind==='boy').map(p=>groupId(state,p)));
+    const marines=live.filter(p=>p.faction==='marines');
+    for (const ork of live.filter(p=>p.faction==='orks')) {
+      const unit=groupId(state,ork);
+      if (boyz.has(unit) && !engagedGroups.has(unit) &&
+        marines.some(enemy=>engaged(ork,enemy,distance(ork.id,enemy.id)))) engagedGroups.add(unit);
     }
   }
   return Object.fromEntries(areas.map(area=>{

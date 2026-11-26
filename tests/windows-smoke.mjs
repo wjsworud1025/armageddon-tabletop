@@ -18,6 +18,7 @@ import {checkAreaCover} from './browser-area-cover.mjs';
 import {checkOverwatch} from './browser-overwatch.mjs';
 import {checkDetection} from './browser-detection.mjs';
 import {checkCommandShock} from './browser-command-shock.mjs';
+import {checkOrkObjective} from './browser-ork-objective.mjs';
 import {checkSmallRuin} from './browser-small-ruin.mjs';
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 // --public-exe <file> exercises a clean distribution using the same native host.
@@ -66,6 +67,7 @@ try{
     await send('Page.reload');await until(()=>js('!!window.tabletopView'));await click('[data-tab=battle]');
   }};
   await checkCommandShock(shootingTools);
+  await checkOrkObjective(shootingTools);
   await checkOverwatch(shootingTools);
   await checkDetection(shootingTools);
   await checkTerrainAreas({...shootingTools,until});

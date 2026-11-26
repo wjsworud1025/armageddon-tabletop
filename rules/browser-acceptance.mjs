@@ -17,6 +17,7 @@ import {checkShootingReactions} from './browser-shooting-reactions.mjs';
 import {checkOverwatch} from '../tests/browser-overwatch.mjs';
 import {checkDetection} from '../tests/browser-detection.mjs';
 import {checkCommandShock} from '../tests/browser-command-shock.mjs';
+import {checkOrkObjective} from '../tests/browser-ork-objective.mjs';
 import {checkCoreStratagems} from './browser-core-stratagems.mjs';
 import {checkTraining} from './browser-training.mjs';
 import {checkTrainingTwo} from './browser-training-two.mjs';
@@ -93,6 +94,7 @@ try {
     await send('Page.reload');await until(()=>js('!!window.tabletopView'));await click('[data-tab=battle]');
   }};
   await checkCommandShock(trainingTools);
+  await checkOrkObjective(trainingTools);
   await checkOverwatch(trainingTools);
   await checkDetection(trainingTools);
   console.log('Passed end-of-movement Overwatch, passing, Snap Shooting, casualties and reload');

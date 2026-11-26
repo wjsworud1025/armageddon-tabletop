@@ -136,6 +136,10 @@ A/B/C 맵에서는 게임이 상대 배치 구역을 검사한다. 제품 전장
 
 훈련 3·4의 시점은 각 훈련의 인쇄 편성을 사용한다. 핸드북 65쪽은 보이는 모델과 엄폐를 설명하며, 게임은 위 코어 규칙에 따라 두 분대의 다른 모델을 숨겨 그 판단을 돕는다. 시점 열기와 닫기는 플레이어가 선택한 가시성이나 엄폐를 변경하지 않는다. [훈련 3 가시성 및 엄폐](TRAINING-THREE-SHOOTING.md) · [훈련 4 사격](TRAINING-FOUR-SHOOTING.md)
 
+## 보이즈의 교전 점유력
+
+보이즈의 *Grab Dat Scrap*은 그 분대가 교전하는 동안 각 모델에 OC +1을 준다. 워보스나 위어드보이가 보이즈에 합류해 적의 교전 거리 안에 들어가면 분대 전체가 교전한다. 이때 거점 안의 보이는 자신이 적과 2″ 넘게 떨어져 있어도 OC 3을 낸다. 거점 밖 분대원의 OC는 더하지 않는다. 전장 충격 중에는 거점을 통제할 수 없고, 보이즈 호위대의 마지막 모델까지 파괴되어 공격이 모두 끝나면 이 능력도 사라진다. [공식 교전 거리 §03.04, 14쪽](https://assets.warhammer-community.com/eng_01-06_warhammer40k_new40k_core_rules-was6fbu1ix-hfewhmxyiy.pdf#page=14) · [공식 합류 분대의 능력 §19.04, 67쪽](https://assets.warhammer-community.com/eng_01-06_warhammer40k_new40k_core_rules-was6fbu1ix-hfewhmxyiy.pdf#page=67) · [’Ardmob 보이즈 데이터시트 및 임무 앱 전사본](https://wahapedia.ru/wh40k11ed_cp/factions/ardmob/)
+
 ## 지휘 단계의 전장 충격과 임무 점수
 
 지휘 단계의 활성 플레이어는 이미 전장 충격 상태인 분대와 절반 이하인 분대를 각각 한 번 검사한다. 두 조건이 겹쳐도 한 번만 굴린다. 합류 분대는 게임 시작 당시 인원으로 절반을 계산하고, 단일 모델 분대는 남은 상처를 확인한다. 살아 있는 예비대도 같은 조건으로 검사한다. 게임은 모든 의무 검사를 마친 뒤 현재 점유력으로 거점과 임무 점수를 확정한다. [공식 기본 규칙 §08.03–08.05 및 예시 30–31쪽](https://assets.warhammer-community.com/eng_01-06_warhammer40k_new40k_core_rules-was6fbu1ix-hfewhmxyiy.pdf#page=30) · [공식 시작 병력 부록 86쪽](https://assets.warhammer-community.com/eng_01-06_warhammer40k_new40k_core_rules-was6fbu1ix-hfewhmxyiy.pdf#page=86) · [앱 부록 §01.02.04 전장 밖 분대](https://wahapedia.ru/wh40k11ed_cp/the-rules/rules-appendix/#Not-On-The-Battlefield)
