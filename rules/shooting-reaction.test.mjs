@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {newBattle} from './battle.mjs';
+import {createTable} from '../data/catalog.mjs';
 import {openShootingReaction,shootingReactionOptions,beginShootingReaction,assessShootingReaction,
   proposeShootingReaction,finishShootingReaction,declineShootingReaction} from './shooting-reaction.mjs';
 
@@ -82,9 +83,14 @@ test('every surging model approaches as far as possible, including an unmoved me
   assert.ok(a.errors.some(e=>e.code==='surge-closer'&&e.modelIds.includes('boy-2')));
   g=surge();g.pieces[1].x=10;h=start(opened(g,'captain',['boy-0']),'boy-0',{d6:1});
   a=assessShootingReaction(h,h.rules.reactionPlan,{'boy-1':[{x:2}]});assert.ok(a.ok);assert.deepEqual(a.manual,[]);
-  g=surge();g.pieces.push({...model('barricade',1.3),faction:'terrain',baseWidth:2,baseDepth:3});
+  g=surge();
+  const rail={...createTable().pieces.find(p=>p.id==='barricade-1'),x:2.7,z:0,yaw:0,elevation:0,removed:false};
+  g.pieces.push(rail);
   h=start(opened(g,'captain',['boy-0']),'boy-0',{d6:5});
-  a=assessShootingReaction(h,h.rules.reactionPlan,{});assert.ok(a.manual.some(e=>e.code==='surge-route'));
+  a=assessShootingReaction(h,h.rules.reactionPlan,{});assert.ok(a.ok);assert.ok(a.manual.some(e=>e.code==='surge-route'));
+  const inside={'boy-1':[{x:rail.x,yaw:0}]};
+  assert.ok(assessShootingReaction(h,h.rules.reactionPlan,inside,'path').ok);
+  assert.ok(codes(assessShootingReaction(h,h.rules.reactionPlan,inside)).includes('terrain-base'));
   g=surge();h=start(opened(g,'captain',['boy-0']),'boy-0',{d6:5});
   a=assessShootingReaction(h,h.rules.reactionPlan,{'boy-1':[{x:1}]});assert.ok(codes(a).includes('surge-engage'));
 });

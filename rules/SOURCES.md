@@ -76,7 +76,7 @@ Heavy는 명중 굴림을 바꾼다. 엄폐와 고지 사격은 BS에 적용하�
 
 A/B/C 맵에서는 게임이 상대 배치 구역을 검사한다. 제품 전장이나 자유 배치에서 배치 구역 경계를 지정하지 않았으면 두 플레이어가 합의한 경계를 확인한다. 편대, 모델 받침대의 겹침, 적과의 수평 간격은 자동으로 검사한다. 지형과 받침대가 겹치는 곳에서는 벽·천장을 관통하는지, 상층에서는 모델이 안정적으로 서는지 확인한다. 상층의 높이가 가장자리 거리 판정을 바꿀 때도 화면에 확인 요청을 표시한다. [공식 코어 규칙 01.04, 03.01–03.03, 13.06](https://assets.warhammer-community.com/eng_01-06_warhammer40k_new40k_core_rules-was6fbu1ix-hfewhmxyiy.pdf)
 
-패트롤에서 이동·돌격·밀착·재정비·사격 반응 이동을 마치거나 증원을 배치할 때, 지면보다 높은 베이스는 전장에 놓인 지형의 실제 상판 안에 들어가야 한다. 게임은 지형의 현재 위치·회전·형상과 각 베이스의 크기로 높이, 벽 관통과 상판 밖 돌출을 검사한다. 비행 모델은 공중을 경유할 수 있고, 이동 종료 때는 같은 지지 조건을 적용한다. 경로를 오르내리는 동안 지형과 수평 ½″ 안에 있는지, 조형이 실제로 안정적인지는 플레이어가 확인한다. [공식 코어 규칙 §13.06, 48쪽](https://assets.warhammer-community.com/eng_01-06_warhammer40k_new40k_core_rules-was6fbu1ix-hfewhmxyiy.pdf#page=48) · [비행 §21.03, 71쪽](https://assets.warhammer-community.com/eng_01-06_warhammer40k_new40k_core_rules-was6fbu1ix-hfewhmxyiy.pdf#page=71)
+패트롤에서 이동·돌격·밀착·재정비·사격 반응 이동을 마치거나 증원을 배치할 때, 지면보다 높은 베이스는 전장에 놓인 지형의 실제 상판 안에 들어가야 한다. 게임은 지형의 현재 위치·회전·형상과 각 베이스의 크기로 높이, 벽 관통과 상판 밖 돌출을 검사한다. 보병은 밀집 지형의 벽을 수평으로 통과해 반대편에 멈출 수 있다. 지상 종료점에서는 받침대가 실제 벽·기둥과 겹치면 이동을 확정할 수 없다. 열린 안뜰과 기둥 사이는 받침대가 들어갈 공간이 있으면 허용한다. 모델 상체·무기와 장식의 간섭, Solid 지형에 있는 낮은 폐쇄형 개구부는 양측이 현물을 기준으로 확인한다. 비행 모델은 공중을 경유할 수 있고, 이동 종료 때는 같은 지지 조건을 적용한다. 경로를 오르내리는 동안 지형과 수평 ½″ 안에 있는지, 조형이 실제로 안정적인지는 플레이어가 확인한다. [공식 코어 규칙 §13.06, 48쪽](https://assets.warhammer-community.com/eng_01-06_warhammer40k_new40k_core_rules-was6fbu1ix-hfewhmxyiy.pdf#page=48) · [비행 §21.03, 71쪽](https://assets.warhammer-community.com/eng_01-06_warhammer40k_new40k_core_rules-was6fbu1ix-hfewhmxyiy.pdf#page=71)
 
 ### 사격 직후의 반응 이동
 

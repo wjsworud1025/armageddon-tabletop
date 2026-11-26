@@ -91,6 +91,8 @@ test('all reserved models including attached characters need poses, legal spacin
   let tested=assessReinforcement(g2,'wartrakk',up);
   assert.ok(errors(tested).includes('upper-floor'));assert.ok(errors(tested).includes('unsupported-base'));
   g.pieces.push(model('largeRuin',1,{faction:'terrain',x:-18.1,z:2.55,baseWidth:5.2,baseDepth:4.1}));
+  const wall={x:-18.1-2.3,z:2.55,elevation:0};
+  assert.ok(errors(assessReinforcement(g,'vanguard',{...poses,[cap.id]:wall})).includes('terrain-base'));
   tested=assessReinforcement(g,'vanguard',{...poses,[cap.id]:{...poses[cap.id],elevation:3}});
   assert.ok(errors(tested).includes('unsupported-floor'));
   tested=assessReinforcement(g,'vanguard',{...poses,[cap.id]:{...poses[cap.id],elevation:3.37}});
