@@ -32,6 +32,6 @@ export function greenskin(s,kind,variant=0){
   else character(s,kind,face);
 }
 
-export function wartrakk(s) {
-  wartrakkVehicle(s,face);
+export function wartrakk(s,previousBanner=false) {
+  wartrakkVehicle(s,face,previousBanner);
 }

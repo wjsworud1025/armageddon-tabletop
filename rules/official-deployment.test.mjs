@@ -95,7 +95,7 @@ for(const map of ['A','B','C']){
     const activeSave=snapshot(game);
     Object.assign(piece(activeSave,'captain-1'),{x:1.7,z:1.9,yaw:.27});
     Object.assign(piece(activeSave,'largeRuin-1'),{x:1.7,z:1.9,yaw:-.76});
-    for(const version of [1,2,3,4,5,6,7]){
+    for(const version of [1,2,3,4,5,6,7,8]){
       activeSave.rules.officialSetup.version=version;
       piece(activeSave,'shockArray-1').removed=version!==1;
       const loaded=restore(createTable(),activeSave),small=piece(loaded,'smallRuin-1');
@@ -130,8 +130,8 @@ test('saved map, defender, turn, terrain and revealed reserve records agree with
 });
 
 test('the box shows all 15 terrain pieces before the draw; each saved map version restores its own structures and resumes through placement',()=>{
-  assert.equal(fresh().rules.officialSetup.version,7);
-  for(const version of [1,2,3,4,5,6,7])for(const [map,die] of [['A',1],['B',3],['C',5]]){
+  assert.equal(fresh().rules.officialSetup.version,8);
+  for(const version of [1,2,3,4,5,6,7,8])for(const [map,die] of [['A',1],['B',3],['C',5]]){
     let game=fresh();game.rules.officialSetup.version=version;
     assert.equal(game.pieces.filter(p=>visiblePatrolPiece(game.rules,p)).length,15);
     const tooEarly=snapshot(game);piece(tooEarly,'shockArray-1').removed=true;
@@ -164,7 +164,7 @@ test('the box shows all 15 terrain pieces before the draw; each saved map versio
       const wrongPipe=snapshot(game);wrongPipe.rules.officialSetup.version=version===4?5:4;
       assert.throws(()=>restore(createTable(),wrongPipe),'the registered pipe wall changes between v4 and v5');
     }
-    const unsupported=snapshot(game);unsupported.rules.officialSetup.version=8;
+    const unsupported=snapshot(game);unsupported.rules.officialSetup.version=9;
     assert.throws(()=>restore(createTable(),unsupported));
     game=step(step(game,'official-roll-role',{},[1,4]),'official-defend');
     game=step(game,'form-enhance',{team:'marines',enhancement:'veterans'});

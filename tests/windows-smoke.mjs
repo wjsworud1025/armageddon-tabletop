@@ -15,6 +15,7 @@ import {checkShooterSight} from './browser-shooter-sight.mjs';
 import {checkPlungingFire} from './browser-plunging-fire.mjs';
 import {checkHeavyRifles} from './browser-heavy-rifles.mjs';
 import {checkVehicleClearance} from './browser-vehicle-clearance.mjs';
+import {checkWartrakkBanner} from './browser-wartrakk-banner.mjs';
 import {checkTerrainAreas} from './browser-terrain-areas.mjs';
 import {checkAreaCover} from './browser-area-cover.mjs';
 import {checkOverwatch} from './browser-overwatch.mjs';
@@ -83,6 +84,7 @@ try{
   await checkPlungingFire(shootingTools);
   await checkHeavyRifles(shootingTools);
   await checkVehicleClearance(shootingTools);
+  await checkWartrakkBanner(shootingTools);
   await checkAreaCover(shootingTools);
   await screenshot('01-table.png');
   const studioInstalled=await js('!document.querySelector("#appearance").hidden');

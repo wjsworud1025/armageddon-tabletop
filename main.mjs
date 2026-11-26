@@ -63,6 +63,7 @@ function shownTable(){
         if(pose){
           delete p.previousSecondRuin;
           delete p.previousSmallRuin;
+          delete p.previousWartrakkBanner;
           Object.assign(p,pose);
         }else p.removed=true;
       }

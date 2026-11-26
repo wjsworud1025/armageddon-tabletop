@@ -35,7 +35,9 @@ function buildPiece(THREE,item,cast) {
     const previous={...item,kind:'previous-second-ruin',baseWidth:5.2,baseDepth:4.10};
     return cast(THREE,previous,s=>legacySecondRuin(s,previous));
   }
-  return cast(THREE,item,s=>{
+  const previousBanner=item.kind==='wartrakk'&&item.previousWartrakkBanner===true;
+  const castItem=previousBanner?{...item,kind:'previous-wartrakk-banner'}:item;
+  return cast(THREE,castItem,s=>{
     if(terrain.has(item.kind)) {
       scenery(s,item);
       return;
@@ -50,7 +52,7 @@ function buildPiece(THREE,item,cast) {
     if(marines.has(item.kind)) marine(body,item.kind,variant);
     else if(orks.has(item.kind)) greenskin(body,item.kind,variant);
     else if(item.kind==='landSpeeder') speeder(body);
-    else if(item.kind==='wartrakk') wartrakk(body);
+    else if(item.kind==='wartrakk') wartrakk(body,previousBanner);
     else throw new Error('Unknown starter set piece '+item.kind);
   });
 }

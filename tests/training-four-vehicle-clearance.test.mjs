@@ -27,7 +27,7 @@ test('new handbook 4 deployment and completed moves reject a Wartrakk caught on 
   assert.deepEqual(validateTrainingFourLayout(field),[]);
   assert.deepEqual(vehicleTerrainContacts(blocked,field.pieces),['smallRuin-2']);
   assert.throws(()=>deploy.move(deployment,id,blocked.x,blocked.z,blocked.yaw),/차체|장비/);
-  assert.equal(deployment.version,4);
+  assert.equal(deployment.version,5);
   const draft=occludedDraft(deployment);
   assert.deepEqual(roundtrip(draft),draft);
   assert.throws(()=>battle.act(draft,{type:'finish'},noDie),/차체|장비/);

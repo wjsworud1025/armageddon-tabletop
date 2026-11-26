@@ -14,7 +14,7 @@ const fields=(value,keys)=>value!==null&&typeof value==='object'&&
   Object.keys(value).length===keys.length&&keys.every(k=>Object.hasOwn(value,k));
 
 export function newPatrolSetup(){
-  return {version:7,layoutDie:null,roleRolls:[],roleChoice:null,
+  return {version:8,layoutDie:null,roleRolls:[],roleChoice:null,
     formationsRevealed:false,deploymentComplete:false,firstRolls:[]};
 }
 
@@ -25,7 +25,16 @@ const revisedTerrain=new Map([
   ['smallRuin-4',{revision:5,flag:'previousPipeRuin',width:2.5,depth:1.4}],
   ...['barricade-1','barricade-2'].map(id=>[id,{revision:6,flag:'previousBarricade',width:3.8,depth:.65}]),
 ]);
+export function applyWartrakkEdition(model,version){
+  if(Number.isInteger(version)&&version>=1&&version<8)model.previousWartrakkBanner=true;
+  else delete model.previousWartrakkBanner;
+}
 export function patrolTerrainPiece(piece,version){
+  if(piece.id==='wartrakk-1'){
+    const model={...piece};
+    applyWartrakkEdition(model,version);
+    return model;
+  }
   const correction=revisedTerrain.get(piece.id);
   if(!correction)return piece;
   const {revision,flag,width,depth}=correction;
@@ -54,7 +63,7 @@ function validRolls(rolls){
 
 export function validatePatrolSetup(s){
   if(!fields(s,['version','layoutDie','roleRolls','roleChoice','formationsRevealed','deploymentComplete','firstRolls'])||
-    ![1,2,3,4,5,6,7].includes(s.version)||s.layoutDie!==null&&!die(s.layoutDie)||
+    ![1,2,3,4,5,6,7,8].includes(s.version)||s.layoutDie!==null&&!die(s.layoutDie)||
     !validRolls(s.roleRolls)||!validRolls(s.firstRolls)||
     typeof s.formationsRevealed!=='boolean'||typeof s.deploymentComplete!=='boolean')return false;
   if(s.roleRolls.length&&s.layoutDie===null)return false;

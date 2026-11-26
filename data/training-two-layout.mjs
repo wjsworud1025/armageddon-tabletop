@@ -77,6 +77,7 @@ export function previousHandbookField(scenario,field,revision=1){
   const second=scenario===2;
   const center=second?{x:25.05,z:5.64}:{x:18.55,z:7.19};
   return {...field,handbookRevision:revision,pieces:field.pieces.map(p=>{
+    if(scenario===4&&revision<=4&&p.id==='wartrakk-1')return {...p,previousWartrakkBanner:true};
     if(p.id==='largeRuin-2'&&revision===1)
       return {...p,...trainingTwoWorldPoint(center),yaw:second?-Math.PI/2:Math.PI/2,baseDepth:4.1,previousSecondRuin:true};
     if(p.id==='smallRuin-1'&&revision<=2)

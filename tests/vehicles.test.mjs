@@ -21,7 +21,8 @@ test('Two vehicles preserve oval bases and loadouts with one cached, pickable dr
     assert.ok(Math.abs(g.boundingBox.min.y)<1e-5);
     for(const key of ['position','color','normal'])assert.ok(g.attributes[key].array.every(Number.isFinite));
     const speeder=p.kind==='landSpeeder';
-    assert.ok(g.boundingBox.max.y>(speeder?3.72:3.32)&&g.boundingBox.max.y<(speeder?4.00:3.65));
+    // The rear pole's spike reaches 3.29 inches in the registered side views.
+    assert.ok(g.boundingBox.max.y>(speeder?3.72:3.26)&&g.boundingBox.max.y<(speeder?4.00:3.32));
     assert.ok(g.index.count/3<(speeder?8500:14000));
     for(const label of speeder?['멀티 멜타','스톰퓨리 미사일','헤비 플레이머']:['로킷 런처','커스텀 슈타','초파'])
       assert.ok(getProfile(p).weapons.some(w=>w.name===label),p.id);

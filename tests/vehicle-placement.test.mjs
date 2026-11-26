@@ -65,7 +65,7 @@ function pendingSpeeder(version){
 }
 
 test('pre-v7 committed wing contact survives import; all new placement decisions and v7 completed saves reject it',()=>{
-  for(const version of [6,7]){
+  for(const version of [6,7,8]){
     const game=pendingSpeeder(version),p=find(game,vehicle),t=find(game,ruin);
     const clear={x:p.x,z:p.z,yaw:p.yaw,elevation:0};
     // This interior pose fits on the blue side. At 2.90″ the wing cuts a wall and at 3.30″ the body cuts the ruined landing.

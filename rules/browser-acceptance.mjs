@@ -30,6 +30,7 @@ import {checkShooterSight,sightButton,inspectButton} from '../tests/browser-shoo
 import {checkPlungingFire} from '../tests/browser-plunging-fire.mjs';
 import {checkHeavyRifles} from '../tests/browser-heavy-rifles.mjs';
 import {checkVehicleClearance} from '../tests/browser-vehicle-clearance.mjs';
+import {checkWartrakkBanner} from '../tests/browser-wartrakk-banner.mjs';
 import {checkAreaCover} from '../tests/browser-area-cover.mjs';
 import {checkSmallRuin} from '../tests/browser-small-ruin.mjs';
 
@@ -124,6 +125,7 @@ try {
   await checkHeavyRifles(shootingTools);
   console.log('Passed Heavy rifle hit rolls after short, long and unrecorded movement');
   await checkVehicleClearance(shootingTools);
+  await checkWartrakkBanner(shootingTools);
   console.log('Passed turning the Land Speeder clear of a ruin and resuming its completed move');
   await checkPatrolSetup(trainingTools);
   console.log('Passed the official mission sequence, private formations, deployment and separate roll-offs');

@@ -1,4 +1,5 @@
 import {groupId} from './rules/battle.mjs';
+import {applyWartrakkEdition} from './rules/patrol-setup.mjs';
 import {patrolTerrainAreas} from './data/patrol-terrain-areas.mjs';
 
 // Board edges in the 1535 x 1961 reference diagrams. Rotate the portrait sheet
@@ -223,5 +224,7 @@ export function applyLayout(game,map,blue){
     placements.push(...planned);
   }
   for(const [p,pose] of placements)Object.assign(p,pose);
+  const trakk=game.pieces.find(p=>p.kind==='wartrakk');
+  if(trakk)applyWartrakkEdition(trakk,game.rules?.officialSetup?.version);
   game.layout={map,blue};
 }

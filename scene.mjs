@@ -95,7 +95,7 @@ export async function buildScene(canvas,api) {
     objects.set(p.id,obj);scene.add(obj);
     if(i%5===0){api.progress(i,game.pieces.length);await new Promise(requestAnimationFrame)}
   }
-  const revisedRuins=new Map(['largeRuin-2','smallRuin-1','smallRuin-4','barricade-1','barricade-2'].map(id=>[id,{current:objects.get(id)}]));
+  const revisedPieces=new Map(['largeRuin-2','smallRuin-1','smallRuin-4','barricade-1','barricade-2','wartrakk-1'].map(id=>[id,{current:objects.get(id)}]));
   const halo=new T.Mesh(new T.RingGeometry(.96,1.08,72),new T.MeshBasicMaterial({color:0xffd773,side:T.DoubleSide,depthTest:false,transparent:true,opacity:.9}));
   const ringRoot=new T.Group();halo.rotation.x=-Math.PI/2;halo.renderOrder=10;ringRoot.add(halo);scene.add(ringRoot);
   const tape=new T.Line(new T.BufferGeometry(),new T.LineBasicMaterial({color:0xffe189,depthTest:false}));tape.renderOrder=11;scene.add(tape);
@@ -200,10 +200,10 @@ export async function buildScene(canvas,api) {
     }
     updateZones();
     for(const p of table.pieces){
-      const edition=revisedRuins.get(p.id);
+      const edition=revisedPieces.get(p.id);
       if(edition){
-        // Earlier photo games already rendered the scanned small wall.
-        const previous=p.previousSecondRuin||p.previousPipeRuin||((p.previousSmallRuin||p.previousBarricade)&&!edition.current.userData.reconstruction);
+        // The earlier photo edition already displayed scans of these pieces.
+        const previous=p.previousSecondRuin||p.previousPipeRuin||((p.previousSmallRuin||p.previousBarricade||p.previousWartrakkBanner)&&!edition.current.userData.reconstruction);
         const required=previous?(edition.previous??=createPiece(T,p)):edition.current;
         if(required!==objects.get(p.id)){
           scene.remove(objects.get(p.id));required.userData.pieceId=p.id;

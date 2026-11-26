@@ -126,5 +126,18 @@ export async function checkTrainingFour({save,upload,click,state,js,reload,send}
   assert.deepEqual(done.poses[wartrakk],parked.positions[wartrakk]);
   await reload();assert.deepEqual(await drill(),done);
   await click('#training-four-exit');
+  // Switch editions with identical poses. Only the procedural Wartrakk changed
+  // between these two fields; the photo build has the same scan in both.
+  async function drawnField(version){
+    await upload({...original,training:{...fresh,version}});
+    assert.equal((await drill()).version,version);
+    const board=await world();assert.equal(board.visible,28);assert.ok(board.trakk);
+    return js('tabletopView.stats().triangles');
+  }
+  const oldTriangles=await drawnField(4),newTriangles=await drawnField(5);
+  if(await js('tabletopView.stats().reconstructed>0'))assert.equal(newTriangles,oldTriangles);
+  else assert.notEqual(newTriangles,oldTriangles,'Archived and current fields must draw different Wartrakk banners');
+  assert.equal(await drawnField(4),oldTriangles);
+  assert.equal(await drawnField(5),newTriangles);
   await upload(save);await click('[data-tab=battle]');
 }

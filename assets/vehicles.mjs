@@ -1,4 +1,5 @@
 import {paint as p,Sculpt} from './sculpt.mjs';
+import {rearBanner} from './wartrakk-banner.mjs';
 
 const navy=0x193258, blue=0x274777, edge=0x50709c;
 const rubber=0x272629, gunmetal=0x46484a, dull=0x777574;
@@ -319,7 +320,7 @@ function rocketRack(s){
   g.cylinder(rubber,[.07,-.17,.691],.031,.031,.016,8,barrel);
   for(let j=0;j<7;j++)g.box(p.brass,[-.21-.024*Math.sin(j*.5),-.15-j*.045,.02],[.116,.028,.048],[0,-.21,-.1]);
 }
-export function wartrakkVehicle(parent,face){
+export function wartrakkVehicle(parent,face,previousBanner=false){
   const root=new Sculpt(parent.T,parent.group,true);
   const s=root.child([0,0,0],[0,.06,0]);
   crawler(s,-.607);crawler(s,.607);forkAndWheel(s);
@@ -344,6 +345,9 @@ export function wartrakkVehicle(parent,face){
   }
   s.oval(p.leather,[0,.751,.27],[.232,.101,.339]);
   orkRider(s,face);gunner(s,face);rocketRack(s);
+  if(!previousBanner){
+    rearBanner(root);return;
+  }
   const pole=[-.091,2.93,-.972];
   s.link(gunmetal,[-.128,1.01,-.907],pole,.034,.026,8);
   s.oval(p.red,plus(pole,0,.10,0),[.124,.182,.129],[.13,0,.14]);

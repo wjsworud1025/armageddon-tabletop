@@ -103,6 +103,7 @@ function bake(T, group) {
   const positions = [], normals = [], colors = [], uvs = [], indices = [];
   const supportBridges = [];
   const partIndexOffsets = [];
+  const paintOnlyIndexOffsets = [];
   let vehicleBodyIndexOffset;
   const v = new T.Vector3(), n = new T.Vector3(), nm = new T.Matrix3();
   group.updateMatrixWorld(true);
@@ -110,6 +111,7 @@ function bake(T, group) {
     if(node.userData.vehicleBody)vehicleBodyIndexOffset=indices.length;
     const {geometry,color} = node.userData;
     if (!geometry) return;
+    if(node.userData.paintOnly)paintOnlyIndexOffsets.push(indices.length);
     partIndexOffsets.push(indices.length);
     for (const edge of node.userData.supportBridges ?? []) {
       supportBridges.push(edge.map(point => {
@@ -141,6 +143,7 @@ function bake(T, group) {
     }
   });
   const combined = new T.BufferGeometry();
+  if(paintOnlyIndexOffsets.length)combined.userData.paintOnlyIndexOffsets=paintOnlyIndexOffsets;
   if (supportBridges.length) combined.userData.supportBridges = supportBridges;
   combined.setAttribute('position',new T.Float32BufferAttribute(positions,3));
   combined.setAttribute('normal',new T.Float32BufferAttribute(normals,3));

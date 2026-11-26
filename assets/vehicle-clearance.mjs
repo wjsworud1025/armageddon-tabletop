@@ -17,7 +17,7 @@ function shape(geometry){
   const starts=geometry.userData.partIndexOffsets,parts=[];
   for(let i=0;i<starts.length;i++){
     const start=starts[i],end=starts[i+1]??indices.length;
-    if(start<(geometry.userData.vehicleBodyIndexOffset??0))continue;
+    if(start<(geometry.userData.vehicleBodyIndexOffset??0)||geometry.userData.paintOnlyIndexOffsets?.includes(start))continue;
     const ix=indices.subarray(start,end),ids=[...new Set(ix)];
     const box=new T.Box3().setFromPoints(ids.map(j=>vertices[j]));
     parts.push({ix,ids,box});
