@@ -10,7 +10,7 @@ import assert from 'node:assert/strict';
 import {createTable} from '../data/catalog.mjs';
 import {baseDistance} from '../state.mjs';
 import {checkPatrolSetup} from '../rules/browser-patrol-setup.mjs';
-import {checkRuinSight} from './browser-ruin-sight.mjs';
+import {checkGretchinSight,checkRuinSight} from './browser-ruin-sight.mjs';
 import {checkShooterSight} from './browser-shooter-sight.mjs';
 import {checkPlungingFire} from './browser-plunging-fire.mjs';
 import {checkTerrainAreas} from './browser-terrain-areas.mjs';
@@ -64,7 +64,9 @@ try{
   const stats=await js('tabletopView.stats()');assert.equal(stats.pieces,61);
   async function screenshot(name){await delay(500);const img=await send('Page.captureScreenshot',{format:'png'});writeFileSync(join(evidence,name),Buffer.from(img.data,'base64'))}
   await checkSmallRuin({save:await state(),upload,state,js,click,send,screenshot});
-  await checkRuinSight({save:await state(),upload,state,js,click,send,screenshot});
+  const sightTools={save:await state(),upload,state,js,click,send,screenshot};
+  await checkRuinSight(sightTools);
+  await checkGretchinSight(sightTools);
   const shootingTools={save:await state(),upload,state,js,click,screenshot,reload:async()=>{
     await send('Page.reload');await until(()=>js('!!window.tabletopView'));await click('[data-tab=battle]');
   }};

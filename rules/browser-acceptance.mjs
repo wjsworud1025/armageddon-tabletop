@@ -25,7 +25,7 @@ import {checkTrainingTwo} from './browser-training-two.mjs';
 import {checkTrainingThree} from './browser-training-three.mjs';
 import {checkTrainingFour} from './browser-training-four.mjs';
 import {checkPatrolSetup} from './browser-patrol-setup.mjs';
-import {checkRuinSight} from '../tests/browser-ruin-sight.mjs';
+import {checkGretchinSight,checkRuinSight} from '../tests/browser-ruin-sight.mjs';
 import {checkShooterSight,sightButton,inspectButton} from '../tests/browser-shooter-sight.mjs';
 import {checkPlungingFire} from '../tests/browser-plunging-fire.mjs';
 import {checkAreaCover} from '../tests/browser-area-cover.mjs';
@@ -102,7 +102,8 @@ try {
   await checkSmallRuin(trainingTools);
   console.log('Passed shrine and pipe ruin wall, courtyard and archived table picking');
   await checkRuinSight(trainingTools);
-  console.log('Passed shooter-view checks for the large ruin window and crossbar, and both small ruin returns');
+  await checkGretchinSight(trainingTools);
+  console.log('Passed shooter-view checks for the ruin walls and the Gretchin’s raised arm and hand');
   await checkShooterSight(trainingTools);
   console.log('Passed individual sight records, unit range, declaration locks and persistence');
   const shootingTools={...trainingTools,screenshot:async name=>{
