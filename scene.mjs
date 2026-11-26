@@ -98,6 +98,8 @@ export async function buildScene(canvas,api) {
   const revisedPieces=new Map(['largeRuin-2','smallRuin-1','smallRuin-4','barricade-1','barricade-2','wartrakk-1'].map(id=>[id,{current:objects.get(id)}]));
   const halo=new T.Mesh(new T.RingGeometry(.96,1.08,72),new T.MeshBasicMaterial({color:0xffd773,side:T.DoubleSide,depthTest:false,transparent:true,opacity:.9}));
   const ringRoot=new T.Group();halo.rotation.x=-Math.PI/2;halo.renderOrder=10;ringRoot.add(halo);scene.add(ringRoot);
+  const rallyRings=new Map();
+  const rallyInk=new T.MeshBasicMaterial({color:0x76d8f1,side:T.DoubleSide,depthTest:false,transparent:true,opacity:.88});
   const tape=new T.Line(new T.BufferGeometry(),new T.LineBasicMaterial({color:0xffe189,depthTest:false}));tape.renderOrder=11;scene.add(tape);
   const zones=new T.Group();scene.add(zones);let drawnMap=null;
   function updateZones(){
@@ -200,6 +202,18 @@ export async function buildScene(canvas,api) {
     }
     updateZones();
     for(const p of table.pieces){
+      let preview=rallyRings.get(p.id);
+      if(p.rallyPreview&&!preview){
+        preview=new T.Mesh(halo.geometry,rallyInk);preview.rotation.x=-Math.PI/2;preview.renderOrder=9;
+        scene.add(preview);rallyRings.set(p.id,preview);
+      }
+      if(preview){
+        preview.visible=!!p.rallyPreview&&!sightPair;
+        if(preview.visible){
+          preview.position.set(p.x,(p.elevation||0)+.055,p.z);
+          preview.scale.set(p.baseWidth*.60,p.baseDepth*.60,1);
+        }
+      }
       const edition=revisedPieces.get(p.id);
       if(edition){
         // The earlier photo edition already displayed scans of these pieces.
@@ -311,8 +325,10 @@ export async function buildScene(canvas,api) {
     if(sightPair&&mode!=='sight')return;
     const pan=e.shiftKey||e.button===1,orbit=e.button===2;
     const id=pan||orbit?null:pick(e),g=ground(e);
+    const placeRally=mode==='pick'&&!pan&&!orbit&&api.rallyPlacing?.()&&(!id||!lookup(id)?.rallyPreview);
     gesture={type:pan?'pan':orbit?'orbit':mode==='ruler'?'measure':mode==='sight'?'sight':mode==='path'?'path':id?'move':'orbit',id,g,sx:e.clientX,sy:e.clientY,angle:yaw,pitch,target:target.clone(),offsetX,offsetY,drag:false,pointer:e.pointerId};
-    if(id&&mode==='pick'){api.select(id);const p=lookup(id);
+    if(placeRally){gesture.type='orbit';gesture.placeRally=true}
+    else if(id&&mode==='pick'){api.select(id);const p=lookup(id);
       if(!api.canDrag(p)){gesture.type='orbit'}else{
         gesture.start={x:p.x,z:p.z,elevation:p.elevation};gesture.records=api.moving(p).map(piece=>({piece,x:piece.x,z:piece.z}));
       }}
@@ -338,6 +354,7 @@ export async function buildScene(canvas,api) {
     const d=gesture;if(!d||d.pointer!==e.pointerId)return;
     gesture=null;if(canvas.hasPointerCapture(e.pointerId))canvas.releasePointerCapture(e.pointerId);
     if(d.type==='surface'){if(surface?.picking&&!cancel&&!d.drag&&e.button===0)chooseSurface(e);return;}
+    if(!cancel&&d.placeRally&&!d.drag&&d.g){api.rallyGround(d.g);return;}
     if(d.type==='move'&&d.drag){const p=lookup(d.id),end={x:p.x,z:p.z};
       for(const i of d.records){i.piece.x=i.x;i.piece.z=i.z}
       if(!cancel)api.route(p,[d.start,end],true);
@@ -357,8 +374,13 @@ export async function buildScene(canvas,api) {
     if(photo){const prev=photoZoom;photoZoom=clamp(prev/scale,.55,12);const ratio=photoZoom/prev,r=canvas.getBoundingClientRect();
       offsetX=ratio*offsetX+(1-ratio)*(e.clientX-r.left-r.width/2);offsetY=ratio*offsetY+(1-ratio)*(e.clientY-r.top-r.height/2)}
     else half=clamp(half*scale,1.2,55);projection()},{passive:false});
-  function focus(id){const p=lookup(id);if(!p||p.removed)return;sightPair=null;
+  function focus(id,companions=[],margin=0){const p=lookup(id);if(!p||p.removed)return;sightPair=null;
     const bounds=new T.Box3().setFromObject(objects.get(id),true);
+    for(const other of companions){
+      const member=lookup(other);
+      if(member&&!member.removed)bounds.expandByObject(objects.get(other),true);
+    }
+    if(margin)bounds.expandByScalar(margin);
     bounds.getCenter(target);
     const w=canvas.clientWidth,h=canvas.clientHeight;
     if(!w||!h)return;

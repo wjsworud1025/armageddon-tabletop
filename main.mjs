@@ -21,6 +21,7 @@ import {beginMove,proposeMove,finishMove,rewindMove,rerollMove,abandonInvalidMov
 import {beginCharge,selectChargeTargets,proposeCharge,finishCharge,rewindCharge,cancelCharge} from './charge-session.mjs';
 import {beginFightMove,proposeFightMove,finishFightMove,cancelFightMove} from './fight-session.mjs';
 import {beginReinforcement,placeReinforcement,finishReinforcement} from './rules/reinforcement-session.mjs';
+import {beginRally,toggleRallyModel,poseRallyModel,finishRally} from './rules/rally-placement.mjs';
 import {beginShootingReaction,proposeShootingReaction,finishShootingReaction,declineShootingReaction} from './rules/shooting-reaction.mjs';
 import {tacticActive} from './rules/patrol.mjs';
 import {applyLayout,objectiveAreas,validDeployment,objectiveFootprints} from './layouts.mjs';
@@ -45,7 +46,19 @@ for(const [team,p] of Object.entries(duelists)){
   Object.assign(p,{x:sign*p.baseWidth/2,z:0,yaw:-sign*Math.PI/2,elevation:0});
 }
 const trainingField={width:30,depth:22,surface:'reverse',pieces:structuredClone(template.pieces)};
+let rallyDisplay=null;
 function shownTable(){
+  const plan=game.rules?.rallyPlan;
+  if(!game.training&&plan&&!plan.reserve){
+    // Dragging temporarily moves these preview objects. Persisted casualties
+    // and their locations stay untouched until the command phase confirms them.
+    if(rallyDisplay?.rules!==game.rules)rallyDisplay={...game,pieces:game.pieces.map(p=>{
+      const pose=plan.selected[p.id];
+      return pose?{...p,...pose,removed:false,rallyPreview:true}:p;
+    })};
+    return rallyDisplay;
+  }
+  rallyDisplay=null;
   if(!game.training&&officialPreparing(game.rules)){
     const die=game.rules.officialSetup.layoutDie;
     const layout=game.layout??(die?{map:'ABC'[Math.floor((die-1)/2)]}:null);
@@ -129,7 +142,15 @@ function syncBattlePanel(){
     });
   }else battlePane.scrollTop=0;
 }
-function redraw(){syncBattlePanel();scene?.sync();roster();selection();history();$('undo').disabled=!canRestoreFrom(past);$('redo').disabled=!canRestoreFrom(future);
+function redraw(){
+  const rp=!game.training&&game.rules?.rallyPlan;
+  if(rp&&!document.body.classList.contains('rally-placement')){
+    reference(false);exitSight();setMode('pick');switchTab('battle');
+  }
+  if(rp&&!Object.hasOwn(rp.selected,active))active=Object.keys(rp.selected)[0]??rp.leader;
+  document.body.classList.toggle('rally-placement',!!rp);
+  if(rp)scene?.select(active);
+  syncBattlePanel();scene?.sync();roster();selection();history();$('undo').disabled=!canRestoreFrom(past);$('redo').disabled=!canRestoreFrom(future);
   document.body.classList.toggle('official-preparing',officialPreparing(game.rules)&&!game.training);
   renderTraining();
   for(const side of ['left','right'])$('flip-'+side).setAttribute('aria-pressed',String(game.surface===side||game.surface==='reverse'));
@@ -140,7 +161,9 @@ function changed(preserveSight=false){
   persist();redraw();
 }
 function mutate(fn,message,preserveSight=false){checkpoint();fn();log(message);changed(preserveSight)}
-function select(id){active=piece(id)?.id??null;scene?.select(active);roster();selection();
+function select(id){
+  if(!game.training&&game.rules?.rallyPlan&&!Object.hasOwn(game.rules.rallyPlan.selected,id))return;
+  active=piece(id)?.id??null;scene?.select(active);roster();selection();
   if(game.training?.scenario===2)renderFieldBattle(game.training);
   if(game.training?.scenario>=3)renderFieldMission(game.training);
   notify()}
@@ -154,14 +177,16 @@ function history(){
 function selection(){
   const p=piece(active);$('selection').hidden=!p;$('sight-tools').hidden=!p||p.removed||p.faction==='terrain';
   $('studio-tools').hidden=!original||!p||!studioGroupFor(p);if(!p)return;
+  const rally=!game.training&&game.rules?.rallyPlan,preview=rally?.selected?.[p.id];
   $('piece-name').textContent=p.name;
   $('piece-spec').textContent=factionNames[p.faction]+' · '+(p.faction==='terrain'?'지면 점유 폭':'베이스')+' '+Math.round(p.baseWidth*25.4)+' × '+Math.round(p.baseDepth*25.4)+' mm';
   const inReserve=Object.values(game.rules?.reserves??{}).some(ids=>ids.includes(p.id));
-  $('elevation').value=p.elevation||0;
-  showFloorLevels(p);
-  $('remove').disabled=inReserve||!!(game.rules?.overwatch||game.rules?.reinforcePlan||game.rules?.shootingReaction||game.rules?.reactionPlan||pendingAttack());
+  $('elevation').value=(preview??p).elevation||0;
+  $('elevation').disabled=$('rotate').disabled=!!rally&&!preview;
+  showFloorLevels(preview?{...p,...preview,removed:false}:p);
+  $('remove').disabled=inReserve||!!(rally||game.rules?.overwatch||game.rules?.reinforcePlan||game.rules?.shootingReaction||game.rules?.reactionPlan||pendingAttack());
   $('remove').textContent=inReserve?(p.removed?'예비대 대기 중':'예비대 배치 중'):p.removed?'전장 복귀':'전장에서 제거';
-  $('focus').disabled=!!p.removed;
+  $('focus').disabled=!!p.removed&&!preview;
 }
 function showFloorLevels(p){
   const controls=$('floor-levels'),r=game.rules;
@@ -169,7 +194,7 @@ function showFloorLevels(p){
   controls.hidden=true;
   if(game.training||p.removed||p.faction==='terrain')return;
   if(officialPreparing(r)&&!pendingPatrolPiece(r,p))return;
-  if(r?.status==='playing'&&![r.movePlan,r.chargePlan,r.fightPlan,r.reactionPlan,r.reinforcePlan]
+  if(r?.status==='playing'&&!r.rallyPlan?.selected?.[p.id]&&![r.movePlan,r.chargePlan,r.fightPlan,r.reactionPlan,r.reinforcePlan]
     .some(plan=>Object.hasOwn(plan?.origins??{},p.id)))return;
   const levels=patrolTerrainLevels(p,game.pieces);
   if(levels.length<2)return;
@@ -258,6 +283,10 @@ function applyMovement(result){
 }
 function editPose(p,delta,message){
   if(game.training)return;
+  if(game.rules?.rallyPlan){
+    if(game.rules.rallyPlan.selected[p.id])try{rallyCommand('pose',p.id,delta)}catch(e){toast(e.message);selection()}
+    return;
+  }
   if(officialPreparing(game.rules)&&!pendingPatrolPiece(game.rules,p))return;
   if(movingByRules(p)){
     try{applyMovement(proposeTableMotion(p,{[p.id]:[delta]}))}catch(e){toast(e.message);selection()}
@@ -265,11 +294,11 @@ function editPose(p,delta,message){
 }
 function rotate(){
   if(game.training?.scenario===4){pivotFourth(1);return}
-  const p=piece(active);if(p)editPose(p,{yaw:(p.yaw+Math.PI/12)%(2*Math.PI)},p.name+' 15° 회전');
+  const p=piece(active);if(p)editPose(p,{yaw:((game.rules?.rallyPlan?.selected[p.id]??p).yaw+Math.PI/12)%(2*Math.PI)},p.name+' 15° 회전');
 }
 function pendingAttack(){return game.rules?.declaration?.attackRoll||game.rules?.declaration?.precisionRoll}
 function remove(id,removed){const p=piece(id);
-  if(game.training||officialPreparing(game.rules))return;
+  if(game.training||game.rules?.rallyPlan||officialPreparing(game.rules))return;
   if(game.rules?.overwatch){toast('경계 사격 중에는 공격 판정에서 사상자를 처리하세요.');return}
   if(pendingAttack()){toast('진행 중인 공격의 피해 배정을 먼저 마치세요.');return}
   if(game.rules?.shootingReaction||game.rules?.reactionPlan){toast('현재 사격 반응을 먼저 마치세요.');return}
@@ -554,7 +583,33 @@ for(const value of ['visible','blocked'])$('sight-'+value).onclick=()=>{
   const next=setPatrolSight(game.rules,game.pieces,...pair,value);
   if(next)mutate(()=>{game.rules=next},piece(pair[0]).name+' → '+piece(pair[1]).name+' · '+verdictNames[value],true);
 };
+function rallyCommand(command,id,pose){
+  let result;
+  switch(command){
+    case 'anchors':{
+      const plan=game.rules?.rallyPlan;
+      if(plan&&!plan.reserve)scene?.focus(plan.anchors[0],plan.anchors.slice(1),1.6);
+      return;
+    }
+    case 'begin':result=beginRally(game,id);break;
+    case 'toggle':result=toggleRallyModel(game,id);break;
+    case 'pose':result=poseRallyModel(game,id,pose);break;
+    case 'finish':result=finishRally(game);break;
+    default:throw Error('알 수 없는 복귀 배치 동작입니다.');
+  }
+  if(command==='toggle'&&Object.hasOwn(result.rules.rallyPlan.selected,id))active=id;
+  if(command==='finish')active=game.rules.rallyPlan.leader;
+  mutate(()=>{
+    game.rules={...result.rules,last:result.message};
+    for(const [key,value] of Object.entries(result.poses))Object.assign(piece(key),value);
+    for(const [key,value] of Object.entries(result.removed))piece(key).removed=value;
+  },result.message);
+  scene?.select(active);
+  if(command==='begin')rallyCommand('anchors');
+  if(command==='finish')toast(result.message);
+}
 const api={
+  rallyCommand,
   inspectSight,exitSight,
   getTable:()=>game,
   officialCommand(action){
@@ -677,11 +732,21 @@ async function start(){
     appearance:(on,photo)=>{$('appearance').setAttribute('aria-pressed',String(on));$('appearance').textContent=on?(photo?'사진 기물':'회전 사진'):'3D 조형'},
     progress:(i,n)=>$('stage-load').textContent='미니어처 준비 중 · '+i+' / '+n,
     moving:movingGroup,
-    canDrag:p=>{if(!game.training)return !officialPreparing(game.rules)||pendingPatrolPiece(game.rules,p);
+    rallyPlacing:()=>!game.training&&!!game.rules?.rallyPlan?.selected[active],
+    rallyGround(point){
+      try{rallyCommand('pose',active,{x:point.x,z:point.z})}catch(e){toast(e.message)}
+    },
+    canDrag:p=>{if(!game.training&&game.rules?.rallyPlan)return !!p.rallyPreview;
+      if(!game.training)return !officialPreparing(game.rules)||pendingPatrolPiece(game.rules,p);
       const plan=game.training.plan;
       if(game.training?.phase==='deployment')return p.faction!=='terrain';
       return game.training?.scenario>=2&&plan?.ids.includes(p.id)&&(plan.mode!=='charge'||!!plan.target)},
     route(p,points,drag=false){
+      if(!game.training&&game.rules?.rallyPlan){
+        if(!game.rules.rallyPlan.selected[p.id])return false;
+        const {x,z}=points.at(-1);
+        try{rallyCommand('pose',p.id,{x,z});return true}catch(e){toast(e.message);return false}
+      }
       if(game.training?.phase==='deployment'){
         const {x,z}=points.at(-1);
         try{
@@ -711,5 +776,5 @@ async function start(){
   // Read-only diagnostics for the packaged Windows acceptance check.
   window.tabletopView={stats:()=>scene.stats(),screen:id=>scene.screen(id),pose:id=>scene.pose(id),state:()=>snapshot(game)};
 }
-function movingGroup(p){return game.training||!$('squad').checked||p.faction==='terrain'?[p]:unitMembers(game.rules??newBattle(),game.pieces,p).filter(m=>!m.removed)}
+function movingGroup(p){return game.training||game.rules?.rallyPlan||!$('squad').checked||p.faction==='terrain'?[p]:unitMembers(game.rules??newBattle(),game.pieces,p).filter(m=>!m.removed)}
 start().catch(err=>{$('stage-load').textContent='전장을 열지 못했습니다. '+err.message;console.error(err)});

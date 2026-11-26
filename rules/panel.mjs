@@ -5,6 +5,7 @@ import {createFightControls} from './fight-controls.mjs';
 import {needsLegacyBossStyle} from '../fight-sequence.mjs';
 import {reinforcementOptions,expiringReserves,reserveCapacity} from './reinforcements.mjs';
 import {attachForDeployment} from './reinforcement-session.mjs';
+import {assessRally,rallyOptions} from './rally-placement.mjs';
 import {openShootingReaction,shootingReactionOptions} from './shooting-reaction.mjs';
 import {useInsaneBravery,useEpicChallenge} from './core-stratagems.mjs';
 import {acceptMovementRoll} from './command-reroll.mjs';
@@ -405,6 +406,11 @@ export function mountRules(container,api) {
     const stats='M '+p.move+'″ · T '+p.toughness+' · Sv '+p.save+'+ · W '+currentHP(state,actor)+'/'+p.wounds+' · Ld '+p.leadership+'+ · OC '+(unit.shocked?'–':p.oc);
     let action='';
     let attachment='';
+    let rallyButton='';
+    if(state.status==='playing'&&state.step===0&&mine&&actor.kind==='warboss'&&state.patrol.enhanced.warcry&&!state.patrol.warcryUsed){
+      const options=rallyOptions(api.getTable(),actor.id);
+      if(options.fallen.length)rallyButton=btn('warcry','전투 함성 · 복귀 수 굴림',!options.ok);
+    }
     if (['librarian','warboss','weirdboy'].includes(actor.kind) && state.status==='setup') {
       const eligible=actor.faction==='marines'?['intercessor']:['boy-0','boy-1'];
       const current=state.attachments[actor.id]||'';
@@ -412,7 +418,7 @@ export function mountRules(container,api) {
     }
     if (reserve) {
       const setup=state.status==='setup', options=setup?null:reinforcementOptions(api.getTable(),groupId(state,actor));
-      return chunk(esc(actor.name)+' · 전략 예비대',attachment+'<p>예비대에 '+reserve.length+'명 대기 중</p>'+shockButtons+
+      return chunk(esc(actor.name)+' · 전략 예비대',attachment+'<p>예비대에 '+reserve.length+'명 대기 중</p>'+shockButtons+rallyButton+
         btn('ingress',setup?'배치로 복귀':'가장자리에서 증원 배치',!setup&&!options.ok)+
         (options?.modes.includes('deep-strike')?btn('ingress-deep','딥 스트라이크로 배치',!options.ok):'')+
         (!setup&&!options.ok?'<p>'+esc(options.errors[0]?.message)+'</p>':''));
@@ -445,10 +451,7 @@ export function mountRules(container,api) {
         action+=btn('epic-'+model.id,'영웅적 도전 · 1 CP · '+model.name+'의 근접 무기에 정밀');
     }
     const tacticsMenu=available.length ? detail('tactics','분대 전술 · 각 1 CP',available.map(([key,t])=>'<p>'+esc(t.rule)+'</p>'+btn('tactic-'+key,t.name)).join('')):'';
-    if (state.status==='playing' && state.step===0 && mine && actor.kind==='warboss' && state.patrol.enhanced.warcry &&
-      !state.patrol.warcryUsed && members.some(p=>p.kind==='boy' && !currentHP(state,p)) && alive.some(p=>p.kind==='boy')) {
-      action+=btn('warcry','전투 함성 · D3+2명 복귀',pending.length>0);
-    }
+    action+=rallyButton;
     if(state.step===3&&currentHP(state,actor)>0)action+=chargeActions(api.getTable(),actor);
     if (state.status==='playing' && mine && state.step===2 && actor.kind==='wartrakk' && unit.finishedAttack===2 && !unit.suppressionTargets && unit.hitTargets?.length && !unit.suppressedEnemy) {
       const hit=unit.hitTargets.map(id=>living(state).find(p=>groupId(state,p)===id)).filter(Boolean);
@@ -538,8 +541,34 @@ export function mountRules(container,api) {
       if(container.parentElement.firstElementChild===container)container.parentElement.scrollTop=0;
     }
   }
+  function renderRally(plan){
+    const game=api.getTable(),fallen=rallyOptions(game,plan.leader).fallen;
+    const chosen=Object.keys(plan.selected),limit=plan.die+2;
+    const editing=api.getSelection()?.id,pose=plan.selected[editing];
+    const verdict=assessRally(game);
+    const buttons=fallen.map(id=>{
+      const on=chosen.includes(id),p=getPiece(id);
+      const toggle='<button type="button" data-act="rally-toggle" data-model="'+esc(id)+'" aria-pressed="'+on+'"'+
+        (!on&&chosen.length>=limit?' disabled':'')+'>'+esc(p.name)+' · '+esc(id)+'</button>';
+      const focus=on&&!plan.reserve?'<button type="button" data-act="rally-focus" data-model="'+esc(id)+'" aria-pressed="'+(id===editing)+'">'+(id===editing?'위치 편집 중':'위치 편집')+'</button>':'';
+      return row(toggle+focus);
+    }).join('');
+    const coords=pose?'<fieldset class="rally-coordinates"><legend>'+esc(editing)+' 위치</legend>'+[
+      ['x','X (인치)',pose.x],['z','Z (인치)',pose.z],['elevation','높이 (인치)',pose.elevation],['yaw','방향 (도)',pose.yaw*180/Math.PI],
+    ].map(([key,label,value])=>'<label>'+label+'<input type="number" step="any" data-field="rally-'+key+'" value="'+Number(value||0).toFixed(2)+'"></label>').join('')+
+      btn('rally-pose','입력 위치 미리보기')+'</fieldset>':'';
+    return '<section class="br-card" data-rally-placement><h3>전투 함성 · '+(plan.reserve?'예비대 복귀':'복귀 배치')+'</h3>'+
+      '<p role="status">D3 '+plan.die+' + 2 · 최대 '+limit+'명 · 선택 '+chosen.length+'명 · 더 고를 수 있는 보이 '+Math.min(limit-chosen.length,fallen.length-chosen.length)+'명</p>'+
+      '<p>'+(plan.reserve?'예비대로 복귀할 보이를 선택하세요.':'복귀할 보이를 선택한 뒤 전장을 클릭하거나 모델을 끌어 배치하세요. 파란 테두리는 배치 미리보기입니다.')+'</p>'+
+      (plan.reserve?'':btn('rally-anchors','기존 분대원 위치 보기'))+
+      buttons+coords+'<div data-rally-errors aria-live="polite">'+verdict.errors.map(e=>'<p>'+esc(e.modelIds.join(', '))+' '+esc(e.message)+'</p>').join('')+'</div>'+
+      verdict.manual.map(e=>'<p>'+esc(e.modelIds.join(', '))+' '+esc(e.message)+'</p>').join('')+
+      (feedback?'<p role="status">'+esc(feedback)+'</p>':'')+
+      btn('rally-finish',chosen.length?chosen.length+'명 복귀 확정':'복귀 없이 전투 함성 종료',!verdict.ok)+'</section>';
+  }
   function renderPanel() {
     const state=read();
+    if(state.rallyPlan){root.innerHTML=renderRally(state.rallyPlan);return;}
     restoreMovementSelection(state);
     if(officialPreparing(state)){
       root.innerHTML=renderOfficialSetup(state)+(feedback?'<p aria-live="polite" class="br-latest">'+esc(feedback)+'</p>':'');
@@ -774,6 +803,26 @@ export function mountRules(container,api) {
     const button=event.target.closest('button'),action=button?.dataset.act;
     if (!action) return;
     const state=read();
+    if(state.rallyPlan||action==='warcry'){
+      if(action!=='warcry'&&!action.startsWith('rally-'))return;
+      feedback='';
+      try{
+        const id=action==='warcry'?choices.fighter:button.dataset.model||api.getSelection()?.id;
+        if(action==='rally-focus'){api.selectPiece(id);return;}
+        let pose;
+        if(action==='rally-pose'){
+          pose={};
+          for(const k of ['x','z','elevation','yaw']){
+            const input=field('rally-'+k),value=input.valueAsNumber;
+            if(!Number.isFinite(value))throw Error('위치는 숫자로 입력하세요.');
+            if(input.value!==input.defaultValue)pose[k]=k==='yaw'?value*Math.PI/180:value;
+          }
+          if(!Object.keys(pose).length)return;
+        }
+        api.rallyCommand(action==='warcry'?'begin':action.slice(6),id,pose);
+      }catch(error){feedback=error.message;refresh()}
+      return;
+    }
     if(state.step===4&&fightView&&needsLegacyBossStyle(state,contents(),fightView.sequence.active)&&!action.startsWith('fight-style-'))return;
     if(action==='official-new'||officialPreparing(state)){
       if(action==='official-new'||action.startsWith('official-')||action.startsWith('form-')){
@@ -871,7 +920,7 @@ export function mountRules(container,api) {
     if (action==='start') {
       let first=choices.first,report='';
       if (first==='roll') { const result=rollOff();first=result.first;report=result.text; }
-      const next=startBattle(state,first,integer('rounds',1,20));
+      const next=startBattle(state,first,integer('rounds',1,20),api.getPieces());
       next.mission=(val('mission')||'').slice(0,80);
       return commit(next,teams[first]+' 선공 · 대전 시작'+report);
     }
@@ -1099,18 +1148,6 @@ export function mountRules(container,api) {
       const next=changeUnit(state,actor,{suppressedEnemy:true});
       return commit({...next,patrol:{...next.patrol,suppressed:target}},'워트랙이 '+target+' 분대를 제압했습니다.');
     }
-    if (action==='warcry') {
-      if(state.status!=='playing'||state.step!==0||state.active!==actor.faction||actor.kind!=='warboss'||
-        !state.patrol.enhanced.warcry||pendingCommandShock(state,contents()).length)return;
-      const fallen=members.filter(p=>p.kind==='boy' && !currentHP(state,p));
-      const number=roll(3)+2;
-      const revived=fallen.slice(0,number);
-      if (!revived.length || state.patrol.warcryUsed) return;
-      const hp={...state.hp},changes={};
-      for (const p of revived) {hp[p.id]=getProfile(p).wounds;changes[p.id]=false;}
-      const rallied=changeUnit(state,actor,{rallied:true});
-      return commit({...rallied,hp,patrol:{...state.patrol,warcryUsed:true}},actor.name+' · 전투 함성 '+number+' · '+revived.length+'명 복귀. 편대 안으로 배치하세요.',changes);
-    }
     if (action.startsWith('tactic-')) {
       const key=action.slice(7),next=selectedTactic(state,key,actor);
       if (next) return commit(next,unitLabel(actor)+' · '+tactics[key].name+' (1 CP) · '+tactics[key].rule);
@@ -1152,6 +1189,7 @@ export function mountRules(container,api) {
   function change(event) {
     const el=event.target,key=el.dataset.field;
     if (!key) return;
+    if(api.getRulesState()?.rallyPlan)return;
     if(key.startsWith('reaction-')){
       choices[key]=el.type==='checkbox'?el.checked:el.value;
       if(key==='reaction-unit'){delete choices['reaction-target'];delete choices['reaction-fly']}
@@ -1211,6 +1249,11 @@ export function mountRules(container,api) {
   }
   root.addEventListener('click',click);
   root.addEventListener('change',change);
+  root.addEventListener('keydown',event=>{
+    if(event.key==='Enter'&&event.target.dataset.field?.startsWith('rally-')){
+      event.preventDefault();root.querySelector('[data-act="rally-pose"]')?.click();
+    }
+  });
   root.addEventListener('toggle',toggle,true);
   const unsubscribe=api.onChange(refresh);
   refresh();

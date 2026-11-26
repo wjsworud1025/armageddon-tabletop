@@ -12,6 +12,7 @@ import {patrolAreaCover} from './patrol-area-cover.mjs';
 import {overwatchUnits,overwatchUnitReady,overwatchTargetEligible} from './overwatch.mjs';
 import {weaponSlot} from './battle.mjs';
 import {playerTurnNumber} from './ranged-history.mjs';
+import {validatePendingRally} from './rally-placement.mjs';
 import {heavyStatus} from './heavy.mjs';
 
 const boolean = value => typeof value === 'boolean';
@@ -88,6 +89,8 @@ const patrol=fields({
 const objective=fields({name:string,home:nullable(team),owner:nullable(team),secured:nullable(team),
   marineOC:int(0),orkOC:int(0)},['owner','marineOC','orkOC']);
 const pose=fields({x:Number.isFinite,z:Number.isFinite,elevation:n=>Number.isFinite(n)&&n>=0&&n<=20,yaw:Number.isFinite},['x','z','elevation','yaw']);
+const rallyFields={unit:oneOf(['boy-0','boy-1']),leader:oneOf(['warboss-1']),die:int(1,3),anchors:list(model,11),
+  reserve:boolean,selected:map(model,nullable(pose))};
 const chargeFields={unit:group,actor:model,mode:oneOf(['normal','masterOfBattle','leapToDefend','intoTheFray']),
   roll:int(2,12),dice:list(int(1,6),2),targets:list(group,12),origins:map(model,pose),paths:map(model,list(pose,512)),takeToSkies:boolean};
 const chargePlan=fields({...chargeFields,commandRerollOpen:boolean},Object.keys(chargeFields));
@@ -104,6 +107,7 @@ const battle=fields({
   version:oneOf([1]),status:oneOf(['setup','playing','finished']),first:team,active:team,
   round:int(1,20),rounds:int(1,20),step:int(0,5),cp:totals,vp:totals,hp,
   units:map(group,unit),attachments:map(model,group),objectives:map(identifier,objective),hazard:nullable(hazard),declaration:nullable(declaration),movePlan:nullable(movePlan),chargePlan:nullable(chargePlan),chargeWindow:boolean,
+  rallyPlan:fields(rallyFields,Object.keys(rallyFields)),rallyStarters:list(model,11),
   fightSequence:validFightSequence,fightPlan:nullable(fightPlan),shootingSight,
   overwatch:fields({stage:oneOf(['offer','shoot','done']),team,unit:nullable(group)},['stage','team','unit']),
   shootingReaction:nullable(reactionWindow),reactionPlan:nullable(fields(reactionFields,Object.keys(reactionFields))),
@@ -211,6 +215,21 @@ export function validateRulesState(value,pieceRecords=null,layout=undefined) {
   const ranged=value.step===2||shootingOverwatch,shootingTeam=window?.team??value.active;
   const savedPieces=()=>pieceRecords.map(({id,x,z,elevation,yaw,removed})=>patrolTerrainPiece(
     {...catalog.get(id),x,z,elevation,yaw,removed:!!removed},value.officialSetup?.version));
+  if(value.rallyStarters){
+    const unit=value.attachments?.['warboss-1'];
+    if(value.status!=='playing'||value.step!==0||value.active!=='orks'||!value.patrol?.enhanced?.warcry||
+      !['boy-0','boy-1'].includes(unit)||value.patrol.warcryUsed&&!value.rallyPlan||
+      new Set(value.rallyStarters).size!==value.rallyStarters.length||
+      value.rallyStarters.some(id=>(value.attachments?.[id]??unitId(models.get(id)))!==unit))return false;
+  }
+  if(value.rallyPlan){
+    const p=value.rallyPlan,selected=Object.entries(p.selected);
+    if(!value.patrol?.warcryUsed||!value.units?.[p.unit]?.rallied||value.attachments?.[p.leader]!==p.unit||
+      value.status!=='playing'||value.step!==0||value.active!=='orks'||selected.length>p.die+2||
+      new Set(p.anchors).size!==p.anchors.length||p.anchors.some(id=>(value.attachments?.[id]??unitId(models.get(id)))!==p.unit)||
+      selected.some(([id,pose])=>models.get(id).kind!=='boy'||unitId(models.get(id))!==p.unit||p.reserve!==(pose===null)))return false;
+    if(pieceRecords&&!validatePendingRally({rules:value,pieces:savedPieces()}))return false;
+  }
   if((value.declaration?.mode==='overwatch')!==!!(shootingOverwatch&&value.declaration))return false;
   if(window){
     if(value.status!=='playing'||value.step!==1||window.team===value.active||!value.cp||!value.patrol?.spent||!value.patrol.tactics||

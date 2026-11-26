@@ -133,7 +133,7 @@ export function advanceOfficialSetup(original,action,d6){
   }
   if(key==='official-start'){
     if(v.stage!=='ready')throw Error('양측 배치와 선공 대결을 마치세요.');
-    game.rules=startBattle(r,v.first,5);return game;
+    game.rules=startBattle(r,v.first,5,game.pieces);return game;
   }
   const choose=key==='official-attack'||key==='official-defend';
   const input=choose?{type:'choose-role',team:v.roleWinner,role:key==='official-attack'?'attacker':'defender'}:

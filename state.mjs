@@ -1,4 +1,5 @@
 import {validateRulesState} from './rules/validate.mjs';
+import {validatePendingRally} from './rules/rally-placement.mjs';
 import {recoverRangedHistory} from './rules/ranged-history.mjs';
 import {reconcilePatrolSight} from './rules/patrol-sight.mjs';
 import {measureFootprints} from './ruler.mjs';
@@ -101,6 +102,8 @@ export function restore(template, save) {
       throw Error('정식 패트롤 기물이 전장 밖에 있습니다.');
     if(save.rules?.overwatch&&(Math.hypot(record.x-piece.x,record.z-piece.z)>1e-6||piece.elevation!==(record.elevation??0)))
       throw Error('경계 사격을 선언한 전장의 기물 위치가 올바르지 않습니다.');
+    if(save.rules?.rallyPlan&&(Math.hypot(record.x-piece.x,record.z-piece.z)>1e-6||piece.elevation!==(record.elevation??0)))
+      throw Error('전투 함성 복귀를 준비 중인 전장의 기물 위치가 올바르지 않습니다.');
   }
   game.rules = save.rules && typeof save.rules === 'object' ? structuredClone(save.rules) : null;
   game.rules = recoverRangedHistory(game.rules);
@@ -110,6 +113,8 @@ export function restore(template, save) {
   game.logs = Array.isArray(save.logs) ? save.logs.filter(s=>typeof s==='string').slice(-100) : [];
   game.surface = ['left','right','reverse'].includes(save.surface) ? save.surface : 'front';
   game.layout = ['A','B','C'].includes(save.layout?.map)&&['marines','orks'].includes(save.layout?.blue)?{map:save.layout.map,blue:save.layout.blue}:null;
+  if(game.rules?.rallyPlan&&!validatePendingRally(game))
+    throw Error('전투 함성의 주사위, 분대 또는 복귀할 모델 기록이 올바르지 않습니다.');
   if(game.rules?.officialSetup){
     const v=patrolSetupView(game.rules.officialSetup);
     if(v.defender?game.layout?.blue!==v.defender||game.layout.map!==v.map:game.layout!==null)

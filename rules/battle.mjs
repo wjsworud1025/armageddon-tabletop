@@ -13,12 +13,23 @@ export function newBattle() {
   return {version:1,status:'setup',first:'marines',active:'marines',round:1,rounds:5,step:0,
     cp:{marines:0,orks:0},vp:{marines:0,orks:0},hp:{},units:{},attachments:{},objectives:{},reserves:{},patrol:freshPatrol(),notes:'',mission:'',last:''};
 }
-export function startBattle(state,first,rounds) {
+// Only members already on the battlefield at the start of this Command
+// phase can anchor a model returned by Rallying War Cry (01.02.03).
+function recordRallyStarters(state,pieces){
+  const unit=state.attachments?.['warboss-1'];
+  if(state.active!=='orks'||!unit||!state.patrol?.enhanced?.warcry||state.patrol.warcryUsed)return state;
+  const roster=pieces??(starterRoster??=createTable().pieces);
+  const reserves=state.reserves?.[unit]??[];
+  const ids=roster.filter(p=>p.faction==='orks'&&groupId(state,p)===unit&&
+    !reserves.includes(p.id)&&currentHP(state,p)>0).map(p=>p.id);
+  return {...state,rallyStarters:ids};
+}
+export function startBattle(state,first,rounds,pieces) {
   if (state.status !== 'setup' || !(first in teams) || !Number.isInteger(rounds) || rounds < 1 || rounds > 20) return state;
-  return {...state,status:'playing',first,active:first,rounds,cp:{marines:1,orks:1},rangedHistory:{since:1,last:{}}};
+  return recordRallyStarters({...state,status:'playing',first,active:first,rounds,cp:{marines:1,orks:1},rangedHistory:{since:1,last:{}}},pieces);
 }
 export function advance(state,pieces) {
-  if (state.status !== 'playing' || state.hazard || state.declaration || state.movePlan || state.reinforcePlan || state.chargePlan || state.fightPlan || state.fightSequence?.counterAfter || state.shootingReaction || state.reactionPlan || state.units?.wartrakk?.suppressionTargets?.length) return state;
+  if (state.status !== 'playing' || state.rallyPlan || state.hazard || state.declaration || state.movePlan || state.reinforcePlan || state.chargePlan || state.fightPlan || state.fightSequence?.counterAfter || state.shootingReaction || state.reactionPlan || state.units?.wartrakk?.suppressionTargets?.length) return state;
   if(state.overwatch&&state.overwatch.stage!=='done')return state;
   if(pendingCommandShock(state,pieces).length)return state;
   state=recoverRangedHistory(state);
@@ -32,6 +43,7 @@ export function advance(state,pieces) {
     // subsequently skips have travelled zero. Earlier saves lack this record.
     if(state.step===0&&state.active==='marines')
       next.units={...state.units,intercessor:{...state.units?.intercessor,heavyTravel:{}}};
+    delete next.rallyStarters;
     delete next.shootingSight;
     delete next.overwatch;
     return next;
@@ -40,8 +52,8 @@ export function advance(state,pieces) {
   const endRound = next === state.first;
   if (endRound && state.round === state.rounds) return {...state,status:'finished'};
   const units = Object.fromEntries(Object.entries(state.units).map(([key,u])=>[key,{shocked:!!u.shocked}]));
-  return {...state,step:0,round:state.round+Number(endRound),active:next,units,patrol:nextPatrolTurn(state.patrol,next),
-    cp:{marines:state.cp.marines+1,orks:state.cp.orks+1}};
+  return recordRallyStarters({...state,step:0,round:state.round+Number(endRound),active:next,units,patrol:nextPatrolTurn(state.patrol,next),
+    cp:{marines:state.cp.marines+1,orks:state.cp.orks+1}},pieces);
 }
 export function roll(sides=6,random=Math.random) {
   return 1 + Math.floor(random()*sides);

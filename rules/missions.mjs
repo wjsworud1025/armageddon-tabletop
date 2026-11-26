@@ -56,6 +56,7 @@ export function objectiveSnapshot(state,pieces,areas,distance) {
   }));
 }
 export function missionAward(state,objectives) {
+  if(state.rallyPlan)return 0;
   const team=state.active;
   let vp=0;
   const fifth=state.round===5;
