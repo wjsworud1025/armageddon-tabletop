@@ -7,6 +7,14 @@ export async function loadPortraitMap(){
 }
 export const portraitId=id=>mapped?.[id]??id;
 export const portraitUrl=id=>'./reference/painted/'+portraitId(id)+'.webp';
+export function matchesPortraitPose(piece,initialYaw){
+  // The single reliquary portrait shows the red door. Retain it for the old
+  // display pose. The corrected opening view faces the landing and saints.
+  let bearing=initialYaw;
+  if(piece.id==='largeRuin-2')bearing=76*Math.PI/180;
+  if(piece.id==='smallRuin-4')bearing=piece.previousPipeRuin?163*Math.PI/180:null;
+  return bearing!=null&&Math.abs(Math.sin((piece.yaw-bearing)/2))<.001;
+}
 export async function paintedFigures(T,pieces){
   const response=await fetch('./reference/painted/frames.json');
   if(!response.ok)throw Error('도색 기물 배율표를 불러올 수 없습니다.');

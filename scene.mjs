@@ -4,7 +4,7 @@ import {createPiece,pieceGeometry} from './assets/pieces.mjs';
 import {sightHiddenPieces} from './assets/sight-units.mjs';
 import {sightObstructions} from './assets/sight-line.mjs';
 import {createSightPicker} from './assets/sight-picker.mjs';
-import {paintedFigures} from './painted.mjs';
+import {paintedFigures,matchesPortraitPose} from './painted.mjs';
 import {layoutGeometry} from './layouts.mjs';
 import {trainingThreePlan,trainingThreeWorldPoint} from './data/training-three-layout.mjs';
 import {trainingFourAreas} from './data/training-four-layout.mjs';
@@ -225,16 +225,13 @@ export async function buildScene(canvas,api) {
         }
       }
       const obj=objects.get(p.id),portrait=painted.get(p.id);
-      // The single studio shot of the pipe wall looks along the pipes. The
-      // assembled battlefield shows the decorated wall broadside. Keep that
-      // photograph available at its old bearing and render the cast elsewhere.
-      const portraitYaw=p.id==='smallRuin-4'?(p.previousPipeRuin?163*Math.PI/180:null):initialYaw.get(p.id);
-      const matchingPose=portraitYaw!=null&&Math.abs(Math.sin((p.yaw-portraitYaw)/2))<.001;
-      if(portrait)portrait.visible=!p.removed&&photo&&usePaint&&matchingPose&&!sightPair&&!p.previousSecondRuin;
+      if(portrait)portrait.visible=!p.removed&&photo&&usePaint&&matchesPortraitPose(p,initialYaw.get(p.id))&&!sightPair&&!p.previousSecondRuin;
       const viewYaw=photo?Math.atan2(promo.camera.position.x-p.x,promo.camera.position.z-p.z):yaw;
       const pos=photo?promo.camera.position:orbitCamera.position;
       const dist=Math.hypot(pos.x-p.x,pos.y-(p.elevation||0),pos.z-p.z);
-      const stereo=studio.update(p,viewYaw,photo ? .32 : pitch,dist,usePaint&&!sightPair&&!portrait?.visible&&!obj.userData.reconstruction&&!p.previousSecondRuin);
+      let studioPitch=photo ? .32 : pitch;
+      if(photo&&p.id==='largeRuin-2')studioPitch=Math.atan2(pos.y-(p.elevation||0),Math.hypot(pos.x-p.x,pos.z-p.z));
+      const stereo=studio.update(p,viewYaw,studioPitch,dist,usePaint&&!sightPair&&!portrait?.visible&&!obj.userData.reconstruction&&!p.previousSecondRuin);
       obj.visible=!p.removed&&!portrait?.visible&&!stereo&&!hidden.has(p.id);obj.position.set(p.x,p.elevation||0,p.z);obj.rotation.y=p.yaw;
       if(portrait){portrait.position.copy(obj.position);portrait.renderOrder=200-promo.camera.position.distanceTo(obj.position)}
     }
