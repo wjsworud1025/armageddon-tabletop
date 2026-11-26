@@ -14,21 +14,22 @@ const fields=(value,keys)=>value!==null&&typeof value==='object'&&
   Object.keys(value).length===keys.length&&keys.every(k=>Object.hasOwn(value,k));
 
 export function newPatrolSetup(){
-  return {version:5,layoutDie:null,roleRolls:[],roleChoice:null,
+  return {version:6,layoutDie:null,roleRolls:[],roleChoice:null,
     formationsRevealed:false,deploymentComplete:false,firstRolls:[]};
 }
 
 // A saved official game keeps the same terrain for deployment, movement,
 // sight, and replay. Custom tables use the current cast at their saved pose.
-const revisedSmallRuins=new Map([
-  ['smallRuin-1',{revision:4,flag:'previousSmallRuin'}],
-  ['smallRuin-4',{revision:5,flag:'previousPipeRuin'}],
+const revisedTerrain=new Map([
+  ['smallRuin-1',{revision:4,flag:'previousSmallRuin',width:2.5,depth:1.4}],
+  ['smallRuin-4',{revision:5,flag:'previousPipeRuin',width:2.5,depth:1.4}],
+  ...['barricade-1','barricade-2'].map(id=>[id,{revision:6,flag:'previousBarricade',width:3.8,depth:.65}]),
 ]);
 export function patrolTerrainPiece(piece,version){
-  const correction=revisedSmallRuins.get(piece.id);
+  const correction=revisedTerrain.get(piece.id);
   if(!correction)return piece;
-  const {revision,flag}=correction;
-  if(Number.isInteger(version)&&version>=1&&version<revision)return {...piece,[flag]:true,baseWidth:2.5,baseDepth:1.4};
+  const {revision,flag,width,depth}=correction;
+  if(Number.isInteger(version)&&version>=1&&version<revision)return {...piece,[flag]:true,baseWidth:width,baseDepth:depth};
   if(!piece[flag])return piece;
   const current=createTable().pieces.find(p=>p.id===piece.id);
   return {...piece,[flag]:false,baseWidth:current.baseWidth,baseDepth:current.baseDepth};
@@ -53,7 +54,7 @@ function validRolls(rolls){
 
 export function validatePatrolSetup(s){
   if(!fields(s,['version','layoutDie','roleRolls','roleChoice','formationsRevealed','deploymentComplete','firstRolls'])||
-    ![1,2,3,4,5].includes(s.version)||s.layoutDie!==null&&!die(s.layoutDie)||
+    ![1,2,3,4,5,6].includes(s.version)||s.layoutDie!==null&&!die(s.layoutDie)||
     !validRolls(s.roleRolls)||!validRolls(s.firstRolls)||
     typeof s.formationsRevealed!=='boolean'||typeof s.deploymentComplete!=='boolean')return false;
   if(s.roleRolls.length&&s.layoutDie===null)return false;

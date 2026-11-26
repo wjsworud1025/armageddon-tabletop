@@ -54,7 +54,7 @@ export function patrolDetection(state, pieces, shooterId, targetId, layout=null,
   if (reserves.some(ids => ids.includes(shooterId) || ids.includes(targetId))) return result;
   const code = detectionMap(state,layout);
   if (!code) return result;
-  const {areas,poses} = survey(code,state.officialSetup?.version??5);
+  const {areas,poses} = survey(code,state.officialSetup?.version??6);
   const terrain = pieces.filter(p => p.faction==='terrain' && !p.removed);
   let present = false;
   for (const area of areas) {

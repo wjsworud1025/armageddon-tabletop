@@ -5,6 +5,7 @@ import {generatorShrine} from './generator-shrine.mjs';
 import {reliquaryRuin} from './reliquary-ruin.mjs';
 import {votiveWall} from './votive-wall.mjs';
 import {conduitRuin} from './conduit-ruin.mjs';
+import {lockcreteBarricade} from './lockcrete-barricade.mjs';
 
 const frame=0x464647, edge=0x69635b, panel=0x664332, inset=0x302e2c;
 
@@ -147,7 +148,7 @@ function pylon(s) {
   }
 }
 
-function barricade(s) {
+function previousBarricade(s) {
   for(const side of [-1,1]) {
     s.plate(frame,[[-.095,0],[.13,0],[.085,1.33],[.02,1.45],[-.082,1.37]],.24,[side*1.04,0,0]);
     s.box(p.iron,[side*1.04,.075,0],[.31,.13,.41]);
@@ -186,7 +187,7 @@ function capacitor(s) {
 }
 
 const smallRuins=[votiveWall,s=>ruin(s,false,1),s=>ruin(s,false,2),conduitRuin];
-const factories={largeRuin:(s,v)=>v===1?reliquaryRuin(s):ruin(s,true,v),smallRuin:(s,v)=>smallRuins[v%4](s),shockArray:shock,capacitorStack:capacitor,barricade,generatorShrine,pylon};
+const factories={largeRuin:(s,v)=>v===1?reliquaryRuin(s):ruin(s,true,v),smallRuin:(s,v)=>smallRuins[v%4](s),shockArray:shock,capacitorStack:capacitor,barricade:lockcreteBarricade,generatorShrine,pylon};
 
 function registeredScenery(s,item,draw) {
   const model=s.child();
@@ -224,5 +225,9 @@ export function legacySmallRuin(s,item) {
 
 export function legacyPipeRuin(s,item) {
   registeredScenery(s,item,model=>ruin(model,false,3));
+}
+
+export function legacyBarricade(s,item) {
+  registeredScenery(s,item,previousBarricade);
 }
 
