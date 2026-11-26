@@ -13,9 +13,9 @@ import {validPlacedPatrolUnits,recoverPreviousRuinDeployment} from './rules/offi
 
 const clamp = (n, low, high) => Math.max(low, Math.min(high, n));
 const finite = Number.isFinite;
-// Version-1 saves predate the revised footprints of these two structures.
+// Old custom saves predate the revised footprints of these structures.
 // A previously legal placement touching the board edge keeps its saved centre.
-const originalPlantBases={capacitorStack:[3.8,1.75],generatorShrine:[3.5,1.5]};
+const originalTerrainBases={capacitorStack:[3.8,1.75],generatorShrine:[3.5,1.5]};
 
 // Radius of the base projected onto a horizontal axis.
 function support(piece, nx, nz) {
@@ -52,6 +52,7 @@ export function snapshot(game) {
   return {version:1, pieces:game.pieces.map(({id,x,z,yaw,removed,elevation}) =>
     ({id,x,z,yaw,removed:!!removed,elevation:elevation||0})), rules:structuredClone(reconcilePatrolSight(game.rules,game.pieces)),
     logs:[...game.logs], layout:game.layout?{...game.layout}:null,surface:game.surface||'front',
+    ...(!game.rules?.officialSetup&&!game.pieces.some(p=>p.kind==='barricade'&&p.previousBarricade)?{barricadeRevision:2}:{}),
     ...(game.rules?.officialSetup&&game.rules.status==='setup'?{terrainRevision:2}:{}),
     ...(game.training?{training:structuredClone(game.training)}:{})};
 }
@@ -60,6 +61,8 @@ export function restore(template, save) {
   if (save?.version !== 1 || !Array.isArray(save.pieces) || save.pieces.length !== template.pieces.length)
     throw new Error('이 스타터 세트의 저장 파일이 아닙니다.');
   if(!validateRulesState(save.rules,save.pieces,save.layout??null))throw new Error('저장 파일의 대전 규칙 데이터가 올바르지 않습니다.');
+  if(save.barricadeRevision!==undefined&&save.barricadeRevision!==2)
+    throw new Error('알 수 없는 바리케이드 판본입니다.');
   if(save.training!=null){
     const validators={1:validateTrainingOne,2:validateTrainingTwo,
       3:save.training.phase==='deployment'?validateTrainingThreeDeployment:validateTrainingThreeBattle,
@@ -71,7 +74,12 @@ export function restore(template, save) {
   }
   const records = new Map(save.pieces.map(p => [p.id,p]));
   const game = structuredClone(template);
-  game.pieces=game.pieces.map(p=>patrolTerrainPiece(p,save.rules?.officialSetup?.version));
+  game.pieces=game.pieces.map(p=>{
+    // Official games carry their complete layout edition. Older custom saves
+    // lack a cast revision and retain the ground contact and sight they used.
+    const customEdition=p.kind==='barricade'&&save.barricadeRevision===undefined?5:undefined;
+    return patrolTerrainPiece(p,save.rules?.officialSetup?.version??customEdition);
+  });
   for (const piece of game.pieces) {
     const record = records.get(piece.id);
     if (!record || ![record.x,record.z,record.yaw,record.elevation??0].every(finite))
@@ -82,7 +90,7 @@ export function restore(template, save) {
       throw new Error('배치 중인 예비대 모델이 저장된 전장에 없습니다.');
     piece.elevation = clamp(record.elevation??0,0,20);
     place(piece,record.x,record.z,game);
-    const former=originalPlantBases[piece.kind];
+    const former=originalTerrainBases[piece.kind];
     if(former&&!save.training&&(save.rules?.officialSetup?.version??1)===1&&
       (record.x!==piece.x||record.z!==piece.z)){
       const legacy={...piece,baseWidth:former[0],baseDepth:former[1]};

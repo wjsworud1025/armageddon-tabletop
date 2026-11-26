@@ -61,7 +61,7 @@ const originalPlants={
   C:{'shockArray-1':[766,1323,90],'capacitorStack-1':[768,622,90],'generatorShrine-1':[769,679,90]}
 };
 const terrainAreas=Object.fromEntries(Object.entries(layouts).map(([code,data])=>[code,patrolTerrainAreas(code,data.areas,world)]));
-export function layoutGeometry(code,version=5){
+export function layoutGeometry(code,version=6){
   const data=layouts[code];if(!data)return null;
   const blue=points(data.zone),red=blue.map(([x,z])=>[-x,-z]);
   const ruins=version>=3?registeredRuins[code]:[];
@@ -74,6 +74,7 @@ export function layoutGeometry(code,version=5){
     const pose={id,x,z,yaw:deg*Math.PI/180};
     if(id==='smallRuin-1')Object.assign(pose,{baseDepth:version>=4?1.25:1.4,previousSmallRuin:version<4});
     if(id==='smallRuin-4')pose.previousPipeRuin=version<5;
+    if(id.startsWith('barricade-'))Object.assign(pose,{previousBarricade:version<6,baseDepth:version<6?.65:1.25});
     return pose;
   })};
 }

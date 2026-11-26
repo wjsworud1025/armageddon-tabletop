@@ -129,7 +129,7 @@ test('on all three diagrams the shrine and capacitor each occupy their own print
     const previous=layoutGeometry(map,2).terrain;
     const withoutPlants=poses=>poses.filter(p=>!['generatorShrine-1','capacitorStack-1','shockArray-1'].includes(p.id));
     assert.deepEqual(withoutPlants(previous),withoutPlants(layoutGeometry(map,1).terrain));
-    const withoutRuins=poses=>poses.filter(p=>!p.id.includes('Ruin-'));
+    const withoutRuins=poses=>poses.filter(p=>!p.id.includes('Ruin-')).map(({id,x,z,yaw})=>({id,x,z,yaw}));
     assert.deepEqual(withoutRuins(terrain),withoutRuins(previous));
   }
 });

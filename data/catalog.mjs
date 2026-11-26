@@ -41,7 +41,7 @@ const layouts = {
   smallRuin: [[933,822,-21], [779,969,12], [832,1052,66], [1312.2,940.4,-48]],
   shockArray: [[1094,982,-32]],
   capacitorStack: [[312,1064,55]],
-  barricade: [[908,694,-19], [1387,854,-24]],
+  barricade: [[915.6,700.4,129.5], [1390.8,869.4,127.6]],
   generatorShrine: [[1528,844,-23]],
   pylon: [[637,758,45], [1314,699,-33]]
 };
@@ -62,7 +62,7 @@ const kinds = [
   ['terrain', 'smallRuin', '소형 제조공장 폐허', 2.5, 1.4],
   ['terrain', 'shockArray', '충격기 배열', 4.1, 0.95],
   ['terrain', 'capacitorStack', '축전기 다발', 4.2, 2.86],
-  ['terrain', 'barricade', '락크리트 바리케이드', 3.8, 0.65],
+  ['terrain', 'barricade', '락크리트 바리케이드', 3.8, 1.25],
   ['terrain', 'generatorShrine', '발전기 성소', 3.5, 2.68],
   ['terrain', 'pylon', '송전 첨탑', 3.5, 1.4]
 ];
