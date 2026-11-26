@@ -13,6 +13,7 @@ import {checkPatrolSetup} from '../rules/browser-patrol-setup.mjs';
 import {checkGretchinSight,checkRuinSight} from './browser-ruin-sight.mjs';
 import {checkShooterSight} from './browser-shooter-sight.mjs';
 import {checkPlungingFire} from './browser-plunging-fire.mjs';
+import {checkHeavyRifles} from './browser-heavy-rifles.mjs';
 import {checkTerrainAreas} from './browser-terrain-areas.mjs';
 import {checkAreaCover} from './browser-area-cover.mjs';
 import {checkOverwatch} from './browser-overwatch.mjs';
@@ -78,6 +79,7 @@ try{
   await checkTerrainAreas({...shootingTools,until});
   await checkShooterSight(shootingTools);
   await checkPlungingFire(shootingTools);
+  await checkHeavyRifles(shootingTools);
   await checkAreaCover(shootingTools);
   await screenshot('01-table.png');
   const studioInstalled=await js('!document.querySelector("#appearance").hidden');

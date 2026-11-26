@@ -38,7 +38,7 @@ function* procedure(state,pieces,packet,preferred){
     count+=dice.reduce((a,b)=>a+b,0);
   }
   if(!count)return null;
-  const threshold=attackThresholds(state,defenders,weapon,{cover:packet.cover,plunging:packet.plunging,hitMod:first.hit-(first.vehiclePenalty||0),
+  const threshold=attackThresholds(state,defenders,weapon,{cover:packet.cover,plunging:packet.plunging,hitMod:packet.effectiveHitMod,
     woundMod:first.wound,ignorePenalties:first.ignore,snap});
   const hitDice=weapon.torrent?[]:yield {kind:'hit',...attacker,sizes:repeat(count,6)};
   const sixes=snap?0:hitDice.filter(d=>d===6).length;

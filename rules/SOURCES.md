@@ -10,6 +10,12 @@
 | 패트롤 모델의 무장·수치·부대별 특수 능력, 임무별 승점 조건 | [Assault Force 앱 2.7.1 자료 전사본](https://wahapedia.ru/wh40k11ed_cp/factions/assault-force/), [’Ardmob 앱 2.7.1 자료 전사본](https://wahapedia.ru/wh40k11ed_cp/factions/ardmob/), [Combat Patrol Archive의 별도 앱 채록본](https://combat-patrol-companion.pages.dev/). 전용 프로필은 두 채록본을 비교했다. 공식 앱을 이 PC에서 직접 열어 대조한 상태는 아니다. |
 | 44″×30″ 전장, A/B/C 배치도, 수비 측 선배치, 선공 대결, 5라운드 | [앱 임무 순서와 배치도 전사본](https://wahapedia.ru/wh40k11ed_cp/the-rules/combat-patrol-mission/) |
 
+## 인터세서 볼트 라이플의 Heavy
+
+자기 사격 페이즈에 인터세서의 볼트 라이플은 분대가 미교전이고 이번 턴 전장에 새로 배치되지 않았으며, 살아 있는 분대원 중 누구도 3″를 초과해 이동하지 않았다면 명중 굴림에 +1을 받는다. 합류한 지휘관의 경로도 포함한다. 총 이동 경로가 정확히 3″이면 적용되고, 출발점으로 돌아와도 도중에 이동한 거리는 남는다. 이 스타터의 두 패트롤에서는 인터세서 볼트 라이플에만 Heavy가 있다. 경계 사격은 상대 이동 페이즈에 처리한다. [GW 코어 규칙 §24.16, 82쪽](https://assets.warhammer-community.com/eng_01-06_warhammer40k_new40k_core_rules-was6fbu1ix-hfewhmxyiy.pdf#page=82) · [Assault Force 데이터시트와 Heavy 전사](https://wahapedia.ru/wh40k11ed_cp/factions/assault-force/) · [별도 앱 채록본](https://combat-patrol-companion.pages.dev/)
+
+Heavy는 명중 굴림을 바꾼다. 엄폐와 고지 사격은 BS에 적용하고, 제압과 기타 명중 굴림 보정은 Heavy와 합산해 최종 ±1 한도를 적용한다. 거리가 남아 있지 않은 구판 이동 기록은 플레이어가 확인해 수동 명중 보정에 넣을 수 있다. 이미 확정한 구판 공격이나 진행 중인 주사위에는 저장된 보정을 사용한다.
+
 ## 지형 구역에서 얻는 엄폐
 
 §13.08에 따라 각 사격 공격의 표적 분대에서 살아 있는 모델 전원이 엄폐 조건을 충족하면 그 공격의 BS를 한 단계 악화시킨다. A·B·C 각 지도의 10개 매트를 사용한다. 스타터 편성에서 해당 키워드를 가진 모델은 보병이다. 각 모델의 베이스가 어느 구역이든 일부 걸치면 첫 조건을 충족한다. 상층도 수평 투영으로 판정한다. 서로 다른 매트에 걸친 분대원과 합류 지휘관까지 각각 확인한다. [공식 코어 규칙 §13.08 및 그림, 50–51쪽](https://assets.warhammer-community.com/eng_01-06_warhammer40k_new40k_core_rules-was6fbu1ix-hfewhmxyiy.pdf#page=50) · [게임스 워크숍의 지형 설명](https://www.warhammer-community.com/en-gb/articles/xlppkx5s/new40k-take-cover-with-updated-terrain-rules/)

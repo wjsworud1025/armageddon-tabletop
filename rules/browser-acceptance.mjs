@@ -28,6 +28,7 @@ import {checkPatrolSetup} from './browser-patrol-setup.mjs';
 import {checkGretchinSight,checkRuinSight} from '../tests/browser-ruin-sight.mjs';
 import {checkShooterSight,sightButton,inspectButton} from '../tests/browser-shooter-sight.mjs';
 import {checkPlungingFire} from '../tests/browser-plunging-fire.mjs';
+import {checkHeavyRifles} from '../tests/browser-heavy-rifles.mjs';
 import {checkAreaCover} from '../tests/browser-area-cover.mjs';
 import {checkSmallRuin} from '../tests/browser-small-ruin.mjs';
 
@@ -118,6 +119,8 @@ try {
   console.log('Passed Warboss split melee attacks, fight choices, undo and reload');
   await checkPlungingFire(shootingTools);
   console.log('Passed upper-floor and ground shooters, locked BS packets, and hit-roll outcomes');
+  await checkHeavyRifles(shootingTools);
+  console.log('Passed Heavy rifle hit rolls after short, long and unrecorded movement');
   await checkPatrolSetup(trainingTools);
   console.log('Passed the official mission sequence, private formations, deployment and separate roll-offs');
   await checkTraining(trainingTools);

@@ -1,6 +1,6 @@
 import {getProfile} from './profiles.mjs';
 import {recordRangedAttack} from './ranged-history.mjs';
-import {attackSkill,character,currentHP,groupId,weaponSlot,diceValue,resolveAttack,queueHazard} from './battle.mjs';
+import {attackHitModifier,attackSkill,character,currentHP,groupId,weaponSlot,diceValue,resolveAttack,queueHazard} from './battle.mjs';
 import {effectWeapon} from './patrol.mjs';
 import {openCounteroffensive,needsLegacyBossStyle} from '../fight-sequence.mjs';
 import {captureSightBoard,forgetPatrolSightUnit,patrolSightStatus,patrolSightTarget,sightBoardMatches} from './patrol-sight.mjs';
@@ -8,6 +8,7 @@ import {patrolHighGround,patrolGroundLevel} from './patrol-terrain-placement.mjs
 import {patrolAreaCover} from './patrol-area-cover.mjs';
 import {detectionMap,patrolDetection} from './patrol-detection.mjs';
 import {isOverwatchShooting,overwatchTargetEligible} from './overwatch.mjs';
+import {heavyStatus} from './heavy.mjs';
 
 const unitOrder=(s,id)=>s.units[id]||{};
 export const weaponFor=(state,p,i)=>effectWeapon(state,p,getProfile(p).weapons[i],groupId(state,p));
@@ -63,7 +64,13 @@ function appendRows(state,pieces,rows){
     const old=next.declaration||{unit,locked:false,focus:null,rows:[],...(snap?{mode:'overwatch'}:{})};
     const style=!w.range&&selected?.bossStyle;
     const effect=style?{lethal:style==='lethal',sustained:style==='sustained'}:{};
-    next={...next,declaration:{...old,rows:[...old.rows,{...row,...effect,done:false}]}};
+    const entry={...row,...effect,done:false};
+    delete entry.heavy;
+    if(w.heavy&&!snap){
+      const {status}=heavyStatus(state,pieces,p,w);
+      if(status!=='unknown')entry.heavy=status==='active';
+    }
+    next={...next,declaration:{...old,rows:[...old.rows,entry]}};
   }
   return next;
 }
@@ -89,7 +96,16 @@ function lockRows(state,pieces,eligibleMelee) {
       if(!rows.length || rows.reduce((n,r)=>n+r.assigned,0)!==meleeLimit(weaponFor(state,actor,rows[0].weapon),rows[0]))return null;
     }
   }
-  return {...state,declaration:{...plan,locked:true}};
+  const rows=plan.rows.map(row=>{
+    // Earlier declarations may already include a manually entered Heavy bonus.
+    if(row.heavy===undefined)return row;
+    const actor=item(pieces,row.actor),w=weaponFor(state,actor,row.weapon);
+    const {status}=heavyStatus(state,pieces,actor,w);
+    const updated={...row,heavy:status==='active'};
+    if(status==='unknown')delete updated.heavy;
+    return updated;
+  });
+  return {...state,declaration:{...plan,locked:true,rows}};
 }
 
 export function plungingFireAtDeclaration(state,pieces,actor,weapon,targets,visible){
@@ -198,10 +214,10 @@ export function confirmPlungingSight(state,pieces,index,targetId,layout=null){
   return {...state,declaration:{...plan,rows}};
 }
 
-function packetKey(w,r,plunging) {
+function packetKey(w,r,plunging,hitMod) {
   const half=w.range>0&&r.distance<=w.range/2;
   return JSON.stringify([r.target,w.skill,w.strength,w.ap+Number(r.guard&&w.ap<0),w.damage,half?w.melta||0:0,
-    !!w.precision,!!w.torrent,!!w.devastating,!!w.psychic,w.antiVehicle||0,r.cover,r.hit-(r.vehiclePenalty||0),r.wound,r.lethal,r.sustained,r.ignore,plunging]);
+    !!w.precision,!!w.torrent,!!w.devastating,!!w.psychic,w.antiVehicle||0,r.cover,hitMod,r.heavy===true,r.wound,r.lethal,r.sustained,r.ignore,plunging]);
 }
 export function attackPackets(state,pieces) {
   const plan=state.declaration;
@@ -216,8 +232,10 @@ export function attackPackets(state,pieces) {
     const actor=item(pieces,r.actor),w=weaponFor(state,actor,r.weapon);
     const plunging=r.plunging===true&&actor.elevation>=3&&grounded.has(r.target)&&r.plungingVisible.some(id=>liveIds.has(id))&&
       (!hasTerrain||patrolHighGround(actor,pieces));
-    const key=packetKey(w,r,plunging);
-    if(!packets.has(key))packets.set(key,{index:i,target:r.target,indices:[],names:new Set(),plunging,cover:r.cover,
+    const heavy=r.heavy===true,hitMod=r.hit-(r.vehiclePenalty||0)+Number(heavy);
+    const key=packetKey(w,r,plunging,hitMod);
+    if(!packets.has(key))packets.set(key,{index:i,target:r.target,indices:[],names:new Set(),plunging,cover:r.cover,heavy,hitMod,
+      effectiveHitMod:plan.mode==='overwatch'?0:attackHitModifier(w,hitMod,r.ignore,heavy),
       skill:plan.mode==='overwatch'&&!w.torrent?6:attackSkill(w,{cover:r.cover,plunging,ignorePenalties:r.ignore})});
     const packet=packets.get(key);
     packet.indices.push(i);packet.names.add(w.name);
@@ -263,7 +281,7 @@ export function resolvePacket(state,pieces,index,preferred=null,random=Math.rand
     }
   }
   const result=count&&defenders.length?resolveAttack({weapon:w,targets:defenders,state,preferred:preferred||first.preferred,precisionTarget,awaitAllocation,rolled,distance:first.distance,
-    attackCount:count,hitMod:first.hit-(first.vehiclePenalty||0),woundMod:first.wound,cover:packet.cover,plunging:packet.plunging,lethal:first.lethal,
+    attackCount:count,hitMod:packet.effectiveHitMod,woundMod:first.wound,cover:packet.cover,plunging:packet.plunging,lethal:first.lethal,
     sustained:first.sustained,ignorePenalties:first.ignore,snap:plan.mode==='overwatch',random}):null;
   if(awaitAllocation&&result?.wounds){
     if(w.range)state=recordRangedAttack(state,plan.unit);

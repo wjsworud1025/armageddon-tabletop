@@ -118,7 +118,12 @@ export function finishMove(game) {
   requireEscapeRolls(plan);
   const assessment=assessPlan(game,plan,survivors,'finish');
   const poses=Object.fromEntries(Object.entries(assessment.models).map(([id,m])=>[id,m.end]));
-  return {rules:{...rules,movePlan:null},poses,message:moveNames[plan.type]+' 완료',manual:assessment.manual,assessment};
+  const next={...rules,movePlan:null};
+  if(plan.unit==='intercessor'){
+    const heavyTravel=Object.fromEntries(Object.entries(assessment.models).map(([id,m])=>[id,m.distance]));
+    next.units={...rules.units,intercessor:{...rules.units.intercessor,heavyTravel}};
+  }
+  return {rules:next,poses,message:moveNames[plan.type]+' 완료',manual:assessment.manual,assessment};
 }
 
 export function rewindMove(game) {

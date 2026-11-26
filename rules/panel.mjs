@@ -20,6 +20,7 @@ import {draftRestriction,appendSightedDeclaration,lockSightedDeclaration,attackP
   plungingFireAtDeclaration,plungingSightCandidates,confirmPlungingSight,pendingManualCover,confirmDraftCover,precisionCandidates} from './declarations.mjs';
 import {canSetPatrolSight,captureSightBoard,patrolSightStatus,setPatrolSight,sightBoardMatches,visibleInRange} from './patrol-sight.mjs';
 import {patrolAreaCover} from './patrol-area-cover.mjs';
+import {heavyStatus} from './heavy.mjs';
 import {patrolDetection} from './patrol-detection.mjs';
 import {doctrines,enhancements,tactics,selectOrder,useTactic,inDoctrine,hasWaaagh,effectWeapon} from './patrol.mjs';
 import {patrolMissions,recordLosses,objectiveSnapshot,missionAward} from './missions.mjs';
@@ -71,6 +72,28 @@ function shootingSkillLabel(weapon,skill,plunging,cover,snap=false){
   if(weapon.torrent)return '자동 명중';
   if(snap)return '수정 전 6만 명중'+(cover?' · 표적 엄폐':'');
   return 'BS '+skill+'+'+(plunging?' · 고지 사격':'')+(cover?' · 표적 엄폐':'');
+}
+const heavyReasons={
+  eligible:'이번 턴에 배치된 모델이 없고 전원이 3″ 이내로 이동한 미교전 분대입니다.',
+  phase:'자신의 사격 페이즈에서만 적용됩니다.',
+  engaged:'분대가 적과 교전 중입니다.',
+  setup:'이번 턴에 전장에 배치된 모델이 있습니다.',
+  distance:'이번 턴에 3″를 넘게 이동한 분대원이 있습니다.',
+  unknown:'이동 기록이 부족합니다. 분대 전원이 조건을 충족했는지 확인하고, 충족했다면 다른 명중 보정과 합쳐 직접 입력하세요.'
+};
+function heavyNote(result){
+  if(result.status==='none')return '';
+  const label=result.status==='active'?'Heavy · 명중 굴림 +1 자동 적용':result.status==='unknown'?'Heavy · 수동 확인':'Heavy · 미적용';
+  return '<p class="br-sub" data-heavy-status="'+esc(result.status)+'" data-heavy-reason="'+esc(result.reason)+'">'+
+    label+' · '+esc(heavyReasons[result.reason])+'</p>';
+}
+function recordedHeavy(weapon,r,packet,snap){
+  if(!weapon.heavy)return '';
+  if(snap)return '<p class="br-sub" data-heavy-applied="false">Heavy · 경계 사격에서는 미적용</p>';
+  const label=r.heavy===true?'Heavy · 명중 굴림 +1':r.heavy===false?'Heavy · 자동 보정 없음':'Heavy · 적용 기록 없음, 이 공격에 기록된 명중 보정 사용';
+  const total=packet.effectiveHitMod;
+  return '<p class="br-sub" data-heavy-applied="'+(r.heavy===undefined?'legacy':r.heavy)+'">'+label+
+    ' · 최종 명중 굴림 보정 '+(total>0?'+':'')+total+'</p>';
 }
 
 export function mountRules(container,api) {
@@ -199,12 +222,13 @@ export function mountRules(container,api) {
       const manualCover=!!coverObservation?.shooters.has(p.id);
       const cover=!!weapon.range&&(areaCover.automatic||manualCover);
       const skill=snapWindow(state)?(weapon.torrent?0:6):attackSkill(weapon,{cover,plunging,ignorePenalties});
-      return {p,distance,visible,skill,plunging,cover,manualCover,problem:attackRestriction(state,p,weapon,targets,distance,visible)};
+      return {p,distance,visible,skill,plunging,cover,manualCover,heavy:heavyStatus(state,pieces,p,weapon),
+        problem:attackRestriction(state,p,weapon,targets,distance,visible)};
     });
   }
   function renderShooterSight(state,shooters,target,weapon,areaCover){
     const pieces=api.getPieces();
-    const rows=shooters.map(({p,distance,visible,skill,plunging,cover,problem},i)=>{
+    const rows=shooters.map(({p,distance,visible,skill,plunging,cover,heavy,problem},i)=>{
       const attrs=' data-shooter="'+esc(p.id)+'" data-target="'+esc(target.id)+'"';
       const status=patrolSightStatus(state,pieces,p.id,target.id);
       const detection=patrolDetection(state,pieces,p.id,target.id,api.getTable().layout,api.getDistance);
@@ -217,7 +241,7 @@ export function mountRules(container,api) {
       const witness=visible.length&&!visible.includes(target.id)?' · '+getPiece(visible[0]).name+' 보임':'';
       return '<div class="br-sight-pair" data-sight-row="'+esc(p.id)+'"><strong>'+esc(p.name)+'</strong>'+view+
         '<p class="br-sub">분대까지 '+distance.toFixed(1)+'″ · <span data-ballistic-skill="'+(weapon.torrent?'':skill)+'">'+
-        shootingSkillLabel(weapon,skill,plunging,cover,snapWindow(state))+'</span> · '+esc((problem||'선언 가능')+witness)+'</p>'+
+        shootingSkillLabel(weapon,skill,plunging,cover,snapWindow(state))+'</span> · '+esc((problem||'선언 가능')+witness)+'</p>'+heavyNote(heavy)+
         '<p class="br-sub" data-detection="'+detection.status+'" data-detection-target="'+esc(target.id)+'"'+(detection.reason?' data-detection-reason="'+esc(detection.reason)+'"':'')+(explanation?'':' hidden')+'>'+esc(explanation)+'</p>'+
         '<div class="br-row" role="group" aria-label="'+esc(p.name+' → '+target.name+' 시야')+'">'+choices+'</div>'+
         '<label><input type="checkbox" data-field="'+(i?'other-cover':'cover')+'" data-cover-shooter="'+esc(p.id)+'"'+
@@ -257,7 +281,8 @@ export function mountRules(container,api) {
       ' · AP '+weapon.ap+' · D '+weapon.damage+'</p>'+
       (weapon.range?coverStatus(areaCover)+renderShooterSight(state,shooters,target,weapon,areaCover):'');
     if(preview)return chunk('사수와 표적 확인',controls);
-    const modifiers=snapWindow(state)?'':detail('mods','무기 및 분대 보정',row(number('hitMod','명중 보정',-1,1,choices.hitMod)+number('woundMod','상처 보정',-1,1,choices.woundMod)+number('extra','추가 공격',0,30,choices.extra))+
+    const modifiers=snapWindow(state)?'':detail('mods','무기 및 분대 보정',row(number('hitMod','그 밖의 명중 보정',-1,1,choices.hitMod)+number('woundMod','상처 보정',-1,1,choices.woundMod)+number('extra','추가 공격',0,30,choices.extra))+
+      (shooters[0].heavy.status==='active'?'<p class="br-sub">Heavy +1은 이미 적용됩니다. 이 칸에는 다른 효과의 명중 보정만 입력하세요.</p>':'')+
       (fightView?.sequence.active?.bossStyle?'':'<label><input type="checkbox" data-field="lethal"'+(choices.lethal?' checked':'')+'>치명적 명중 (Lethal Hits)</label>'));
     return chunk('무기 공격',controls+modifiers+
       (!weapon.range?number('allocation','이 표적에 배정할 근접 공격',1,availableAttacks,choices.allocation||availableAttacks):'')+
@@ -320,7 +345,7 @@ export function mountRules(container,api) {
       const snapHits=plan.mode==='overwatch'&&plan.attackRoll.records.find(e=>e.kind==='hit'&&e.closed)?.raw;
       const hitHistory=snapHits?'<p class="br-sub" data-overwatch-hit>경계 사격 명중 ['+diceText(snapHits)+'] → '+
         snapHits.filter(d=>d===6).length+'명중</p>':'';
-      return chunk(header,'<p>'+who+(skillLabel?' · '+skillLabel:'')+'</p>'+hitHistory+body+(state.last?'<p class="br-latest">'+esc(state.last)+'</p>':''));
+      return chunk(header,'<p>'+who+(skillLabel?' · '+skillLabel:'')+'</p>'+recordedHeavy(w,r,event.packet,plan.mode==='overwatch')+hitHistory+body+(state.last?'<p class="br-latest">'+esc(state.last)+'</p>':''));
     }
     const groups=attackPackets(state,api.getPieces());
     const rolled=plan.precisionRoll;
@@ -347,7 +372,7 @@ export function mountRules(container,api) {
             select('precision-target','그 모델에서 보이는 적 캐릭터',opt('','정밀 배정 생략','')+
               precisionCandidates(state,api.getPieces(),p).map(t=>opt(t.id,pieceLabel(t)+' · 시야 확인','')).join(''));
         }
-        return precision+(defenders.length?select('allocate-'+p.index,'방어 측 일반 배정 우선순위',defenders.map(t=>opt(t.id,pieceLabel(t),pref)).join('')):'')+
+        return precision+recordedHeavy(w,r,p,plan.mode==='overwatch')+(defenders.length?select('allocate-'+p.index,'방어 측 일반 배정 우선순위',defenders.map(t=>opt(t.id,pieceLabel(t),pref)).join('')):'')+
           (!rolled&&defenders.length?btn('staged-'+p.index,label+' · 단계별 판정'):'')+
           btn('resolve-'+p.index,rolled?'배정 확정 · 방어 및 피해 판정':label+(defenders.length?' · 양측 지휘 재굴림 생략':' · 전멸한 표적 공격 종료'));
       }).join('')+(!rolled&&!plan.rows.some(r=>r.done)?detail('target-exception','표적 적격성 변경',

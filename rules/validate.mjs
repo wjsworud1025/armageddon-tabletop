@@ -12,6 +12,7 @@ import {patrolAreaCover} from './patrol-area-cover.mjs';
 import {overwatchUnits,overwatchUnitReady,overwatchTargetEligible} from './overwatch.mjs';
 import {weaponSlot} from './battle.mjs';
 import {playerTurnNumber} from './ranged-history.mjs';
+import {heavyStatus} from './heavy.mjs';
 
 const boolean = value => typeof value === 'boolean';
 const string = value => typeof value === 'string';
@@ -57,7 +58,7 @@ const rowFields={
   size:int(1,46),assigned:int(0,45),hit:int(-2,1),wound:int(-2,1),extra:int(0,30),
   cover:boolean,lethal:boolean,sustained:boolean,ignore:boolean,guard:boolean,done:boolean
 };
-const validRow=fields({...rowFields,vehiclePenalty:int(0,2),plunging:boolean,plungingVisible:list(model,46),
+const validRow=fields({...rowFields,vehiclePenalty:int(0,2),heavy:boolean,plunging:boolean,plungingVisible:list(model,46),
   manualCover:boolean,areaCover:boolean,coverReview:oneOf([true])},Object.keys(rowFields));
 const diceArray=list(int(1,6),40000);
 const precisionRoll=fields({index:int(0,275),count:int(1,20000),hits:int(1,40000),wounds:int(1,40000),
@@ -71,6 +72,7 @@ const declaration=fields({unit:group,mode:oneOf(['overwatch']),locked:boolean,di
   coverBoard:v=>sightBoard(v)&&Object.keys(v).length===catalog.size},['unit','locked','focus','rows']);
 const characterId=oneOf(['captain-1','librarian-1','warboss-1','weirdboy-1']);
 const unit = fields({
+  heavyTravel:map(model,n=>Number.isFinite(n)&&n>=0&&n<=12.000001),
   shocked:boolean,shockChecked:boolean,rallied:boolean,epicChallengeModel:characterId,reinforcing:boolean,movementTracked:boolean,movement:oneOf(['normal','advance','fallback','remain']),
   order:string,charge:int(0,12),chargeTracked:boolean,charged:boolean,rerolled:boolean,attacks,finishedAttack:attackStep,
   counterCharge:boolean,reaction:boolean,reactionTracked:boolean,fightsFirst:boolean,shotAt:boolean,suppressedEnemy:boolean,hitTargets:list(group,12),suppressionTargets:list(group,12)
@@ -165,6 +167,13 @@ export function validateRulesState(value,pieceRecords=null,layout=undefined) {
   if (fields({hp},['hp'])(value)) return true;
   if(pieceRecords&&(!Array.isArray(pieceRecords)||pieceRecords.some(p=>!p||!catalog.has(p.id))))return false;
   if(!battle(value) || value.round>value.rounds||!officialStateOK(value,pieceRecords))return false;
+  for(const [key,u] of Object.entries(value.units??{})){
+    if(u.heavyTravel===undefined)continue;
+    if(key!=='intercessor'||value.status==='setup'||value.active!=='marines'||value.step===0)return false;
+    const ids=Object.keys(u.heavyTravel);
+    if(ids.some(id=>(value.attachments?.[id]??unitId(models.get(id)))!==key))return false;
+    if(ids.length&&(!u.movementTracked||!['normal','advance','fallback'].includes(u.movement)))return false;
+  }
   const activation=value.fightSequence?.active;
   if(activation?.bossStyle){
     if(value.step!==4||activation.unit!==(value.attachments?.['warboss-1']??'warboss'))return false;
@@ -375,6 +384,7 @@ export function validateRulesState(value,pieceRecords=null,layout=undefined) {
   if(!plan.rows.every(r=>{
     const weapon=getProfile(models.get(r.actor)).weapons[r.weapon];
     const visible=r.plungingVisible;
+    if(r.heavy!==undefined&&(!weapon?.heavy||value.step!==2||shootingOverwatch))return false;
     if(r.coverReview&&(plan.locked||r.manualCover!==false||r.areaCover===undefined))return false;
     if(r.manualCover!==undefined||r.areaCover!==undefined){
       if(!weapon?.range||r.manualCover===undefined||r.areaCover===undefined||r.cover!==(r.manualCover||r.areaCover)||r.manualCover&&!plan.coverBoard)return false;
@@ -389,6 +399,19 @@ export function validateRulesState(value,pieceRecords=null,layout=undefined) {
       faction(r.actor)!==faction(r.preferred) && (!ranged || faction(r.actor)===shootingTeam) &&
       (weapon.range?r.assigned===0:r.assigned>=1&&r.assigned<=weapon.attacks+r.extra);
   }))return false;
+  // A draft can be edited before it is confirmed. After a packet removes
+  // models or exposes dice, the already-locked modifier belongs to that roll.
+  if(pieceRecords&&plan.locked&&!plan.attackRoll&&!plan.precisionRoll&&!plan.rows.some(r=>r.done)&&
+    plan.rows.some(r=>r.heavy!==undefined)&&(plan.rows.every(r=>r.manualCover===undefined)||
+      value.shootingSight&&sightBoardMatches(value,pieceRecords,value.shootingSight.board))){
+    const pieces=savedPieces();
+    for(const row of plan.rows.filter(r=>r.heavy!==undefined)){
+      const actor=pieces.find(p=>p.id===row.actor);
+      if(!actor)return false;
+      const {status}=heavyStatus(value,pieces,actor,getProfile(actor).weapons[row.weapon]);
+      if(status==='unknown'||row.heavy!==(status==='active'))return false;
+    }
+  }
   // An intact sight record refers to this exact board. Once casualties or
   // movement invalidate it, original row qualifiers remain historical.
   if(pieceRecords&&plan.detectionMap&&value.shootingSight&&!plan.attackRoll&&!plan.precisionRoll&&!plan.rows.some(r=>r.done)){

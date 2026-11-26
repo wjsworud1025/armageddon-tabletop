@@ -28,6 +28,10 @@ export function advance(state,pieces) {
   }
   if (state.step < steps.length - 1) {
     const next={...state,step:state.step+1,...(state.step===3?{chargeWindow:false}:state.step===4?{fightSequence:null}:{})};
+    // At the start of a tracked Movement phase, even models the player
+    // subsequently skips have travelled zero. Earlier saves lack this record.
+    if(state.step===0&&state.active==='marines')
+      next.units={...state.units,intercessor:{...state.units?.intercessor,heavyTravel:{}}};
     delete next.shootingSight;
     delete next.overwatch;
     return next;
@@ -225,17 +229,24 @@ export function attackSkill(weapon,{cover=false,plunging=false,ignorePenalties=f
   return clamp(weapon.skill+Number(covered)-Number(ranged&&plunging),2,6);
 }
 
+export function attackHitModifier(weapon,hitMod,ignorePenalties=false,heavy=false){
+  // A separately identifiable positive modifier survives when the attacking
+  // unit elects to ignore negative modifiers (e.g. a Librarian leading it).
+  const modifier=ignorePenalties||weapon.psychic?Math.max(Number(heavy),hitMod):hitMod;
+  return clamp(modifier,-1,1);
+}
+
 export function attackThresholds(state,defenders,weapon,{cover,plunging=false,hitMod,woundMod,ignorePenalties,snap=false}){
   const bodyguards=defenders.filter(p=>!character(p));
   const toughness=Math.max(...(bodyguards.length ? bodyguards : defenders).map(p=>p.profile.toughness));
   if (weapon.strength>toughness && hasWaaagh(state,defenders[0])) woundMod-=1;
-  if (ignorePenalties || weapon.psychic) hitMod=Math.max(0,hitMod);
+  hitMod=attackHitModifier(weapon,hitMod,ignorePenalties);
   if (ignorePenalties) woundMod=Math.max(0,woundMod);
   const hitTarget=attackSkill(weapon,{cover,plunging,ignorePenalties});
   const woundTarget=woundThreshold(weapon.strength,toughness);
   const anti=weapon.antiVehicle&&defenders.some(p=>p.kind==='landSpeeder');
   const critical=d=>d===6||!!anti&&d>=weapon.antiVehicle;
-  return {critical,hits:d=>snap?d===6:d!==1&&(d===6||d+clamp(hitMod,-1,1)>=hitTarget),
+  return {critical,hits:d=>snap?d===6:d!==1&&(d===6||d+hitMod>=hitTarget),
     wounds:d=>d!==1&&(critical(d)||d+clamp(woundMod,-1,1)>=woundTarget)};
 }
 

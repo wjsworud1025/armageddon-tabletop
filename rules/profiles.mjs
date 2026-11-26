@@ -20,7 +20,7 @@ export const profiles = {
     gun('풀미네이션 · 서지',24,3,3,4,-1,1,{psychic:true,blast:2,slot:'fulmination'}),
     melee('포스 웨폰',4,3,6,-1,2,{psychic:true})]),
   intercessor: profile(6,4,3,2,6,3,0,[
-    gun('볼트 라이플',24,2,3,4,-1,1,{assault:true}), boltPistol, melee('근접 무기',3,3,4,0,1)]),
+    gun('볼트 라이플',24,2,3,4,-1,1,{assault:true,heavy:true}), boltPistol, melee('근접 무기',3,3,4,0,1)]),
   vanguard: profile(12,4,3,2,6,1,0,[
     gun('헤비 볼트 피스톨',18,1,3,4,-1,1), melee('마스터 크래프티드 파워 웨폰',3,3,5,-2,2)]),
   landSpeeder: profile(14,8,3,9,6,2,0,[

@@ -106,6 +106,7 @@ export async function checkPlungingFire({save,upload,state,js,click,reload,scree
   await click('[data-tab=battle]');await click(action('move-finish'));await click(action('next'));
   await click(action('overwatch-decline'));
   assert.equal((await state()).rules.step,2);
+  const afterClimb=(await state()).rules;
   await selectFromRoster();
   assert.equal(await js('document.querySelector("#floor-levels").hidden'),true,'Ordinary shooting cannot edit floors');
   await selectRifleAndSight(false);
@@ -120,7 +121,8 @@ export async function checkPlungingFire({save,upload,state,js,click,reload,scree
   assert.equal(plan.locked,true);assert.equal(plan.rows.length,2);
   const upperIndex=plan.rows.findIndex(r=>r.actor===upper),groundIndex=plan.rows.findIndex(r=>r.actor===ground);
   assert.equal(plan.rows[upperIndex]?.plunging,true);assert.equal(plan.rows[groundIndex]?.plunging,false);
-  assert.ok(plan.rows.every(r=>r.target==='gretchin'&&r.weapon===0&&r.hit===0&&!r.cover));
+  assert.ok(plan.rows.every(r=>r.target==='gretchin'&&r.weapon===0&&r.hit===0&&r.heavy===false&&!r.cover),
+    'The 3.37-inch climb prevents Heavy for both Intercessors, keeping the BS comparison independent');
   const saved=await state();
   await upload(save);await upload(saved);await reload();
   assert.deepEqual((await state()).rules.declaration,plan,'Saved BS groups survive import and reload');
@@ -144,6 +146,7 @@ export async function checkPlungingFire({save,upload,state,js,click,reload,scree
   // Make both declarations against one visible model. Only the defender
   // selected for allocation is removed; another live Grot remains on the ground.
   const replacement='gretchin-2',casualtyGame=battlefield(save,false);
+  casualtyGame.rules=structuredClone(afterClimb);
   Object.assign(casualtyGame.pieces.find(p=>p.id===replacement),{x:8,z:2.3,elevation:0,yaw:0,removed:false});
   await upload(casualtyGame);await selectRifleAndSight(false);
   await click(action('volley'));await click(action('lock'));
