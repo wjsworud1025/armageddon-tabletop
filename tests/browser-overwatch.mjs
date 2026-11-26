@@ -31,7 +31,8 @@ export async function checkOverwatch({save,upload,click,state,js,reload,screensh
       try{document.querySelector(${JSON.stringify(act(action))}).click()}finally{Math.random=original}})()`);
   }
   async function offer(active){
-    await upload(movementEnd(save,active));await click('[data-tab=battle]');await click(act('next'));
+    await upload(movementEnd(save,active));await click('[data-tab=battle]');
+    await choose('fighter',active==='marines'?rifle:boy);await click(act('next'));
     const s=(await state()).rules;
     assert.equal(s.step,1);assert.equal(s.active,active);assert.equal(s.overwatch.stage,'offer');
     assert.equal(s.overwatch.team,active==='orks'?'marines':'orks');
@@ -39,6 +40,7 @@ export async function checkOverwatch({save,upload,click,state,js,reload,screensh
   // Both players see the decision; passing enters the shooting phase without payment.
   await offer('marines');await click(act('overwatch-decline'));
   let s=(await state()).rules;assert.equal(s.step,2);assert.equal(s.active,'marines');
+  assert.equal(await js('document.querySelector("[data-field=fighter]").value'),rifle);
   assert.deepEqual(s.cp,{marines:2,orks:2});assert.ok(!s.overwatch);
 
   await offer('orks');await choose('overwatch-unit','intercessor');await choose('fighter',rifle);
@@ -68,6 +70,7 @@ export async function checkOverwatch({save,upload,click,state,js,reload,screensh
   await click('#redo');await reload();assert.deepEqual(await state(),ended);
   await click(act('next'));s=(await state()).rules;
   assert.equal(s.step,2);assert.equal(s.active,'orks');assert.ok(!s.overwatch);
+  assert.equal(await js('document.querySelector("[data-field=fighter]").value'),other,'Return control to a surviving Ork');
   await choose('fighter',boy);assert.equal(await available(act('attack')),false,'The casualty cannot shoot');
   await choose('fighter',other);await choose('target',rifle);
   await click(sightButton(other,rifle));

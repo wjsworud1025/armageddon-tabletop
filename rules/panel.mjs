@@ -72,6 +72,7 @@ export function mountRules(container,api) {
     hitMod:'0',woundMod:'0',extra:'0',lethal:false,rollCount:'1',objective:'',marineOC:'0',orkOC:'0',secured:'',attach:''};
   let choices={...defaultChoices};
   let coverObservation=null;
+  let movementSelection=null;
   let selectedId='', feedback='', opened=new Set(),writing=false;
   const field=id=>root.querySelector('[data-field="'+id+'"]');
   const read=()=> {
@@ -449,9 +450,31 @@ export function mountRules(container,api) {
       select('secured','현재 확보 효과',opt('','없음',choices.secured)+Object.entries(teams).map(([k,v])=>opt(k,v,choices.secured)).join(''))+
       btn('objective','점유 기록',!choices.objective)+(record?'<p>최근 판정 · '+esc(teams[record.owner]||'중립')+'</p>':'')));
   }
+  function restoreMovementSelection(state){
+    const eligible=p=>getProfile(p)&&p.faction===state.active&&currentHP(state,p)>0;
+    const board=api.getTable();
+    if(state.overwatch){
+      if(movementSelection?.board!==board||movementSelection.round!==state.round||movementSelection.team!==state.active){
+        const prior=[api.getSelection(),getPiece(choices.fighter)].find(eligible);
+        movementSelection={board,round:state.round,team:state.active,id:prior?.id};
+      }
+      return;
+    }
+    if(!movementSelection)return;
+    const prior=movementSelection;
+    movementSelection=null;
+    if(state.status!=='playing'||state.active!==prior.team||state.round!==prior.round||![1,2].includes(state.step))return;
+    const saved=prior.board===board&&getPiece(prior.id);
+    const actor=[saved,api.getSelection()].find(eligible)??contents().find(eligible);
+    choices.fighter=actor?.id||'';
+    if((api.getSelection()?.id||'')===choices.fighter)return;
+    writing=true;
+    try{api.selectPiece(actor?.id??null)}finally{writing=false}
+  }
   function refresh() {
     if (writing) return;
     const state=read();
+    restoreMovementSelection(state);
     if(officialPreparing(state)){
       root.innerHTML=renderOfficialSetup(state)+(feedback?'<p aria-live="polite" class="br-latest">'+esc(feedback)+'</p>':'');
       return;
