@@ -39,22 +39,34 @@ function panel(s,x) {
   }
 }
 
-function lattice(s,x) {
-  // Clip each diagonal to its own bay. The spaces between strips remain
-  // physically open from front to back, including to the game's sight probe.
-  const w=.735, h=.126, pitch=.139;
-  const grid=s.child([x,2.15,railZ(2.15)],[Math.atan(.32),0,0]);
-  for(const y of [-h,h])grid.box(steel,[0,y,0],[2*w,.042,.064]);
-  for(const slope of [-1,1])for(let i=-7;i<=7;i++){
-    const offset=i*pitch;
-    const a=Math.max(-w,offset-h),b=Math.min(w,offset+h);
-    if(a>=b)continue;
-    grid.link(silver,[a,slope*(a-offset),0],[b,slope*(b-offset),0],.019,.019,6);
+function lattice(s,x,centerHeight,phase) {
+  // Pierced metal strip. The back face and the inside walls of every hole
+  // participate in the ordinary game raycast.
+  const w=.735,h=.117,pitch=.112,thickness=.014;
+  const grid=s.child([x,centerHeight,-.211+.32*(centerHeight-2.15)],[Math.atan(.32),0,0]);
+  const face=new s.T.Shape();
+  face.moveTo(-w,-h);face.lineTo(w,-h);face.lineTo(w,h);face.lineTo(-w,h);face.closePath();
+  for(const row of [-1,0,1]){
+    const cy=row*.056,first=phase+(row===0?0:pitch/2);
+    for(let i=-7;i<=7;i++){
+      const cx=first+i*pitch,rx=.024,ry=.025;
+      if(Math.abs(cx)+rx>w-.015)continue;
+      const hole=new s.T.Path();
+      hole.moveTo(cx-rx,cy);hole.lineTo(cx,cy+ry);hole.lineTo(cx+rx,cy);
+      hole.lineTo(cx,cy-ry);hole.closePath();
+      face.holes.push(hole);
+    }
   }
+  const geometry=new s.T.ExtrudeGeometry(face,{depth:thickness,bevelEnabled:false,steps:1});
+  geometry.translate(0,0,-thickness/2);
+  grid.part(geometry,silver,[0,0,0],[1,1,1]);
+  for(const sign of [-1,1])grid.box(steel,[0,sign*h,0],[2*w,.031,.054]);
 }
 
 export function lockcreteBarricade(s) {
-  for(const x of [-.97,.97]){panel(s,x);lattice(s,x);}
+  for(const x of [-.97,.97])panel(s,x);
+  lattice(s,-.97,2.142,.052);
+  lattice(s,.97,2.164,.031);
   for(const x of postX){
     s.box(iron,[x,.706,-.416],[.157,1.41,.277]);
     s.link(steel,[x,1.355,railZ(1.355)],[x,2.49,railZ(2.49)],.092,.082,8);

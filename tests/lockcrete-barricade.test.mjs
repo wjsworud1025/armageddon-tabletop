@@ -30,11 +30,42 @@ test('both lockcrete screens use the registered footprint and twin openings in t
       sight(dir*.16,1.70,true);   // Centre posts between the bays
       sight(dir*.97,.55,true);    // Solid chest-height wall
       for(const y of [1.49,1.94,2.37])sight(dir*.97,y,true);
-      sight(dir*.97,2.15,true);   // Crossing of the diamond grille
-      sight(dir*1.035,2.15,false);
+      sight(dir*.97,2.15,true);   // Narrow openings and the metal between them
+      sight(dir*1.035,2.15,true);
     }
     sight(0,.35,false);sight(0,.57,true); // Central seam and its connecting pin
   }
+});
+
+test('each upper strip has three rows of actual apertures with less than 1 mm of clear width',()=>{
+  const p=barricades[0],root=createPiece(T,p);
+  root.userData.pieceId=p.id;root.updateMatrixWorld(true);
+  for(const [middle,yMiddle] of [[-.918,2.142],[1.001,2.164]]){
+    for(const [offset,y] of [[.056,yMiddle-.053],[0,yMiddle],[.056,yMiddle+.053]]){
+      for(const x of [middle+offset,middle+offset+.112]){
+        const a=new T.Vector3(x,y,-1),b=new T.Vector3(x,y,1);
+        for(const [from,to] of [[a,b],[b,a]]){
+          const ray=new T.Raycaster(from,to.clone().sub(from).normalize(),0,from.distanceTo(to));
+          assert.equal(ray.intersectObject(root,true).length,0,'visible aperture at '+[x,y]);
+          assert.deepEqual(sightObstructions(from,to,[root]),[p.id],'1 mm cylinder contacts rim at '+[x,y]);
+          const web=new T.Raycaster(from.clone().add(new T.Vector3(.056,0,0)),ray.ray.direction,0,2);
+          assert.ok(web.intersectObject(root,true).length,'metal between adjacent holes');
+        }
+      }
+    }
+  }
+  // Local witnesses with white centres in four separate photographic views.
+  for(const [x,y] of [[1.054,2.118],[-.862,2.190]]){
+    for(const z of [-1,1]){
+      const from=new T.Vector3(x,y,z),to=new T.Vector3(x,y,-z);
+      const thin=new T.Raycaster(from,new T.Vector3(0,0,-z),0,2);
+      assert.equal(thin.intersectObject(root,true).length,0);
+      assert.deepEqual(sightObstructions(from,to,[root]),[p.id]);
+    }
+  }
+  // At the former 1 mm pass, the corresponding four photographs show metal.
+  const formerPass=new T.Raycaster(new T.Vector3(1.035,2.15,-1),new T.Vector3(0,0,1),0,2);
+  assert.ok(formerPass.intersectObject(root,true).length);
 });
 
 test('rear feet obstruct a 25 mm base while the central ground behind the panels remains available',()=>{
