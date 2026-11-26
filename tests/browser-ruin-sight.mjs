@@ -78,6 +78,13 @@ export function checkGretchinSight(tools){
   ]);
 }
 
+export function checkBarricadeSight(tools){
+  return checkSightSamples(tools,[
+    ['06-barricade-open-rail','barricade-1',.97,1.70,-.15,false],
+    ['06-barricade-crossbar','barricade-1',.97,1.94,-.15,true]
+  ]);
+}
+
 async function checkSightSamples({save,upload,state,js,click,send,screenshot},samples){
   async function select(key,value){
     await js(`(()=>{const el=document.querySelector('[data-field="${key}"]');el.value=${JSON.stringify(value)};el.dispatchEvent(new Event('change',{bubbles:true}));})()`);

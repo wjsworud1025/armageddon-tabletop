@@ -10,7 +10,7 @@ import assert from 'node:assert/strict';
 import {createTable} from '../data/catalog.mjs';
 import {baseDistance} from '../state.mjs';
 import {checkPatrolSetup} from '../rules/browser-patrol-setup.mjs';
-import {checkGretchinSight,checkRuinSight} from './browser-ruin-sight.mjs';
+import {checkBarricadeSight,checkGretchinSight,checkRuinSight} from './browser-ruin-sight.mjs';
 import {checkShooterSight} from './browser-shooter-sight.mjs';
 import {checkPlungingFire} from './browser-plunging-fire.mjs';
 import {checkHeavyRifles} from './browser-heavy-rifles.mjs';
@@ -68,6 +68,7 @@ try{
   const sightTools={save:await state(),upload,state,js,click,send,screenshot};
   await checkRuinSight(sightTools);
   await checkGretchinSight(sightTools);
+  await checkBarricadeSight(sightTools);
   const shootingTools={save:await state(),upload,state,js,click,screenshot,reload:async()=>{
     await send('Page.reload');await until(()=>js('!!window.tabletopView'));await click('[data-tab=battle]');
   }};
