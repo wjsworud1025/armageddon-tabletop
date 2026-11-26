@@ -101,11 +101,18 @@ export class Sculpt {
 function bake(T, group) {
   const lib = resources(T);
   const positions = [], normals = [], colors = [], uvs = [], indices = [];
+  const supportBridges = [];
   const v = new T.Vector3(), n = new T.Vector3(), nm = new T.Matrix3();
   group.updateMatrixWorld(true);
   group.traverse(node => {
     const {geometry,color} = node.userData;
     if (!geometry) return;
+    for (const edge of node.userData.supportBridges ?? []) {
+      supportBridges.push(edge.map(point => {
+        v.fromArray(point).applyMatrix4(node.matrixWorld);
+        return {x:Math.fround(v.x), y:Math.fround(v.y), z:Math.fround(v.z)};
+      }));
+    }
     if (!lib.colors.has(color)) lib.colors.set(color, new T.Color(color));
     const pigment = lib.colors.get(color);
     const offset = positions.length/3;
@@ -130,6 +137,7 @@ function bake(T, group) {
     }
   });
   const combined = new T.BufferGeometry();
+  if (supportBridges.length) combined.userData.supportBridges = supportBridges;
   combined.setAttribute('position',new T.Float32BufferAttribute(positions,3));
   combined.setAttribute('normal',new T.Float32BufferAttribute(normals,3));
   combined.setAttribute('color',new T.Float32BufferAttribute(colors,3));

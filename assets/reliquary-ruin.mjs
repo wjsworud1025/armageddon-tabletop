@@ -143,15 +143,38 @@ function reliquaryWall(s){
   }
 }
 
+// A sloping strip has parallel top and bottom faces. Its underside leans
+// inwards where the metal has folded away from the horizontal landing.
+function brokenStrip(s,color,outline,thickness,[x,y,d],drop,lean){
+  const node=s.plate(color,outline.map(([u,v])=>[u-x,d-v]),thickness,
+    [x,y-thickness/2,-d],[Math.PI/2,0,0]);
+  node.userData.geometry.applyMatrix4(new s.T.Matrix4().set(
+    1,0,-lean,-lean*thickness/2,
+    0,1,0,0,
+    0,-drop,1,0,
+    0,0,0,1));
+}
+
 function landing(s){
-  // Its broken fourth tile leaves a diagonal gap at the freestanding corner.
-  const boundary=[[.035,.035],[2.77,.035],[2.78,.69],[2.66,.81],[2.72,1.08],
-    [2.58,1.07],[2.52,1.29],[2.38,1.24],[2.46,1.42],[2.26,1.44],
+  // The freestanding edge splits into a heavy beam and a curled metal tab.
+  const boundary=[[.035,.035],[2.77,.035],[2.78,.69],[2.598,.731],
+    [2.565,.841],[2.550,.953],[2.535,1.015],[2.535,1.107],
+    [2.52,1.29],[2.38,1.24],[2.46,1.42],[2.26,1.44],
     [2.15,1.67],[1.97,1.76],[1.91,1.98],[1.77,2.09],[1.89,2.21],
     [1.66,2.20],[1.69,2.45],[1.91,2.50],[1.91,2.61],[.94,2.61],
     [.95,2.49],[1.11,2.46],[1.12,2.34],[.95,2.40],[.86,2.27],
     [.65,2.31],[.66,2.22],[.41,2.31],[.24,2.41],[.19,2.29],[.035,2.34]];
-  s.plate(rust,boundary.map(([x,d])=>[x,-d]),.105,[0,2.2475,0],[Math.PI/2,0,0]);
+  const cast=s.plate(rust,boundary.map(([x,d])=>[x,-d]),.105,[0,2.2475,0],[Math.PI/2,0,0]);
+  cast.userData.supportBridges=[[[2.78,-.69,-.0525],[2.66,-.81,-.0525]],
+    [[2.66,-.81,-.0525],[2.72,-1.08,-.0525]],[[2.72,-1.08,-.0525],[2.58,-1.07,-.0525]],
+    [[2.58,-1.07,-.0525],[2.52,-1.29,-.0525]]];
+  brokenStrip(s,iron,[[2.585,.725],[2.778,.682],[2.759,.983],[2.750,1.031],
+    [2.730,1.049],[2.625,1.046],[2.617,1.032],[2.626,.946],[2.605,.854]],
+    .060,[2.65,2.299,.69],.141,.46);
+  brokenStrip(s,rust,[[2.492,.994],[2.523,.991],[2.545,1.036],[2.585,1.069],
+    [2.617,1.105],[2.635,1.140],[2.624,1.155],[2.605,1.150],
+    [2.570,1.114],[2.531,1.092],[2.504,1.061]],
+    .034,[2.51,2.262,.990],.350,.25);
   for(const [x,d,full] of [[.76,.76,true],[2.01,.76,true],[.76,1.95,false]]){
     const size=full ? .53 : .425;
     for(const rad of [size,size*.71]){

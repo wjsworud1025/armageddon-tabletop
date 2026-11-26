@@ -46,7 +46,7 @@ if(process.argv[1]===path&&process.argv[2]==='--check-ruin-windows'){
       for(const y of [3.04,3.13,3.24,3.35])assert.ok(blocked('reliquary',1.08,y,side),'central mullion at '+y);
     });
   }
-  test(mode+' lower corner lattice preserves its braces and passes a finite 1 mm sight line in both directions',()=>{
+  function checkPaths(samples){
     // The scene tags and poses the piece root. Apply the same transform to the
     // endpoints, which are local inches inferred from the photographed views.
     const wall=mesh.clone();
@@ -54,7 +54,19 @@ if(process.argv[1]===path&&process.argv[2]==='--check-ruin-windows'){
     wall.position.set(piece.x,piece.elevation??0,piece.z);
     wall.rotation.y=piece.yaw;
     wall.updateMatrixWorld(true);
-    const samples=[
+    for(const [name,start,end,centreBlocked,cylinderBlocked] of samples){
+      const from=wall.localToWorld(new T.Vector3(...start)),to=wall.localToWorld(new T.Vector3(...end));
+      for(const [a,b] of [[from,to],[to,from]]){
+        const delta=b.clone().sub(a),length=delta.length();
+        const centre=new T.Raycaster(a,delta.normalize(),0,length);
+        assert.equal(centre.intersectObject(wall,true).length>0,centreBlocked,name+' centre line');
+        if(cylinderBlocked!==null)
+          assert.deepEqual(sightObstructions(a,b,[wall]),cylinderBlocked?[piece.id]:[],name+' 1 mm line');
+      }
+    }
+  }
+  test(mode+' lower corner lattice preserves its braces and passes a finite 1 mm sight line in both directions',()=>{
+    checkPaths([
       // Both ends reproject to white pixels in the registered 480 px study.
       ['01-01 (238,204), held out',[-2.65,1.661910,1.853008],[-1.85,1.758049,1.303559],false,false],
       ['01-06 (301,224)',[-2.65,1.801749,1.643054],[-1.85,1.710852,1.616966],false,false],
@@ -65,16 +77,19 @@ if(process.argv[1]===path&&process.argv[2]==='--check-ruin-windows'){
       ['horizontal X intersection',[-3.5,1.950,1.675],[1,1.950,1.675],true,true],
       ['descending strap',[-3.5,1.82,1.59],[1,1.82,1.59],true,true],
       ['ascending strap',[-3.5,1.82,1.76],[1,1.82,1.76],true,true],
-    ];
-    for(const [name,start,end,centreBlocked,cylinderBlocked] of samples){
-      const from=wall.localToWorld(new T.Vector3(...start)),to=wall.localToWorld(new T.Vector3(...end));
-      for(const [a,b] of [[from,to],[to,from]]){
-        const delta=b.clone().sub(a),length=delta.length();
-        const centre=new T.Raycaster(a,delta.normalize(),0,length);
-        assert.equal(centre.intersectObject(wall,true).length>0,centreBlocked,name+' centre line');
-        assert.deepEqual(sightObstructions(a,b,[wall]),cylinderBlocked?[piece.id]:[],name+' 1 mm line');
-      }
-    }
+    ]);
+  });
+  test(mode+' the damaged landing opens to the side of an intact edge beam and deck',()=>{
+    // Opposite ends of each short diagonal reproject to the same source pixel
+    // in the 480 px registered views. 03-11 is the original diagnostic view.
+    checkPaths([
+      // The projected 1 mm disc also touches dark photo pixels at this location.
+      // The source supports a clear centre line without establishing full 1 mm clearance.
+      ['03-11 (248,255) white gap',[.42895,2.48,.83804],[.23332,2.06,.73387],false,null],
+      ['03-10 (277,243) white gap from a second angle',[.383844,2.48,.849911],[.272496,2.06,.652185],false,null],
+      ['03-11 (248,259) dark outer beam',[.49498,2.48,.87170],[.30077,2.06,.76825],true,true],
+      ['03-11 (248,251) intact deck',[.36271,2.48,.80428],[.16566,2.06,.69938],true,true],
+    ]);
   });
 }else{
   const modes=['public'];

@@ -32,7 +32,7 @@ function cast(t){
     if(!tops.has(level))tops.set(level,[]);
     tops.get(level).push(tri);
   }
-  const shape={triangles,tops,sections:new Map(),floors:new Map()};
+  const shape={triangles,tops,supportBridges:geometry.userData.supportBridges??[],sections:new Map(),floors:new Map()};
   casts.set(geometry,shape);
   return shape;
 }
@@ -107,7 +107,11 @@ function floorAt(shape,level){
   for(const [height,triangles] of shape.tops){
     if(height<=key&&height>=key-ribDepth)faces.push(...triangles);
   }
-  const points=faces.flatMap(t=>[t.a,t.b,t.c]).sort((a,b)=>a.x-b.x||a.z-b.z);
+  const bridges=shape.supportBridges.filter(edge=>edge.every(p=>{
+    const height=roundHeight(p.y);
+    return height<=key&&height>=key-ribDepth;
+  }));
+  const points=faces.flatMap(t=>[t.a,t.b,t.c]).concat(bridges.flat()).sort((a,b)=>a.x-b.x||a.z-b.z);
   const half=points=>{
     const chain=[];
     for(const p of points){
@@ -118,7 +122,7 @@ function floorAt(shape,level){
     return chain;
   };
   const hull=[...half(points),...half(points.reverse())];
-  const floor={faces,contact,hull};
+  const floor={faces,contact,hull,bridges};
   shape.floors.set(key,floor);
   return floor;
 }
@@ -128,7 +132,7 @@ function supported(site,level){
   // intersection proves overhang; holes inside the frame need a stability check.
   const floor=floorAt(site.shape,level);
   if(!floor)return false;
-  const {faces,contact,hull}=floor;
+  const {faces,contact,hull,bridges}=floor;
   // Support of the full ellipse in each hull-edge direction catches partial
   // overhang even between sampled rim points and with a rotated oval base.
   for(let i=0;i<hull.length;i++){
@@ -142,15 +146,18 @@ function supported(site,level){
     if(contact.some(t=>covers(t,p))){touching=true;continue;}
     if(faces.some(t=>covers(t,p)))continue;
     const dx=p.x-site.x,dz=p.z-site.z;
+    function crossesOutward(v,w){
+      const ex=w.x-v.x,ez=w.z-v.z,det=dx*ez-dz*ex;
+      if(Math.abs(det)<eps)return false;
+      const vx=v.x-p.x,vz=v.z-p.z,u=(vx*dz-vz*dx)/det;
+      return u>=-eps&&u<=1+eps&&(vx*ez-vz*ex)/det>=-eps;
+    }
+    // A base can span the hairline fracture between two pieces of the
+    // same rim. Only physical faces can supply contact or obstruct sight.
+    if(bridges.some(([a,b])=>crossesOutward(a,b)))continue;
     let beyond=false;
     for(const {a,b,c} of faces){
-      for(const [v,w] of [[a,b],[b,c],[c,a]]){
-        const ex=w.x-v.x,ez=w.z-v.z,det=dx*ez-dz*ex;
-        if(Math.abs(det)<eps)continue;
-        const vx=v.x-p.x,vz=v.z-p.z,u=(vx*dz-vz*dx)/det;
-        if(u>=-eps&&u<=1+eps&&(vx*ez-vz*ex)/det>=-eps){beyond=true;break;}
-      }
-      if(beyond)break;
+      if(crossesOutward(a,b)||crossesOutward(b,c)||crossesOutward(c,a)){beyond=true;break;}
     }
     if(!beyond)return false;
   }
