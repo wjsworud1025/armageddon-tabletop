@@ -44,3 +44,31 @@ test('front central fissure and reverse bone pits stay on their respective panel
     assert.ok(darkFraction(front,x,y,.32)<.14);
   }
 });
+
+test('front soil varies at gravel and weathered-patch scales across the two printed panels',()=>{
+  const {pixels,width,height}=createFieldPixels(false);
+  const stride=width+1,sum=new Float64Array(stride*(height+1));
+  for(let y=0;y<height;y++){
+    let row=0;
+    for(let x=0;x<width;x++){
+      const i=(y*width+x)*4;
+      row+=.299*pixels[i]+.587*pixels[i+1]+.114*pixels[i+2];
+      sum[(y+1)*stride+x+1]=sum[y*stride+x+1]+row;
+    }
+  }
+  function mean(x,y,r){
+    const left=x-r,right=x+r+1,top=(y-r)*stride,bottom=(y+r+1)*stride;
+    return (sum[bottom+right]-sum[top+right]-sum[bottom+left]+sum[top+left])/(2*r+1)**2;
+  }
+  // Box filtering at 30 px/in: compare average tones over 7 and 41 px.
+  // Targets are regional RMS measurements, independent of feature placement.
+  const samples=[[2,1,10,6,7.52],[34,2,42,9,4.55],[8,20,15,24,5.18],[33,21,42,28,6.19]];
+  for(const [left,top,right,bottom,reference] of samples){
+    let squared=0,n=0;
+    for(let y=top*30;y<bottom*30;y+=2)for(let x=left*30;x<right*30;x+=2){
+      squared+=(mean(x,y,3)-mean(x,y,20))**2;n++;
+    }
+    const rms=Math.sqrt(squared/n);
+    assert.ok(Math.abs(rms-reference)<.90,`Soil contrast at (${left}, ${top}): ${rms.toFixed(2)}`);
+  }
+});

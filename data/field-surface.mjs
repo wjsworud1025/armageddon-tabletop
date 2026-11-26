@@ -45,7 +45,8 @@ function scouredSoil(pixels,width,height,reverse,rand,draw){
   for(const [cx,cy,rx,ry] of scars){
     for(let y=Math.max(0,Math.floor((cy-ry*1.55)*sy));y<Math.min(height,(cy+ry*1.55)*sy);y++){
       for(let x=Math.max(0,Math.floor((cx-rx*1.55)*sx));x<Math.min(width,(cx+rx*1.55)*sx);x++){
-        const u=x/sx,v=y/sy,grit=crumb(u,v),r=Math.hypot((u-cx)/rx,(v-cy)/ry)+weather(u,v)*.25+grit*.07;
+        const u=x/sx,v=y/sy,grit=crumb(u,v),wash=weather(u,v);
+        const r=Math.hypot((u-cx)/rx,(v-cy)/ry)+wash*(reverse?.25:.40)+grit*(reverse?.07:.13);
         const faded=clamp((1.14-r)*3.1+grit*.35);
         if(!faded)continue;
         const edge=clamp(1-Math.abs(.84-r)*6),shade=grit*11+weather(u,v)*6;
@@ -62,6 +63,58 @@ function scouredSoil(pixels,width,height,reverse,rand,draw){
       const lo=[px-rad,py+tilt],hi=[px+rad*.32,py-rad*.7],tip=[px+rad,py+tilt];
       draw.poly([lo,hi,tip,[px,py+rad*.64]],mix([175,150,117],rand()*32-14),.49);
       draw.line(lo,hi,.024,sandLight,.60);draw.line(tip,[px,py+rad*.64],.021,mortar,.53);
+    }
+  }
+}
+
+// Bands of compacted soil break through the loose ochre dust. Warp their
+// edges at two scales so the small chips follow the larger eroded patches.
+function weatherFront(pixels,width,height,draw){
+  const rand=random(0xb931fa64),drift=noise(1.84,rand),crust=noise(.56,rand);
+  const grit=noise(.19,rand),sandGrain=noise(.071,rand);
+  for(let y=0;y<height;y++){
+    const v=y/height*30,south=clamp((v-2)/24);
+    for(let x=0;x<width;x++){
+      const u=x/width*44,east=clamp((u-4)/34),i=(y*width+x)*4;
+      const wind=drift(u,v),grain=sandGrain(u,v);
+      const a=u*.95+1+.39*wind, b=v*.93+.9+.34*wind;
+      const crumb=grit(a,b),plate=crust(a+.1*crumb,b-.08*crumb);
+      const ridges=clamp((plate+.33*crumb+.19*wind+.06)*2.3);
+      // The upper left panel has exposed hardpan. The sand just across the
+      // centre fold is smoother, and the lower right panel is paler and worn.
+      const northRelief=2.8+15.1*clamp((23-u)/13),southRelief=5.1+7.1*east;
+      const exposure=.62+.72*clamp(.52+.83*wind);
+      const relief=(northRelief+(southRelief-northRelief)*south)*exposure;
+      const shade=relief*(plate*.76+crumb*.50+(ridges-.5)*.42)+grain*(5+13*ridges)*exposure;
+      const tint=5-2*east-11*south+28*east*south;
+      const silt=(1-east)*(1-south)*2+east*south*5;
+      pixels[i]+=shade+tint-2*crumb;
+      pixels[i+1]+=shade+tint+silt*.24;
+      pixels[i+2]+=shade*.95+tint+silt+2*crumb;
+    }
+  }
+  // Split stone has a sunward lip and a shaded face. Wind leaves an
+  // occasional hairline fracture in the harder sediment between chips.
+  for(let n=0;n<240;n++){
+    const x=rand()*44,y=rand()*30,angle=rand()*TAU,c=Math.cos(angle),s=Math.sin(angle);
+    const length=.3+rand()*1.15,breadth=.12+rand()*.48;
+    const exposure=clamp(.65+drift(x,y)*.7,.16,1);
+    for(let j=0,count=7+rand()*28;j<count;j++){
+      const a=(rand()-.5)*length,b=(rand()-.5)*breadth;
+      const u=x+a*c-b*s,v=y+a*s+b*c,r=.018+rand()**2*.09;
+      const left=[u-r,v+r*.16],top=[u-r*.24,v-r*.65],right=[u+r*.96,v-r*.13];
+      const bottom=[u+r*.25,v+r*.58];
+      draw.poly([left,top,right,bottom],mix(warm,rand()*30-20),.76*exposure);
+      draw.line(left,top,r*.29,sandLight,.84*exposure);draw.line(right,bottom,r*.31,mortar,.54*exposure);
+    }
+    if(rand()<.36){
+      let px=x,py=y;
+      for(let j=0,count=2+rand()*4;j<count;j++){
+        const a=.05+rand()*.15,b=(rand()-.5)*.10;
+        const qx=px+a*c-b*s,qy=py+a*s+b*c;
+        draw.line([px,py],[qx,qy],.013+rand()*.013,mortar,.46);
+        px=qx;py=qy;
+      }
     }
   }
 }
@@ -373,6 +426,7 @@ export function createFieldPixels(reverse=false,width=1320){
   sand(pixels,width,height,reverse,rand);
   const brush=painter(pixels,width,height),draw=brush();
   scouredSoil(pixels,width,height,reverse,rand,draw);
+  if(!reverse)weatherFront(pixels,width,height,draw);
   speckle(draw,rand);
   const substrate=pixels.slice();
   if(reverse)back(brush,rand);else front(brush,rand);
