@@ -12,6 +12,7 @@ const repeat=(n,value)=>Array(n).fill(value);
 // samples randomness; only advancing off the last decision can roll new dice.
 function* procedure(state,pieces,packet,preferred){
   const plan=state.declaration,byId=new Map(pieces.map(p=>[p.id,p]));
+  const snap=plan.mode==='overwatch';
   const first=plan.rows[packet.index],actor=byId.get(first.actor);
   const base=weaponFor(state,actor,first.weapon);
   const weapon=first.guard?{...base,ap:Math.min(0,base.ap+1)}:base;
@@ -37,9 +38,9 @@ function* procedure(state,pieces,packet,preferred){
   }
   if(!count)return null;
   const threshold=attackThresholds(state,defenders,weapon,{cover:packet.cover,plunging:packet.plunging,hitMod:first.hit-(first.vehiclePenalty||0),
-    woundMod:first.wound,ignorePenalties:first.ignore});
+    woundMod:first.wound,ignorePenalties:first.ignore,snap});
   const hitDice=weapon.torrent?[]:yield {kind:'hit',...attacker,sizes:repeat(count,6)};
-  const sixes=hitDice.filter(d=>d===6).length;
+  const sixes=snap?0:hitDice.filter(d=>d===6).length;
   const hits=(weapon.torrent?count:hitDice.filter(threshold.hits).length)+(first.sustained?sixes:0);
   const auto=first.lethal?sixes:0;
   const woundDice=hits>auto?yield {kind:'wound',...attacker,sizes:repeat(hits-auto,6)}:[];
@@ -96,6 +97,7 @@ function replay(state,pieces,packet,progress){
     }else if(record.raw!==undefined)return null;
     if(i===progress.records.length-1){
       if(record.closed||record.change||Object.hasOwn(record,'choice'))return null;
+      if(state.declaration.mode==='overwatch'&&event.kind==='hit')return null;
       last=event;break;
     }
     if(record.closed!==true)return null;
@@ -103,6 +105,7 @@ function replay(state,pieces,packet,progress){
       if(Object.hasOwn(record,'choice'))return null;
       const dice=[...record.raw];
       if(record.change){
+        if(state.declaration.mode==='overwatch'&&event.kind==='hit')return null;
         const {index,value}=record.change;
         if(!Number.isInteger(index)||index<0||index>=dice.length||!Number.isInteger(value)||value<1||value>event.sizes[index])return null;
         dice[index]=value;
@@ -145,6 +148,7 @@ export function stepAttackRoll(state,pieces,index,action={type:'begin'},random=M
       if(!['keep','reroll'].includes(action.type))return null;
       const dice=[...record.raw];
       if(action.type==='reroll'){
+        if(plan.mode==='overwatch'&&event.kind==='hit')return null;
         const i=action.index;
         if(!Number.isInteger(i)||i<0||i>=dice.length)return null;
         const paid=useCommandReroll(state,{...event,sides:event.sizes[i],dice:[dice[i]]},0,random);
@@ -166,7 +170,7 @@ export function stepAttackRoll(state,pieces,index,action={type:'begin'},random=M
     const event=next.value,record={kind:event.kind};
     if(event.sizes)record.raw=event.sizes.map(sides=>roll(sides,random));
     records.push(record);
-    if(!event.sizes||canCommandReroll(state,event.unit,event.team)){
+    if(!event.sizes||(plan.mode!=='overwatch'||event.kind!=='hit')&&canCommandReroll(state,event.unit,event.team)){
       const attackRoll={index,preferred,records};
       return {state:{...state,declaration:{...plan,focus:packet.target,attackRoll}},event:{...event,raw:record.raw},note,packet};
     }

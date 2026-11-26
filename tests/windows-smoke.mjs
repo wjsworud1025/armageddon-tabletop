@@ -15,6 +15,7 @@ import {checkShooterSight} from './browser-shooter-sight.mjs';
 import {checkPlungingFire} from './browser-plunging-fire.mjs';
 import {checkTerrainAreas} from './browser-terrain-areas.mjs';
 import {checkAreaCover} from './browser-area-cover.mjs';
+import {checkOverwatch} from './browser-overwatch.mjs';
 import {checkSmallRuin} from './browser-small-ruin.mjs';
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 // --public-exe <file> exercises a clean distribution using the same native host.
@@ -62,6 +63,7 @@ try{
   const shootingTools={save:await state(),upload,state,js,click,screenshot,reload:async()=>{
     await send('Page.reload');await until(()=>js('!!window.tabletopView'));await click('[data-tab=battle]');
   }};
+  await checkOverwatch(shootingTools);
   await checkTerrainAreas({...shootingTools,until});
   await checkShooterSight(shootingTools);
   await checkPlungingFire(shootingTools);
@@ -244,7 +246,10 @@ try{
   await screenshot('04a-deployment.png');
   await js('(()=>{const s=document.querySelector("[data-field=first]");s.value="marines";s.dispatchEvent(new Event("change",{bubbles:true}))})()');
   await click('[data-act=start]');assert.equal((await state()).rules.status,'playing');
-  for(let i=0;i<6;i++)await click('[data-act=next]');
+  for(let i=0;i<6;i++){
+    await click('[data-act=next]');
+    if((await state()).rules.overwatch?.stage==='offer')await click('[data-act=overwatch-decline]');
+  }
   assert.equal((await state()).rules.active,'orks');await screenshot('04-turn.png');
   const saved=await state();await send('Page.reload');await until(()=>js('!!window.tabletopView'));assert.deepEqual(await state(),saved);
   assert.deepEqual(errors,[]);console.log(JSON.stringify({passed:true,stats,vehicleRuler:{baseGap,groundGap},verified:[...(studioInstalled?['photo','studio gallery']:[]),'two-sided board','3D drag','routed movement','eye-level view','undo/redo','casualty','camera','ruler','vehicle picking, rotated base bounds and reload','deployment','turn handoff','reload'],evidence},null,2));

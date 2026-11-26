@@ -104,6 +104,7 @@ export async function checkPlungingFire({save,upload,state,js,click,reload,scree
   assert.deepEqual((await state()).rules.movePlan.paths[upper],route,'Two climbs cost 6.74 inches, above the 6-inch allowance');
   assert.match(await js('document.querySelector("#notice").textContent'),/누적 이동 거리/);
   await click('[data-tab=battle]');await click(action('move-finish'));await click(action('next'));
+  await click(action('overwatch-decline'));
   assert.equal((await state()).rules.step,2);
   await selectFromRoster();
   assert.equal(await js('document.querySelector("#floor-levels").hidden'),true,'Ordinary shooting cannot edit floors');

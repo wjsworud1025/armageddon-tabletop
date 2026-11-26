@@ -14,6 +14,7 @@ import {layoutGeometry,objectiveAreas} from '../layouts.mjs';
 import {getProfile} from './profiles.mjs';
 import {newBattle,startBattle} from './battle.mjs';
 import {checkShootingReactions} from './browser-shooting-reactions.mjs';
+import {checkOverwatch} from '../tests/browser-overwatch.mjs';
 import {checkCoreStratagems} from './browser-core-stratagems.mjs';
 import {checkTraining} from './browser-training.mjs';
 import {checkTrainingTwo} from './browser-training-two.mjs';
@@ -89,6 +90,8 @@ try {
   const trainingTools={save,upload,click,state,js,send,reload:async()=>{
     await send('Page.reload');await until(()=>js('!!window.tabletopView'));await click('[data-tab=battle]');
   }};
+  await checkOverwatch(trainingTools);
+  console.log('Passed end-of-movement Overwatch, passing, Snap Shooting, casualties and reload');
   await checkSmallRuin(trainingTools);
   console.log('Passed shrine and pipe ruin wall, courtyard and archived table picking');
   await checkRuinSight(trainingTools);
@@ -144,7 +147,11 @@ try {
   let s=await state();assert.equal(s.rules.active,'marines');assert.equal(s.rules.step,0);
   await choose('fighter',actor.id);
   assert.equal(await disabled('shock'),true);
-  await click(button('next'));await click(button('next'));
+  async function endMovement(){
+    await click(button('next'));
+    if((await state()).rules.overwatch?.stage==='offer')await click(button('overwatch-decline'));
+  }
+  await click(button('next'));await endMovement();
   await choose('target',victim.id);
   assert.equal(await disabled('attack'),true);
   await click(sightButton(actor.id,victim.id));
@@ -209,7 +216,8 @@ try {
     await js('(()=>{for(let i=0;i<'+count+';i++){let next=document.querySelector("[data-act=next]");'+
       'for(let side=0;side<4&&next?.disabled;side++){const pass=document.querySelector("[data-act=fight-pass]");'+
       'if(!pass||pass.disabled||!/(밀착|재정비) 마침/.test(pass.textContent))break;pass.click();next=document.querySelector("[data-act=next]");}'+
-      'if(!next||next.disabled)throw Error("Required action at phase transition "+i+" · "+document.querySelector("#rules .br-phase")?.textContent);next.click();}})()');
+      'if(!next||next.disabled)throw Error("Required action at phase transition "+i+" · "+document.querySelector("#rules .br-phase")?.textContent);'+
+      'next.click();document.querySelector("[data-act=overwatch-decline]")?.click();}})()');
   }
   await advancePhases(3);
   assert.equal((await state()).rules.step,5);assert.equal(await disabled('next'),true);
@@ -319,7 +327,7 @@ try {
   await click(button('move-finish'));s=await state();assert.equal(s.rules.movePlan,null);nearX(s,actor.id,3);
   await click('#undo');assert.deepEqual((await state()).rules.movePlan,draft);
   await click('#redo');assert.equal((await state()).rules.movePlan,null);
-  await click(button('next'));assert.equal((await state()).rules.step,2);
+  await endMovement();assert.equal((await state()).rules.step,2);
 
   const escapes=movementFixture({[actor.id]:[0,0],[bombers[0].id]:[-2.1,0],[bombers[1].id]:[-2.1,1.25],[near]:[-6,1.25]},
     [actor.id,bombers[0].id,bombers[1].id],'orks');
@@ -497,7 +505,7 @@ try {
   const arrived=arrivals.map(id=>coords(s,id));
   await drag(librarian.id,blockedMarkers[2]);s=await state();
   assert.deepEqual(arrivals.map(id=>coords(s,id)),arrived,'An arriving squad cannot move again in its Movement phase');
-  await click(button('next'));assert.equal((await state()).rules.step,2);
+  await endMovement();assert.equal((await state()).rules.step,2);
   await drag(arrivals[0],blockedMarkers[0]);s=await state();
   assert.deepEqual(arrivals.map(id=>coords(s,id)),arrived,'Ingress prevents another move until the next Charge phase');
   const reactionChecks=await checkShootingReactions({movementFixture,upload,choose,click,button,state,js,drag,

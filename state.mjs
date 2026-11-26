@@ -90,6 +90,8 @@ export function restore(template, save) {
     }
     if(save.rules?.officialSetup&&save.rules.status==='setup'&&(Math.hypot(record.x-piece.x,record.z-piece.z)>1e-6||piece.elevation!==(record.elevation??0)))
       throw Error('정식 패트롤 기물이 전장 밖에 있습니다.');
+    if(save.rules?.overwatch&&(Math.hypot(record.x-piece.x,record.z-piece.z)>1e-6||piece.elevation!==(record.elevation??0)))
+      throw Error('경계 사격을 선언한 전장의 기물 위치가 올바르지 않습니다.');
   }
   game.rules = save.rules && typeof save.rules === 'object' ? structuredClone(save.rules) : null;
   game.rules = reconcilePatrolSight(game.rules,game.pieces);

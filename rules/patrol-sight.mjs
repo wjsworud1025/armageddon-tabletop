@@ -2,10 +2,12 @@ import {currentHP,groupId} from './battle.mjs';
 import {getProfile} from './profiles.mjs';
 import {measureFootprints} from '../ruler.mjs';
 import {createTable} from '../data/catalog.mjs';
+import {isOverwatchShooting,overwatchUnits} from './overwatch.mjs';
 
 const statuses=['visible','blocked','unknown'];
 const alive=(state,p)=>!!getProfile(p)&&currentHP(state,p)>0;
-const editable=state=>state.status==='playing'&&state.step===2&&!state.declaration?.locked&&
+const overwatchSight=s=>s.step===1&&(s.overwatch?.stage==='offer'||isOverwatchShooting(s));
+const editable=state=>state.status==='playing'&&(state.step===2||overwatchSight(state))&&!state.declaration?.locked&&
   !state.hazard&&!state.shootingReaction&&!state.reactionPlan&&!state.units?.wartrakk?.suppressionTargets?.length;
 
 // The same saved angle may be normalised by the table loader on each restore.
@@ -23,7 +25,7 @@ export function sightBoardMatches(state,pieces,board){
 
 function current(state,pieces){
   const sight=state.shootingSight;
-  return sight&&state.step===2&&state.status==='playing'&&sight.round===state.round&&sight.active===state.active&&
+  return sight&&(state.step===2||overwatchSight(state))&&state.status==='playing'&&sight.round===state.round&&sight.active===state.active&&
     sightBoardMatches(state,pieces,sight.board);
 }
 
@@ -49,9 +51,11 @@ export function forgetPatrolSightUnit(state,pieces,unit){
 export function canSetPatrolSight(state,pieces,shooterId,targetId){
   if(!state||!editable(state))return false;
   const actor=pieces.find(p=>p.id===shooterId),target=pieces.find(p=>p.id===targetId);
-  if(!alive(state,actor)||!alive(state,target)||actor.faction!==state.active||target.faction===actor.faction)return false;
+  if(!alive(state,actor)||!alive(state,target)||target.faction===actor.faction)return false;
   const unit=groupId(state,actor);
-  return state.units?.[unit]?.finishedAttack!==2&&(!state.declaration||state.declaration.unit===unit);
+  if(overwatchSight(state))return actor.faction===state.overwatch.team&&(isOverwatchShooting(state)?
+    state.overwatch.unit===unit:overwatchUnits(state,pieces).includes(unit));
+  return actor.faction===state.active&&state.units?.[unit]?.finishedAttack!==2&&(!state.declaration||state.declaration.unit===unit);
 }
 
 export function patrolSightStatus(state,pieces,shooterId,targetId){
@@ -79,8 +83,11 @@ export function setPatrolSight(state,pieces,shooterId,targetId,status){
 export function patrolSightTarget(state,pieces,shooterId,targetIds,range,distance){
   const actor=pieces.find(p=>p.id===shooterId);
   const empty={distance:Infinity,visible:[]};
-  if(!Number.isFinite(range)||range<=0||!alive(state,actor)||!current(state,pieces)||
-    actor.faction!==state.active||state.units?.[groupId(state,actor)]?.finishedAttack===2)return empty;
+  if(!Number.isFinite(range)||range<=0||!alive(state,actor)||!current(state,pieces))return empty;
+  const unit=groupId(state,actor);
+  if(overwatchSight(state)){
+    if(actor.faction!==state.overwatch.team||state.overwatch.unit&&unit!==state.overwatch.unit)return empty;
+  }else if(actor.faction!==state.active||state.units?.[unit]?.finishedAttack===2)return empty;
   const targets=pieces.filter(p=>targetIds.includes(p.id)&&p.faction!==actor.faction&&alive(state,p));
   if(!targets.length||targets.some(p=>groupId(state,p)!==groupId(state,targets[0])))return empty;
   const measured=Math.min(...targets.map(t=>distance?distance(actor.id,t.id):measureFootprints(actor,t).distance));

@@ -34,6 +34,7 @@ export function attachForDeployment(game,leader,bodyguard){
 
 export function beginReinforcement(game,unit,mode='edge'){
   const rules=game.rules;
+  if(rules.overwatch)throw Error('경계 사격 순서에 들어가 이번 단계의 증원 배치가 끝났습니다.');
   if(rules.reinforcePlan||rules.movePlan||rules.hazard)throw Error('진행 중인 분대 판정을 먼저 마치세요.');
   const options=reinforcementOptions(game,unit);
   check(options);

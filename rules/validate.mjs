@@ -9,6 +9,8 @@ import {createTable} from '../data/catalog.mjs';
 import {sightBoardMatches,sightHP} from './patrol-sight.mjs';
 import {plungingFireAtDeclaration} from './declarations.mjs';
 import {patrolAreaCover} from './patrol-area-cover.mjs';
+import {overwatchUnits,overwatchUnitReady,overwatchTargetEligible} from './overwatch.mjs';
+import {weaponSlot} from './battle.mjs';
 
 const boolean = value => typeof value === 'boolean';
 const string = value => typeof value === 'string';
@@ -63,7 +65,7 @@ const attackRecord=fields({kind:oneOf(['attacks','hit','wound','save','damage','
   raw:diceArray,closed:oneOf([true]),choice:nullable(model),
   change:fields({index:int(0,39999),value:int(1,6)},['index','value'])},['kind']);
 const attackRoll=fields({index:int(0,275),preferred:model,records:list(attackRecord,500)},['index','preferred','records']);
-const declaration=fields({unit:group,locked:boolean,didShoot:boolean,didFight:boolean,focus:nullable(group),rows:list(validRow,276),precisionRoll,attackRoll,
+const declaration=fields({unit:group,mode:oneOf(['overwatch']),locked:boolean,didShoot:boolean,didFight:boolean,focus:nullable(group),rows:list(validRow,276),precisionRoll,attackRoll,
   coverBoard:v=>sightBoard(v)&&Object.keys(v).length===catalog.size},['unit','locked','focus','rows']);
 const characterId=oneOf(['captain-1','librarian-1','warboss-1','weirdboy-1']);
 const unit = fields({
@@ -72,7 +74,7 @@ const unit = fields({
   counterCharge:boolean,reaction:boolean,reactionTracked:boolean,fightsFirst:boolean,shotAt:boolean,suppressedEnemy:boolean,hitTargets:list(group,12),suppressionTargets:list(group,12)
 });
 const doctrine=oneOf(Object.keys(doctrines)),tactic=oneOf(Object.keys(tactics));
-const coreKeys=['marines','orks'].flatMap(team=>['insaneBravery-'+team,'epicChallenge-'+team,'commandReroll-'+team]);
+const coreKeys=['marines','orks'].flatMap(team=>['insaneBravery-'+team,'epicChallenge-'+team,'commandReroll-'+team,'overwatch-'+team]);
 const tacticKey=oneOf([...Object.keys(tactics),'heroicIntervention','counteroffensive',...coreKeys]);
 const patrol=fields({
   doctrine:nullable(doctrine),usedDoctrines:list(doctrine,3),waaagh:int(0,2),waaaghUsed:boolean,
@@ -99,6 +101,7 @@ const battle=fields({
   round:int(1,20),rounds:int(1,20),step:int(0,5),cp:totals,vp:totals,hp,
   units:map(group,unit),attachments:map(model,group),objectives:map(identifier,objective),hazard:nullable(hazard),declaration:nullable(declaration),movePlan:nullable(movePlan),chargePlan:nullable(chargePlan),chargeWindow:boolean,
   fightSequence:validFightSequence,fightPlan:nullable(fightPlan),shootingSight,
+  overwatch:fields({stage:oneOf(['offer','shoot','done']),team,unit:nullable(group)},['stage','team','unit']),
   shootingReaction:nullable(reactionWindow),reactionPlan:nullable(fields(reactionFields,Object.keys(reactionFields))),
   reinforcePlan:nullable(fields({unit:group,mode:oneOf(['edge','deep-strike']),origins:map(model,pose)},['unit','mode','origins'])),
   reserves:map(group,list(model,46)),patrol,notes:string,mission:string,last:string,
@@ -159,17 +162,51 @@ export function validateRulesState(value,pieceRecords=null,layout=undefined) {
   if (fields({hp},['hp'])(value)) return true;
   if(pieceRecords&&(!Array.isArray(pieceRecords)||pieceRecords.some(p=>!p||!catalog.has(p.id))))return false;
   if(!battle(value) || value.round>value.rounds||!officialStateOK(value,pieceRecords))return false;
+  const window=value.overwatch,shootingOverwatch=window?.stage==='shoot';
+  const ranged=value.step===2||shootingOverwatch,shootingTeam=window?.team??value.active;
+  const savedPieces=()=>pieceRecords.map(({id,x,z,elevation,yaw,removed})=>patrolTerrainPiece(
+    {...catalog.get(id),x,z,elevation,yaw,removed:!!removed},value.officialSetup?.version));
+  if((value.declaration?.mode==='overwatch')!==!!(shootingOverwatch&&value.declaration))return false;
+  if(window){
+    if(value.status!=='playing'||value.step!==1||window.team===value.active||!value.cp||!value.patrol?.spent||!value.patrol.tactics||
+      !value.hp||!value.attachments||!value.units||value.movePlan||value.reinforcePlan||value.chargePlan||value.fightPlan||
+      value.fightSequence||value.reactionPlan||value.shootingReaction||value.units.wartrakk?.suppressionTargets?.length)return false;
+    const key='overwatch-'+window.team,stamp=[value.round,value.active,1].join('-');
+    if(window.unit===null){
+      if(shootingOverwatch||value.patrol.spent?.[key]===stamp||value.hazard||value.declaration||
+        window.stage==='done'&&value.shootingSight)return false;
+      if(window.stage==='offer'&&(value.cp[window.team]<1||
+        pieceRecords&&!overwatchUnits(value,savedPieces()).length))return false;
+    }else{
+      if(window.stage==='offer'||groupTeam(window.unit)!==window.team||value.patrol.spent?.[key]!==stamp||
+        value.patrol.tactics?.[key]!==stamp+'/'+window.unit||value.units[window.unit]?.shocked||
+        Object.entries(value.patrol.tactics).some(([other,target])=>other!==key&&target===stamp+'/'+window.unit))return false;
+      if(value.declaration&&(!shootingOverwatch||value.declaration.unit!==window.unit)||
+        value.hazard&&(window.stage!=='done'||value.hazard.unit!==window.unit||value.hazard.reason))return false;
+      if(shootingOverwatch&&pieceRecords&&!overwatchUnitReady(value,savedPieces(),window.unit))return false;
+      if(value.hazard){
+        const sources=[...models].filter(([id,p])=>(value.attachments[id]||unitId(p))===window.unit&&
+          getProfile(p).weapons.some(w=>w.range>0&&w.hazardous));
+        if(value.hazard.count>sources.length)return false;
+      }
+    }
+  }
   if(value.hazard?.commandDice&&!canCommandReroll(value,value.hazard.unit,groupTeam(value.hazard.unit)))return false;
   const modelGroup=id=>value.attachments?.[id]||unitId(models.get(id));
   if(value.shootingSight){
     const s=value.shootingSight,rows=Object.entries(s.pairs);
-    if(value.status!=='playing'||value.step!==2||value.round!==s.round||value.active!==s.active||
+    if(value.status!=='playing'||!ranged&&window?.stage!=='offer'||value.round!==s.round||value.active!==s.active||
       Object.keys(s.board).length!==catalog.size||!rows.length||
       Object.entries(s.board).some(([id,p])=>p[5]!==sightHP(value,id))||
       pieceRecords&&!sightBoardMatches(value,pieceRecords,s.board))return false;
     const live=id=>!s.board[id][4]&&s.board[id][5]!==0;
-    if(rows.some(([id,targets])=>!live(id)||faction(id)!==s.active||value.units?.[modelGroup(id)]?.finishedAttack===2||!Object.keys(targets).length||
-      Object.keys(targets).some(target=>!live(target)||faction(target)===s.active)))return false;
+    if(pieceRecords&&window?.stage==='offer'){
+      const eligible=overwatchUnits(value,savedPieces());
+      if(rows.some(([id])=>!eligible.includes(modelGroup(id))))return false;
+    }
+    if(rows.some(([id,targets])=>!live(id)||faction(id)!==shootingTeam||
+      (window?shootingOverwatch&&modelGroup(id)!==window.unit:value.units?.[modelGroup(id)]?.finishedAttack===2)||!Object.keys(targets).length||
+      Object.keys(targets).some(target=>!live(target)||faction(target)===shootingTeam)))return false;
   }
   const stamp=value.patrol?.spent?.counteroffensive,target=value.patrol?.tactics?.counteroffensive;
   if(stamp!==undefined||target!==undefined){
@@ -193,6 +230,12 @@ export function validateRulesState(value,pieceRecords=null,layout=undefined) {
       !int(1,value.round)(Number(round))||String(Number(round))!==round||!['marines','orks'].includes(active)||
       stamp!==[round,active,step].join('-')||!['0','1','2','3','4','5'].includes(step)||
       (ability==='insaneBravery'&&(active!==team||step!=='0'))||(ability==='epicChallenge'&&step!=='4'))return false;
+    if(ability==='overwatch'){
+      if(value.status==='setup'||active===team||step!=='1')return false;
+      if(Number(round)===value.round&&(active===value.active
+        ?value.step<1||value.step===1&&window?.unit!==unit
+        :value.active===value.first))return false;
+    }
   }
   for(const [unit,flags] of Object.entries(value.units??{})){
     const id=flags.epicChallengeModel;
@@ -257,10 +300,29 @@ export function validateRulesState(value,pieceRecords=null,layout=undefined) {
   }
   if(value.hazard?.reason==='escape')return false;
   if(!value.hazard && !value.declaration)return true;
-  if(value.status!=='playing'||!attackStep(value.step))return false;
+  if(value.status!=='playing'||!attackStep(value.step)&&!window)return false;
   const plan=value.declaration;
   if(!plan)return true;
-  if(plan.coverBoard&&value.step!==2)return false;
+  if(shootingOverwatch){
+    const selections=new Map();
+    for(const r of plan.rows){
+      const actor=models.get(r.actor),weapon=getProfile(actor).weapons[r.weapon];
+      if(!weapon?.range||r.target!==plan.rows[0].target||r.plunging||r.distance>weapon.range+1e-7)return false;
+      const weapons=selections.get(r.actor)??[],slot=weaponSlot(weapon);
+      if(weapons.some(w=>weaponSlot(w)===slot||actor.kind!=='landSpeeder'&&!!w.pistol!==!!weapon.pistol))return false;
+      weapons.push(weapon);selections.set(r.actor,weapons);
+    }
+    if(pieceRecords&&!plan.rows.some(r=>r.done)){
+      const pieces=savedPieces(),byId=new Map(pieces.map(p=>[p.id,p]));
+      if(plan.rows.some(r=>{
+        const actor=byId.get(r.actor),target=byId.get(r.preferred);
+        return !overwatchTargetEligible(value,pieces,actor,target,getProfile(actor)?.weapons[r.weapon]);
+      }))return false;
+      if(plan.locked&&plan.rows.some(r=>!Object.entries(value.shootingSight?.pairs[r.actor]??{})
+        .some(([id,status])=>status==='visible'&&modelGroup(id)===r.target)))return false;
+    }
+  }
+  if(plan.coverBoard&&!ranged)return false;
   if(plan.didFight!==undefined&&value.step!==4)return false;
   if(value.hazard||!plan.rows.length||!plan.rows.some(r=>!r.done)||(!plan.locked&&plan.rows.some(r=>r.done)))return false;
   if(plan.focus && (!plan.locked||!plan.rows.some(r=>r.target===plan.focus&&!r.done)))return false;
@@ -286,12 +348,10 @@ export function validateRulesState(value,pieceRecords=null,layout=undefined) {
     }
     return weapon && (r.plunging?weapon.range>0&&!weapon.torrent&&visible?.length&&
       new Set(visible).size===visible.length&&visible.every(id=>modelGroup(id)===r.target):visible===undefined) &&
-      !!weapon.range===(value.step===2) && modelGroup(r.actor)===plan.unit && modelGroup(r.preferred)===r.target &&
-      faction(r.actor)!==faction(r.preferred) && (value.step!==2 || faction(r.actor)===value.active) &&
+      !!weapon.range===ranged && modelGroup(r.actor)===plan.unit && modelGroup(r.preferred)===r.target &&
+      faction(r.actor)!==faction(r.preferred) && (!ranged || faction(r.actor)===shootingTeam) &&
       (weapon.range?r.assigned===0:r.assigned>=1&&r.assigned<=weapon.attacks+r.extra);
   }))return false;
-  const savedPieces=()=>pieceRecords.map(({id,x,z,elevation,yaw,removed})=>patrolTerrainPiece(
-    {...catalog.get(id),x,z,elevation,yaw,removed:!!removed},value.officialSetup?.version));
   // An intact sight record refers to this exact board. Once casualties or
   // movement invalidate it, original row qualifiers remain historical.
   if(pieceRecords&&plan.locked&&value.shootingSight&&plan.rows.some(r=>r.manualCover)&&
@@ -323,7 +383,7 @@ export function validateRulesState(value,pieceRecords=null,layout=undefined) {
       if(r.change){
         const team=groupTeam(r.kind==='save'?plan.focus:plan.unit);
         const unit=r.kind==='save'?plan.focus:plan.unit;
-        if(last||r.change.index>=r.raw.length||changes.has(team)||
+        if(last||shootingOverwatch&&r.kind==='hit'||r.change.index>=r.raw.length||changes.has(team)||
           value.patrol?.tactics?.['commandReroll-'+team]!==[value.round,value.active,value.step].join('-')+'/'+unit)return false;
         changes.add(team);
       }

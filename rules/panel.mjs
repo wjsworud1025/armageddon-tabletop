@@ -25,6 +25,7 @@ import {officialPreparing,remainingPatrolUnits,patrolPlacementError} from './off
 import {patrolSetupView} from './patrol-setup.mjs';
 import {patrolFormationPanel} from './patrol-formations-ui.mjs';
 import {patrolTerrainLevels} from './patrol-terrain-placement.mjs';
+import {overwatchUnits,beginOverwatch,declineOverwatch,overwatchTargetEligible} from './overwatch.mjs';
 
 const sourcePatrol='https://www.warhammer-community.com/en-gb/articles/2akzkx92/combat-patrol-is-now-live-in-your-app/';
 const sourceCore='https://assets.warhammer-community.com/eng_01-06_warhammer40k_new40k_core_rules-was6fbu1ix-hfewhmxyiy.pdf';
@@ -49,9 +50,11 @@ const unitLabel=(p)=>p.kind==='boy' ? '보이즈 '+(Math.floor(p.variant/10)+1)+
 const pieceLabel=p=>p.name+' · '+p.id;
 const chunk=(title,body)=>'<section class="br-card"><h3>'+title+'</h3>'+body+'</section>';
 const sightLabels={unknown:'미확인',visible:'보임',blocked:'가림'};
-function shootingSkillLabel(weapon,skill,plunging,cover){
+const snapWindow=state=>state.overwatch?.stage==='offer'||state.overwatch?.stage==='shoot';
+function shootingSkillLabel(weapon,skill,plunging,cover,snap=false){
   if(!weapon.range)return '';
   if(weapon.torrent)return '자동 명중';
+  if(snap)return '수정 전 6만 명중'+(cover?' · 표적 엄폐':'');
   return 'BS '+skill+'+'+(plunging?' · 고지 사격':'')+(cover?' · 표적 엄폐':'');
 }
 
@@ -116,7 +119,8 @@ export function mountRules(container,api) {
     const options=getProfile(actor).weapons.map((w,i)=>({w:effectWeapon(state,actor,w,groupId(state,actor)),i})).filter(({w})=>state.step===4 ? w.range===0 : w.range>0);
     const selected=options.find(({i})=>i===Number(choices.weapon)) || options[0];
     if (selected) choices.weapon=String(selected.i);
-    const candidates=living(state).filter(p=>p.faction!==actor.faction);
+    const targetUnit=snapWindow(state)?state.declaration?.rows[0]?.target:null;
+    const candidates=living(state).filter(p=>p.faction!==actor.faction&&(!targetUnit||groupId(state,p)===targetUnit));
     if (!candidates.some(p=>p.id===choices.target)) {
       const nearest=candidates.sort((a,b)=>api.getDistance(actor.id,a.id)-api.getDistance(actor.id,b.id))[0];
       choices.target=nearest?.id||'';
@@ -124,7 +128,7 @@ export function mountRules(container,api) {
     const target=getPiece(choices.target);
     if(coverObservation&&(coverObservation.game!==api.getTable()||!target||
       coverObservation.target!==groupId(state,target)||coverObservation.unit!==groupId(state,actor)||
-      coverObservation.round!==state.round||coverObservation.active!==state.active||state.step!==2||
+      coverObservation.round!==state.round||coverObservation.active!==state.active||coverObservation.step!==state.step||
       !sightBoardMatches(state,api.getPieces(),coverObservation.board)))coverObservation=null;
     const members=target ? unitMembers(state,candidates,target) : [];
     const dist=members.length ? Math.min(...members.map(p=>api.getDistance(actor.id,p.id))) : Infinity;
@@ -136,14 +140,17 @@ export function mountRules(container,api) {
     const order=findKey(state,actor);
     if(!targets.length)return '선택할 표적이 없습니다';
     const idx=getProfile(actor).weapons.findIndex(w=>w.name===weapon.name);
-    const draft=draftRestriction(state,contents(),actor,idx,groupId(state,targets[0]));
+    const snap=snapWindow(state);
+    const draft=state.overwatch?.stage==='offer'?'':draftRestriction(state,contents(),actor,idx,groupId(state,targets[0]));
     if(draft)return draft;
-    if (order.finishedAttack===state.step) return '이번 페이즈의 분대 공격을 마쳤습니다';
+    if (!snap&&order.finishedAttack===state.step) return '이번 페이즈의 분대 공격을 마쳤습니다';
     const inContact=(a,b)=>engaged(a,b,api.getDistance(a.id,b.id));
     if (!weapon.range) return targets.some(t=>inContact(actor,t))?'':'교전 거리 밖';
     if (dist>weapon.range+1e-7) return '사거리 밖';
+    if(snap&&!overwatchTargetEligible(state,api.getPieces(),actor,targets[0],weapon))return '교전하지 않은 24″ 이내 적 분대를 선택하세요';
     if (!(visible??visibleInRange(state,api.getPieces(),actor.id,targets.map(t=>t.id),weapon.range,api.getDistance)).length)
       return '이 사수에게 보이는 표적 모델을 기록하세요';
+    if(snap)return '';
     if (order.movement==='fallback' && !inDoctrine(state,actor,'tactical')) return '후퇴한 분대';
     if (order.movement==='advance' && !weapon.assault && !inDoctrine(state,actor,'devastator') && !hasWaaagh(state,actor)) return '전력 이동 후 사용 불가';
     const current=living(state),own=unitMembers(state,current,actor);
@@ -165,10 +172,10 @@ export function mountRules(container,api) {
       .some(w=>JSON.stringify(effectWeapon(state,p,w,groupId(state,p)))===signature)).map(p=>{
       const distance=Math.min(...targets.map(t=>api.getDistance(p.id,t.id)));
       const visible=weapon.range?visibleInRange(state,pieces,p.id,targetIds,weapon.range,api.getDistance):[];
-      const plunging=plungingFireAtDeclaration(state,pieces,p,weapon,targets,visible.length>0);
+      const plunging=!snapWindow(state)&&plungingFireAtDeclaration(state,pieces,p,weapon,targets,visible.length>0);
       const manualCover=!!coverObservation?.shooters.has(p.id);
       const cover=!!weapon.range&&(areaCover.automatic||manualCover);
-      const skill=attackSkill(weapon,{cover,plunging,ignorePenalties});
+      const skill=snapWindow(state)?(weapon.torrent?0:6):attackSkill(weapon,{cover,plunging,ignorePenalties});
       return {p,distance,visible,skill,plunging,cover,manualCover,problem:attackRestriction(state,p,weapon,targets,distance,visible)};
     });
   }
@@ -185,7 +192,7 @@ export function mountRules(container,api) {
       const witness=status!=='visible'&&visible.length?' · '+getPiece(visible[0]).name+' 보임':'';
       return '<div class="br-sight-pair" data-sight-row="'+esc(p.id)+'"><strong>'+esc(p.name)+'</strong>'+view+
         '<p class="br-sub">분대까지 '+distance.toFixed(1)+'″ · <span data-ballistic-skill="'+(weapon.torrent?'':skill)+'">'+
-        shootingSkillLabel(weapon,skill,plunging,cover)+'</span> · '+esc((problem||'선언 가능')+witness)+'</p>'+
+        shootingSkillLabel(weapon,skill,plunging,cover,snapWindow(state))+'</span> · '+esc((problem||'선언 가능')+witness)+'</p>'+
         '<div class="br-row" role="group" aria-label="'+esc(p.name+' → '+target.name+' 시야')+'">'+choices+'</div>'+
         '<label><input type="checkbox" data-field="'+(i?'other-cover':'cover')+'" data-cover-shooter="'+esc(p.id)+'"'+
         (cover?' checked':'')+(areaCover.automatic?' disabled':'')+'>'+
@@ -217,13 +224,16 @@ export function mountRules(container,api) {
     const matching=weapon.range||!blocked?shooters.filter(s=>!s.problem):[];
     const allocated=(state.declaration?.rows||[]).filter(r=>r.actor===actor.id).reduce((n,r)=>n+r.assigned,0);
     const availableAttacks=weapon.range?0:Math.max(1,weapon.attacks+Number(choices.extra)-allocated);
-    return chunk('무기 공격',select('weapon','선택한 모델의 무기',options.map(({w,i})=>opt(String(i),w.name,choices.weapon)).join(''))+
+    const preview=state.overwatch?.stage==='offer';
+    const controls=select('weapon','선택한 모델의 무기',options.map(({w,i})=>opt(String(i),w.name,choices.weapon)).join(''))+
       select('target','공격할 분대의 모델',candidates.map(p=>opt(p.id,pieceLabel(p),choices.target)).join(''))+
       '<p class="br-sub">분대까지 최단 거리 '+dist.toFixed(1)+'″ · 사거리 '+range+' · A '+weapon.attacks+' · S '+weapon.strength+
       ' · AP '+weapon.ap+' · D '+weapon.damage+'</p>'+
-      (weapon.range?coverStatus(areaCover)+renderShooterSight(state,shooters,target,weapon,areaCover):'')+
-      detail('mods','무기 및 분대 보정',row(number('hitMod','명중 보정',-1,1,choices.hitMod)+number('woundMod','상처 보정',-1,1,choices.woundMod)+number('extra','추가 공격',0,30,choices.extra))+
-        '<label><input type="checkbox" data-field="lethal"'+(choices.lethal?' checked':'')+'>치명적 명중 (Lethal Hits)</label>')+
+      (weapon.range?coverStatus(areaCover)+renderShooterSight(state,shooters,target,weapon,areaCover):'');
+    if(preview)return chunk('사수와 표적 확인',controls);
+    const modifiers=snapWindow(state)?'':detail('mods','무기 및 분대 보정',row(number('hitMod','명중 보정',-1,1,choices.hitMod)+number('woundMod','상처 보정',-1,1,choices.woundMod)+number('extra','추가 공격',0,30,choices.extra))+
+      '<label><input type="checkbox" data-field="lethal"'+(choices.lethal?' checked':'')+'>치명적 명중 (Lethal Hits)</label>');
+    return chunk('무기 공격',controls+modifiers+
       (!weapon.range?number('allocation','이 표적에 배정할 근접 공격',1,availableAttacks,choices.allocation||availableAttacks):'')+
       row(btn('attack',blocked || (weapon.range?'이 사수의 무기 선언':'이 근접 무기 선언'),Boolean(blocked))+
         (weapon.range&&shooters.length>1?btn('volley','사격 가능한 '+matching.length+'명 일제사격 선언',!matching.length):
@@ -280,8 +290,11 @@ export function mountRules(container,api) {
           btn('packet-select','배정 확정');
       }
       const r=plan.rows[event.packet.index],w=getProfile(getPiece(r.actor)).weapons[r.weapon];
-      const skillLabel=shootingSkillLabel(w,event.packet.skill,event.packet.plunging,event.packet.cover);
-      return chunk(header,'<p>'+who+(skillLabel?' · '+skillLabel:'')+'</p>'+body+(state.last?'<p class="br-latest">'+esc(state.last)+'</p>':''));
+      const skillLabel=shootingSkillLabel(w,event.packet.skill,event.packet.plunging,event.packet.cover,plan.mode==='overwatch');
+      const snapHits=plan.mode==='overwatch'&&plan.attackRoll.records.find(e=>e.kind==='hit'&&e.closed)?.raw;
+      const hitHistory=snapHits?'<p class="br-sub" data-overwatch-hit>경계 사격 명중 ['+diceText(snapHits)+'] → '+
+        snapHits.filter(d=>d===6).length+'명중</p>':'';
+      return chunk(header,'<p>'+who+(skillLabel?' · '+skillLabel:'')+'</p>'+hitHistory+body+(state.last?'<p class="br-latest">'+esc(state.last)+'</p>':''));
     }
     const groups=attackPackets(state,api.getPieces());
     const rolled=plan.precisionRoll;
@@ -297,7 +310,7 @@ export function mountRules(container,api) {
       groups.map(p=>{
         const r=plan.rows[p.index],defenders=living(state).filter(t=>groupId(state,t)===p.target);
         const w=getProfile(getPiece(r.actor)).weapons[r.weapon];
-        const skillLabel=shootingSkillLabel(w,p.skill,p.plunging,p.cover);
+        const skillLabel=shootingSkillLabel(w,p.skill,p.plunging,p.cover,plan.mode==='overwatch');
         const label=unitLabel(getPiece(r.preferred))+' · '+[...p.names].join(' / ')+' × '+p.indices.length+(skillLabel?' · '+skillLabel:'');
         const pref=defenders.some(t=>t.id===choices['allocate-'+p.index])?choices['allocate-'+p.index]:r.preferred;
         let precision='';
@@ -446,7 +459,11 @@ export function mountRules(container,api) {
     const selected=api.getSelection();
     if ((selected?.id||'')!==selectedId) {
       selectedId=selected?.id||'';
-      if (selected && getProfile(selected)) choices.fighter=selected.id;
+      if (selected && getProfile(selected)){
+        choices.fighter=selected.id;
+        if(state.overwatch?.stage==='offer'&&selected.faction===state.overwatch.team)
+          choices['overwatch-unit']=groupId(state,selected);
+      }
     }
     let actor=getPiece(choices.fighter);
     if (!getProfile(actor)) actor=null;
@@ -476,9 +493,13 @@ export function mountRules(container,api) {
       const winner=controlObjective(state.vp.marines,state.vp.orks);
       top=chunk('대전 종료','<b class="br-phase">'+(winner?teams[winner]+' 승리':'무승부')+'</b><p>'+state.vp.marines+' 대 '+state.vp.orks+'</p>');
     } else {
+      const endingMove=state.step===1&&!state.overwatch;
+      const reaction=state.overwatch;
+      const nextLabel=endingMove?'이동 단계 종료 · 경계 사격 확인':state.step<5?'다음 · '+steps[state.step+1]:(state.active!==state.first && state.round===state.rounds?'대전 마치기':'다음 플레이어');
       top=chunk(esc(state.mission || (state.rounds===5 ? patrolMissions[state.active] : '로컬 대전'))+' · '+state.round+'/'+state.rounds+' 라운드',
-        '<b class="br-phase">'+teams[state.active]+' · '+steps[state.step]+'</b><p>'+prompts[state.step]+'</p>'+
-        btn('next',state.step<5?'다음 · '+steps[state.step+1]:(state.active!==state.first && state.round===state.rounds?'대전 마치기':'다음 플레이어'),!!(state.hazard||state.declaration||state.movePlan||state.reinforcePlan||state.chargePlan||state.shootingReaction||state.reactionPlan||state.units.wartrakk?.suppressionTargets?.length||dispersed.length||fightView&&!fightView.done)));
+        '<b class="br-phase">'+teams[state.active]+' · '+steps[state.step]+(reaction?' 종료':'')+'</b><p>'+
+        (reaction?(reaction.stage==='done'?'경계 사격 판정이 끝났습니다.':teams[reaction.team]+' 플레이어의 경계 사격 기회입니다.'):prompts[state.step])+'</p>'+
+        (snapWindow(state)?'':btn('next',nextLabel,!!(state.hazard||state.declaration||state.movePlan||state.reinforcePlan||state.chargePlan||state.shootingReaction||state.reactionPlan||state.units.wartrakk?.suppressionTargets?.length||dispersed.length||fightView&&!fightView.done))));
     }
     if(state.reinforcePlan){
       const deep=state.reinforcePlan.mode==='deep-strike';
@@ -575,6 +596,30 @@ export function mountRules(container,api) {
       root.innerHTML=renderDeclaration(state,all);
       return;
     }
+    if(state.overwatch){
+      const {team,stage}=state.overwatch,offer=stage==='offer';
+      const recent=(feedback||state.last)?'<p aria-live="polite" class="br-latest">'+esc(feedback||state.last)+'</p>':'';
+      if(stage==='done'||state.hazard){root.innerHTML=top+recent;return;}
+      const units=offer?overwatchUnits(state,api.getPieces()):[state.overwatch.unit];
+      const unit=units.includes(choices['overwatch-unit'])?choices['overwatch-unit']:units[0];
+      const live=living(state),members=live.filter(p=>groupId(state,p)===unit);
+      if(!members.some(p=>p.id===actor?.id))actor=members[0];
+      choices.fighter=actor?.id||'';
+      const unitName=key=>unitLabel(all.find(p=>groupId(state,p)===key));
+      let body='<p>'+esc(teams[team])+' · 남은 '+state.cp[team]+' CP'+(offer?'':' · 경계 사격 1 CP 지불')+'</p>'+
+        '<p>24″ 안의 보이는 적 한 분대에 사격합니다. 사수별 무기 사거리와 시야를 확인하세요. 수정 전 6은 일반 명중이며 토렌트 무기는 자동 명중합니다.</p>';
+      if(offer){
+        body+=select('overwatch-unit','경계 사격할 분대',units.map(k=>opt(k,unitName(k),unit)).join(''))+
+          row(btn('overwatch-begin','1 CP · 경계 사격 선언',!unit)+btn('overwatch-decline','경계 사격 포기 · 사격 단계로'));
+      }else if(unit){
+        body+='<p>'+esc(unitName(unit))+' · 생존 '+members.length+'명</p>'+
+          (!state.declaration?btn('overwatch-decline','사격 없이 마침 · 1 CP 소비'): '');
+      }
+      if(actor&&!state.declaration?.locked)
+        body+=select('fighter','사수',members.map(p=>opt(p.id,pieceLabel(p),actor.id)).join(''));
+      root.innerHTML=top+chunk('경계 사격',body)+renderDeclaration(state,all)+(actor?renderAttack(state,actor):'')+recent;
+      return;
+    }
     root.innerHTML=top+army+renderDeclaration(state,all)+selector+(actor?renderActor(state,actor):'')+
       (state.status!=='setup'?renderObjectives(state):'')+
       chunk('주사위',row(number('rollCount','D6 개수',1,60,choices.rollCount)+btn('dice','굴리기')))+
@@ -653,9 +698,9 @@ export function mountRules(container,api) {
       return;
     }
     if(action==='inspect-sight'||action==='shot-sight'){
-      if(state.step!==2||state.status!=='playing'||!actor||state.declaration?.locked)return;
+      if((state.step!==2&&!snapWindow(state))||state.status!=='playing'||!actor||state.declaration?.locked)return;
       const {shooter,target,status}=button.dataset,from=getPiece(shooter),to=getPiece(target);
-      if(!from||!to||from.faction!==state.active||to.faction===from.faction||!currentHP(state,from)||!currentHP(state,to)||
+      if(!from||!to||!canSetPatrolSight(state,api.getPieces(),shooter,target)||
         groupId(state,from)!==groupId(state,actor)||target!==choices.target)return;
       if(action==='inspect-sight'){api.inspectSight?.(shooter,target);return;}
       if(!Object.hasOwn(sightLabels,status)||patrolSightStatus(state,api.getPieces(),shooter,target)===status)return;
@@ -670,6 +715,17 @@ export function mountRules(container,api) {
     if(state.hazard?.commandDice&&!['hazard-command','hazard-keep'].includes(action))return;
     const val=id=>field(id)?.value??choices[id];
     const integer=(id,min,max)=>Math.max(min,Math.min(max,Math.trunc(Number(val(id)))||0));
+    if(action==='overwatch-begin'){
+      const next=beginOverwatch(state,api.getPieces(),val('overwatch-unit'));
+      if(next)return commit(next,teams[next.overwatch.team]+' · 경계 사격 선언 · 1 CP');
+      feedback='현재 경계 사격을 선언할 수 있는 분대를 선택하세요.';return refresh();
+    }
+    if(action==='overwatch-decline'){
+      const next=declineOverwatch(state);
+      if(next)return commit(advance(next,api.getPieces()),
+        (state.overwatch.stage==='offer'?'경계 사격 포기':'경계 사격 종료 · 1 CP 소비')+' · '+teams[state.active]+' 사격 단계');
+      return;
+    }
     if(action==='command-reroll'||action==='command-keep'){
       if(!state.movePlan?.commandRerollOpen&&!state.chargePlan?.commandRerollOpen)return;
       if(action==='command-keep')return commit(acceptMovementRoll(state),'지휘 재굴림 생략 · 현재 결과 유지');
@@ -745,7 +801,8 @@ export function mountRules(container,api) {
         resolved={...resolved,reserves,hp};
         if(!expired.final)resolved=recordLosses(resolved,contents());
       }
-      const next=advance(resolved);
+      const next=advance(resolved,api.getPieces());
+      if(next.overwatch?.stage==='offer')return commit(next,teams[state.active]+' 이동 단계 종료 · '+teams[next.overwatch.team]+' 경계 사격 선택');
       return commit(next,(expired.ids.length?'미도착 예비대 '+expired.ids.length+'명 제거 · ':'')+(score?teams[state.active]+' 임무 +'+score+' VP · ':'')+(next.status==='finished'?'대전 종료':next.round+' 라운드 · '+teams[next.active]+' · '+steps[next.step]));
     }
     if(action.startsWith('coherency-')){
@@ -808,7 +865,7 @@ export function mountRules(container,api) {
         rows.push({...r,distance,size:targets.length,guard,vehiclePenalty});
       }
       const next=lockSightedDeclaration({...state,declaration:{...plan,rows}},api.getPieces(),eligible,api.getDistance,api.getTable().layout);
-      if(!next){feedback=state.step===2?'사수별 시야와 표적 분대까지의 사거리를 다시 확인하세요.':'교전 중인 각 모델의 근접 공격을 모두 배정하세요.';return refresh();}
+      if(!next){feedback=state.step===2||snapWindow(state)?'사수별 시야와 표적 분대까지의 사거리를 다시 확인하세요.':'교전 중인 각 모델의 근접 공격을 모두 배정하세요.';return refresh();}
       return commit(next,'분대 공격 선언 확정 · 무기·표적 배정 '+rows.length+'건');
     }
     if(action.startsWith('resolve-')||action.startsWith('staged-')||action.startsWith('packet-')){
@@ -972,11 +1029,12 @@ export function mountRules(container,api) {
       const blades=state.patrol.enhanced.blades && targets.some(t=>t.kind==='vanguard') && unit.charged && !selected.w.range;
       const withWarboss=!selected.w.range && members.some(p=>p.kind==='warboss' && currentHP(state,p)>0);
       const withLibrarian=!!selected.w.range && members.some(p=>p.kind==='librarian' && currentHP(state,p)>0);
+      const snap=snapWindow(state);
       const rows=shooters.map(({p,distance,manualCover})=>({actor:p.id,weapon:getProfile(p).weapons.findIndex(w=>w.name===selected.w.name),
         target:groupId(state,target),preferred:target.id,distance,size:targets.length,
         assigned:selected.w.range?0:integer('allocation',1,selected.w.attacks+integer('extra',0,30)),
-        hit:integer('hitMod',-1,1)-Number(state.patrol.suppressed===groupId(state,actor)),wound:integer('woundMod',-1,1)-Number(Boolean(blades)),
-        extra:integer('extra',0,30),cover:!!(selected.w.range&&manualCover),lethal:!!(choices.lethal || (withWarboss&&choices.bossStyle!=='sustained')),
+        hit:snap?0:integer('hitMod',-1,1)-Number(state.patrol.suppressed===groupId(state,actor)),wound:snap?0:integer('woundMod',-1,1)-Number(Boolean(blades)),
+        extra:snap?0:integer('extra',0,30),cover:!!(selected.w.range&&manualCover),lethal:!snap&&!!(choices.lethal || (withWarboss&&choices.bossStyle!=='sustained')),
         sustained:!!(withWarboss&&choices.bossStyle==='sustained'),ignore:withLibrarian,guard:false}));
       const next=appendSightedDeclaration(state,api.getPieces(),rows,api.getDistance,api.getTable().layout);
       if(!next){feedback='선언할 수 없는 배정입니다. 모델별 근접 공격 수와 이미 선택한 무기를 확인하세요.';return refresh();}
@@ -995,9 +1053,9 @@ export function mountRules(container,api) {
     const state=read();
     if(el.dataset.coverShooter){
       const actor=getPiece(choices.fighter),target=getPiece(choices.target);
-      if(el.disabled||!actor||!target||state.declaration?.locked||state.step!==2)return;
+      if(el.disabled||!actor||!target||state.declaration?.locked||(state.step!==2&&!snapWindow(state)))return;
       if(!coverObservation)coverObservation={game:api.getTable(),target:groupId(state,target),unit:groupId(state,actor),
-        round:state.round,active:state.active,board:captureSightBoard(state,api.getPieces()),shooters:new Set()};
+        round:state.round,active:state.active,step:state.step,board:captureSightBoard(state,api.getPieces()),shooters:new Set()};
       if(el.checked)coverObservation.shooters.add(el.dataset.coverShooter);
       else coverObservation.shooters.delete(el.dataset.coverShooter);
       return refresh();
@@ -1024,6 +1082,12 @@ export function mountRules(container,api) {
       }catch(error){feedback=error.message;return refresh()}
     }
     choices[key]=el.type==='checkbox'?el.checked:el.value;
+    if(key==='overwatch-unit'){
+      const p=living(state).find(p=>groupId(state,p)===el.value);
+      choices.fighter=p?.id||'';choices.weapon='0';coverObservation=null;
+      if(p)api.selectPiece(p.id);
+      return refresh();
+    }
     if (key==='fighter') {
       if (choices.fighter) api.selectPiece(choices.fighter);
       choices.weapon='0'; choices.extra='0'; choices.hitMod='0'; choices.woundMod='0'; choices.lethal=false;

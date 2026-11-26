@@ -132,7 +132,7 @@ function selection(){
   const inReserve=Object.values(game.rules?.reserves??{}).some(ids=>ids.includes(p.id));
   $('elevation').value=p.elevation||0;
   showFloorLevels(p);
-  $('remove').disabled=inReserve||!!(game.rules?.reinforcePlan||game.rules?.shootingReaction||game.rules?.reactionPlan||pendingAttack());
+  $('remove').disabled=inReserve||!!(game.rules?.overwatch||game.rules?.reinforcePlan||game.rules?.shootingReaction||game.rules?.reactionPlan||pendingAttack());
   $('remove').textContent=inReserve?(p.removed?'예비대 대기 중':'예비대 배치 중'):p.removed?'전장 복귀':'전장에서 제거';
   $('focus').disabled=!!p.removed;
 }
@@ -192,6 +192,7 @@ function setMode(value){mode=value;scene?.setMode(mode);
 function movingByRules(p){
   const r=game.rules;
   if(r?.status!=='playing')return false;
+  if(r.overwatch)return true;
   if(r.step===4)return true;
   const unit=r.units?.[groupId(r,p)];
   if(r.step===2){
@@ -208,6 +209,7 @@ function movingByRules(p){
   return true;
 }
 function proposeTableMotion(p,paths){
+  if(game.rules.overwatch)throw Error('이동 단계가 끝났습니다. 경계 사격을 결정한 뒤 사격 단계로 진행하세요.');
   if(game.rules.step===2){
     if(game.rules.reactionPlan)return proposeShootingReaction(game,p,paths);
     throw Error('사격 페이즈에는 반응 이동을 선택한 분대만 옮길 수 있습니다.');
@@ -241,6 +243,7 @@ function rotate(){
 function pendingAttack(){return game.rules?.declaration?.attackRoll||game.rules?.declaration?.precisionRoll}
 function remove(id,removed){const p=piece(id);
   if(game.training||officialPreparing(game.rules))return;
+  if(game.rules?.overwatch){toast('경계 사격 중에는 공격 판정에서 사상자를 처리하세요.');return}
   if(pendingAttack()){toast('진행 중인 공격의 피해 배정을 먼저 마치세요.');return}
   if(game.rules?.shootingReaction||game.rules?.reactionPlan){toast('현재 사격 반응을 먼저 마치세요.');return}
   if(game.rules?.reinforcePlan || p&&game.rules?.reserves?.[groupId(game.rules,p)]?.includes(id)){

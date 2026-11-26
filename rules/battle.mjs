@@ -1,5 +1,6 @@
 import {getProfile, unitId} from './profiles.mjs';
 import {freshPatrol,nextPatrolTurn,effectProfile,hasWaaagh} from './patrol.mjs';
+import {openOverwatch} from './overwatch.mjs';
 
 export const teams = {marines:'스페이스 마린',orks:'오크'};
 export const steps = ['지휘','이동','사격','돌격','근접전','턴 종료'];
@@ -14,11 +15,17 @@ export function startBattle(state,first,rounds) {
   if (state.status !== 'setup' || !(first in teams) || !Number.isInteger(rounds) || rounds < 1 || rounds > 20) return state;
   return {...state,status:'playing',first,active:first,rounds,cp:{marines:1,orks:1}};
 }
-export function advance(state) {
+export function advance(state,pieces) {
   if (state.status !== 'playing' || state.hazard || state.declaration || state.movePlan || state.reinforcePlan || state.chargePlan || state.fightPlan || state.fightSequence?.counterAfter || state.shootingReaction || state.reactionPlan || state.units?.wartrakk?.suppressionTargets?.length) return state;
+  if(state.overwatch&&state.overwatch.stage!=='done')return state;
+  if(state.step===1&&pieces&&!state.overwatch){
+    const offer=openOverwatch(state,pieces);
+    if(offer)return offer;
+  }
   if (state.step < steps.length - 1) {
     const next={...state,step:state.step+1,...(state.step===3?{chargeWindow:false}:state.step===4?{fightSequence:null}:{})};
     delete next.shootingSight;
+    delete next.overwatch;
     return next;
   }
   const next = opposite(state.active);
@@ -100,7 +107,8 @@ export const character = p=>['captain','librarian','weirdboy','warboss'].include
 // One test per selected weapon, including weapons that scored no hits.
 export function queueHazard(state,piece,copies) {
   const unit=groupId(state,piece),pending=state.hazard;
-  if (state.status!=='playing' || ![2,4].includes(state.step) || state.units[unit]?.finishedAttack===state.step)
+  const overwatch=state.step===1&&state.overwatch?.stage==='shoot'&&state.overwatch.unit===unit;
+  if (state.status!=='playing' || !overwatch&&(![2,4].includes(state.step)||state.units[unit]?.finishedAttack===state.step))
     throw new Error('이 분대는 현재 공격을 선언할 수 없습니다.');
   if (!Number.isInteger(copies) || copies<1 || copies>46 || (pending?.count||0)+copies>276)
     throw new RangeError('잘못된 위험 무기 개수');
@@ -136,7 +144,7 @@ export function resolveHazard(state,pieces,preferred=null,random=Math.random,rol
   const total=remaining;
   const hp={...state.hp},removed={};
   let next={...state,hp};
-  if(pending.reason!=='escape')next.units={...state.units,[pending.unit]:{...state.units[pending.unit],finishedAttack:state.step}};
+  if(pending.reason!=='escape'&&!state.overwatch)next.units={...state.units,[pending.unit]:{...state.units[pending.unit],finishedAttack:state.step}};
   while (remaining>0) {
     const candidates=hazardCandidates(next,pieces);
     if (!candidates.length) {remaining=0;break;}
@@ -178,7 +186,7 @@ export function attackSkill(weapon,{cover=false,plunging=false,ignorePenalties=f
   return clamp(weapon.skill+Number(covered)-Number(ranged&&plunging),2,6);
 }
 
-export function attackThresholds(state,defenders,weapon,{cover,plunging=false,hitMod,woundMod,ignorePenalties}){
+export function attackThresholds(state,defenders,weapon,{cover,plunging=false,hitMod,woundMod,ignorePenalties,snap=false}){
   const bodyguards=defenders.filter(p=>!character(p));
   const toughness=Math.max(...(bodyguards.length ? bodyguards : defenders).map(p=>p.profile.toughness));
   if (weapon.strength>toughness && hasWaaagh(state,defenders[0])) woundMod-=1;
@@ -188,14 +196,14 @@ export function attackThresholds(state,defenders,weapon,{cover,plunging=false,hi
   const woundTarget=woundThreshold(weapon.strength,toughness);
   const anti=weapon.antiVehicle&&defenders.some(p=>p.kind==='landSpeeder');
   const critical=d=>d===6||!!anti&&d>=weapon.antiVehicle;
-  return {critical,hits:d=>d!==1&&(d===6||d+clamp(hitMod,-1,1)>=hitTarget),
+  return {critical,hits:d=>snap?d===6:d!==1&&(d===6||d+clamp(hitMod,-1,1)>=hitTarget),
     wounds:d=>d!==1&&(critical(d)||d+clamp(woundMod,-1,1)>=woundTarget)};
 }
 
 // Resolve a single weapon profile. The defender chooses the order of models with
 // otherwise identical allocation priority. Each damage roll belongs to one attack.
 export function resolveAttack({weapon,targets,preferred,precisionTarget=null,awaitAllocation=false,rolled=null,state,distance,cover=false,hitMod=0,
-  woundMod=0,extraAttacks=0,copies=1,attackCount=null,lethal=false,sustained=false,ignorePenalties=false,plunging=false,random=Math.random}) {
+  woundMod=0,extraAttacks=0,copies=1,attackCount=null,lethal=false,sustained=false,ignorePenalties=false,plunging=false,snap=false,random=Math.random}) {
   const living=targets.filter(p=>currentHP(state,p)>0);
   if (!living.length) throw new Error('생존한 표적이 없습니다.');
   const inRange=weapon.range===0 || distance<=weapon.range;
@@ -207,7 +215,7 @@ export function resolveAttack({weapon,targets,preferred,precisionTarget=null,awa
   let count=attackCount??0;
   if(attackCount===null)for(let i=0;i<copies;i++) count+=diceValue(weapon.attacks,random)+bonus;
   const defenders = living.map(p=>({...p,profile:modelProfile(state,p),hp:currentHP(state,p)}));
-  const required=attackThresholds(state,defenders,weapon,{cover,plunging,hitMod,woundMod,ignorePenalties});
+  const required=attackThresholds(state,defenders,weapon,{cover,plunging,hitMod,woundMod,ignorePenalties,snap});
   const hitDice=rolled?.hitDice??[],woundDice=rolled?.woundDice??[],saves=[],damage=[];
   let hits=rolled?.hits??0,wounds=rolled?.wounds??0,devastating=rolled?.devastating??0;
   const woundOnce=autoWound=>{
@@ -224,8 +232,9 @@ export function resolveAttack({weapon,targets,preferred,precisionTarget=null,awa
     const hit=weapon.torrent ? null : roll(6,random);
     if (hit!==null) hitDice.push(hit);
     if (hit!==null && !required.hits(hit)) continue;
-    woundOnce(hit===6 && lethal);
-    if (hit===6 && sustained) woundOnce(false);
+    const criticalHit=hit===6&&!snap;
+    woundOnce(criticalHit && lethal);
+    if (criticalHit && sustained) woundOnce(false);
   }
   if(awaitAllocation && wounds)return {count,hits,wounds,hitDice,woundDice,devastating};
   if(rolled)for(let i=0;i<wounds-devastating;i++)saves.push(roll(6,random));

@@ -10,6 +10,7 @@ const poseKeys=['x','z','elevation','yaw'];
 function movementPhase(game) {
   const rules=game.rules;
   if(rules?.status!=='playing' || rules.step!==1) throw new Error('대전의 이동 페이즈에서 사용할 수 있습니다.');
+  if(rules.overwatch)throw new Error('경계 사격 순서에 들어가 이번 단계의 이동이 끝났습니다.');
   return {hp:{},units:{},attachments:{},...rules};
 }
 function actingModel(game,actor) {
