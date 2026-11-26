@@ -135,3 +135,11 @@ A/B/C 맵에서는 게임이 상대 배치 구역을 검사한다. 제품 전장
 두 표면점 검사에서는 화면에 표시할 3D 조형의 표면을 직접 찍는다. 게임은 두 점 사이에서 지름 1mm인 원기둥과 교차하는 다른 기물의 삼각형을 찾아 이름을 표시한다. 양 끝을 넘은 기물은 제외한다. 한 점 쌍이 막히면 두 플레이어는 다른 지점에서도 시선을 확인할 수 있다. 작은 조형 오차와 13.07의 지형 구역 효과는 별도로 판단한다.
 
 훈련 3·4의 시점은 각 훈련의 인쇄 편성을 사용한다. 핸드북 65쪽은 보이는 모델과 엄폐를 설명하며, 게임은 위 코어 규칙에 따라 두 분대의 다른 모델을 숨겨 그 판단을 돕는다. 시점 열기와 닫기는 플레이어가 선택한 가시성이나 엄폐를 변경하지 않는다. [훈련 3 가시성 및 엄폐](TRAINING-THREE-SHOOTING.md) · [훈련 4 사격](TRAINING-FOUR-SHOOTING.md)
+
+## 지휘 단계의 전장 충격과 임무 점수
+
+지휘 단계의 활성 플레이어는 이미 전장 충격 상태인 분대와 절반 이하인 분대를 각각 한 번 검사한다. 두 조건이 겹쳐도 한 번만 굴린다. 합류 분대는 게임 시작 당시 인원으로 절반을 계산하고, 단일 모델 분대는 남은 상처를 확인한다. 살아 있는 예비대도 같은 조건으로 검사한다. 게임은 모든 의무 검사를 마친 뒤 현재 점유력으로 거점과 임무 점수를 확정한다. [공식 기본 규칙 §08.03–08.05 및 예시 30–31쪽](https://assets.warhammer-community.com/eng_01-06_warhammer40k_new40k_core_rules-was6fbu1ix-hfewhmxyiy.pdf#page=30) · [공식 시작 병력 부록 86쪽](https://assets.warhammer-community.com/eng_01-06_warhammer40k_new40k_core_rules-was6fbu1ix-hfewhmxyiy.pdf#page=86) · [앱 부록 §01.02.04 전장 밖 분대](https://wahapedia.ru/wh40k11ed_cp/the-rules/rules-appendix/#Not-On-The-Battlefield)
+
+불굴의 용기로 자동 통과한 분대는 이번 검사를 마친다. §15.02의 지휘 재굴림 대상에는 전장 충격 2D6가 없다. 실패로 받은 충격은 다음 자기 지휘 단계의 검사에 통과하면 해제된다. 중간 저장은 이번 턴 검사 결과를 보존한다. 이미 이동 단계로 넘어간 구판 대전은 예전 승점으로 재개한다. [공식 기본 규칙 §15.02–15.03](https://assets.warhammer-community.com/eng_01-06_warhammer40k_new40k_core_rules-was6fbu1ix-hfewhmxyiy.pdf#page=55)
+
+7월 스타터의 오크 카드 앞면은 **자기 지휘 단계 시작에** 와아!를 선포하도록 한다. 전장 충격 결과를 보거나 자동 통과한 뒤에는 선포할 수 없다. 뒷면의 전투 함성은 자기 지휘 단계의 일반 능력이어서 검사 뒤에 보이즈를 복귀시킨다. 새 저장은 이번 턴에 전투 함성을 썼는지 기록한다. 구판 저장에 전투 전체 사용 여부만 있으면 사용한 턴은 확정할 수 없다. 마린 전투 교리도 자기 지휘 단계 일반 능력으로 처리한다. [실물 오크 카드 앞면](https://www.brueckenkopf-online.com/wp-content/uploads/2026/07/Brueckenkopf-Online_Unboxing-Warhammer-40.000-%E2%80%93-Starterset-11.-Edition-45-e1785095088521.jpeg) · [실물 오크 카드 뒷면](https://www.brueckenkopf-online.com/wp-content/uploads/2026/07/Brueckenkopf-Online_Unboxing-Warhammer-40.000-%E2%80%93-Starterset-11.-Edition-46-e1785095099140.jpeg) · [마린 교리 전사본](https://wahapedia.ru/wh40k11ed_cp/factions/assault-force/#Combat-Doctrines)

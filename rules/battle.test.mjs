@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {getProfile,profiles,unitId} from './profiles.mjs';
 import {newBattle,startBattle,advance,roll,diceValue,woundThreshold,changeUnit,unitMembers,
-  needsShock,shockTest,currentHP,adjustHP,resolveAttack,engaged,weaponSlot,controlObjective,
+  needsShock,shockTest,resolveCommandShock,currentHP,adjustHP,resolveAttack,engaged,weaponSlot,controlObjective,
   queueHazard,hazardCandidates,resolveHazard} from './battle.mjs';
 
 const piece=(kind,variant=0,faction='marines')=>({id:kind+'-'+variant,kind,variant,faction});
@@ -28,6 +28,8 @@ test('a one-round game gives both players one full turn and stops',()=>{
   let state=startBattle(newBattle(),'orks',1);
   assert.deepEqual(state.cp,{marines:1,orks:1});
   state=changeUnit(state,boy,{movement:'advance',shocked:true});
+  assert.equal(advance(state),state);
+  state=resolveCommandShock(state,[boy],'boy-0',sequence(1,1)).state;
   for(let i=0;i<6;i++) state=advance(state);
   assert.equal(state.step,0);
   assert.equal(state.active,'marines');

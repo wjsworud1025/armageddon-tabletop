@@ -71,7 +71,7 @@ const declaration=fields({unit:group,mode:oneOf(['overwatch']),locked:boolean,di
   coverBoard:v=>sightBoard(v)&&Object.keys(v).length===catalog.size},['unit','locked','focus','rows']);
 const characterId=oneOf(['captain-1','librarian-1','warboss-1','weirdboy-1']);
 const unit = fields({
-  shocked:boolean,shockChecked:boolean,epicChallengeModel:characterId,reinforcing:boolean,movementTracked:boolean,movement:oneOf(['normal','advance','fallback','remain']),
+  shocked:boolean,shockChecked:boolean,rallied:boolean,epicChallengeModel:characterId,reinforcing:boolean,movementTracked:boolean,movement:oneOf(['normal','advance','fallback','remain']),
   order:string,charge:int(0,12),chargeTracked:boolean,charged:boolean,rerolled:boolean,attacks,finishedAttack:attackStep,
   counterCharge:boolean,reaction:boolean,reactionTracked:boolean,fightsFirst:boolean,shotAt:boolean,suppressedEnemy:boolean,hitTargets:list(group,12),suppressionTargets:list(group,12)
 });
@@ -165,6 +165,13 @@ export function validateRulesState(value,pieceRecords=null,layout=undefined) {
   if (fields({hp},['hp'])(value)) return true;
   if(pieceRecords&&(!Array.isArray(pieceRecords)||pieceRecords.some(p=>!p||!catalog.has(p.id))))return false;
   if(!battle(value) || value.round>value.rounds||!officialStateOK(value,pieceRecords))return false;
+  // A completed Command-phase test belongs to the active player's current
+  // turn. The flag survives its later phases and is cleared at handover.
+  if(Object.entries(value.units??{}).some(([key,u])=>u.shockChecked&&
+    (value.status==='setup'||groupTeam(key)!==value.active)))return false;
+  if(Object.entries(value.units??{}).some(([key,u])=>u.rallied&&
+    (value.status==='setup'||value.active!=='orks'||key!==(value.attachments?.['warboss-1']??'warboss')||
+    !value.patrol?.enhanced?.warcry||!value.patrol.warcryUsed)))return false;
   if(value.rangedHistory){
     const turn=playerTurnNumber(value),{since,last}=value.rangedHistory;
     if(value.status==='setup'||since>turn+1||Object.values(last).some(t=>t>turn||t<since-1))return false;

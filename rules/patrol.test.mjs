@@ -29,6 +29,16 @@ test('Waaagh lasts two player turns, its wound penalty only applies if S > T',()
   const hit=resolveAttack({weapon,targets:[weird],state:s,distance:3,random:()=>.4});
   assert.equal(hit.wounds,0);
 });
+test('printed Waaagh! starts before checks or Rallying War Cry, including a successful automatic test',()=>{
+  const orks=start('orks');
+  assert.ok(selectOrder({...orks,units:{warboss:{shocked:true}}},'waaagh'));
+  for(const order of [{shockChecked:true,shocked:true},{shockChecked:true,shocked:false},{rallied:true}]){
+    assert.equal(selectOrder({...orks,units:{warboss:order}},'waaagh'),null);
+  }
+  assert.equal(selectOrder(start('marines'),'waaagh'),null);
+  const oldWarCry={...orks,patrol:{...orks.patrol,warcryUsed:true}};
+  assert.ok(selectOrder(oldWarCry,'waaagh'),'a prior battle-wide use does not establish which turn it occurred in');
+});
 test('stratagem spends 1 CP once in phase and expires; enhancements change actual stats',()=>{
   const s=start('marines');s.step=2;
   const marked=useTactic(s,'med','gretchin','orks',false);

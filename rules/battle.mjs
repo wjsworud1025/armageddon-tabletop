@@ -1,4 +1,5 @@
 import {getProfile, unitId} from './profiles.mjs';
+import {createTable} from '../data/catalog.mjs';
 import {freshPatrol,nextPatrolTurn,effectProfile,hasWaaagh} from './patrol.mjs';
 import {openOverwatch} from './overwatch.mjs';
 import {recoverRangedHistory} from './ranged-history.mjs';
@@ -19,6 +20,7 @@ export function startBattle(state,first,rounds) {
 export function advance(state,pieces) {
   if (state.status !== 'playing' || state.hazard || state.declaration || state.movePlan || state.reinforcePlan || state.chargePlan || state.fightPlan || state.fightSequence?.counterAfter || state.shootingReaction || state.reactionPlan || state.units?.wartrakk?.suppressionTargets?.length) return state;
   if(state.overwatch&&state.overwatch.stage!=='done')return state;
+  if(pendingCommandShock(state,pieces).length)return state;
   state=recoverRangedHistory(state);
   if(state.step===1&&pieces&&!state.overwatch){
     const offer=openOverwatch(state,pieces);
@@ -55,10 +57,10 @@ export function woundThreshold(strength,toughness) {
 }
 export function currentHP(state,piece) {
   if (piece.removed) return 0;
-  return state.hp[piece.id] ?? getProfile(piece)?.wounds ?? 0;
+  return state.hp?.[piece.id] ?? getProfile(piece)?.wounds ?? 0;
 }
 export function groupId(state,piece) {
-  return state.attachments[piece.id] || unitId(piece);
+  return state.attachments?.[piece.id] || unitId(piece);
 }
 export function modelProfile(state,piece) {
   const key=groupId(state,piece);
@@ -83,19 +85,54 @@ export function changeUnit(state,piece,delta) {
   const key = groupId(state,piece);
   return {...state,units:{...state.units,[key]:{...state.units[key],...delta}}};
 }
+// 01.02.04: models in strategic reserves still count for Command-phase
+// battle-shock. Their table pieces are marked removed until they arrive.
+function shockWounds(state,p){
+  if(state.reserves?.[groupId(state,p)]?.includes(p.id))return state.hp?.[p.id]??getProfile(p).wounds;
+  return currentHP(state,p);
+}
 export function needsShock(state,members) {
-  const alive=members.filter(p=>currentHP(state,p)>0);
+  const alive=members.filter(p=>shockWounds(state,p)>0);
   if (!alive.length) return false;
-  if (state.units[groupId(state,alive[0])]?.shocked) return true;
-  if (members.length===1) return currentHP(state,alive[0])*2 <= getProfile(alive[0]).wounds;
+  if (state.units?.[groupId(state,alive[0])]?.shocked) return true;
+  if (members.length===1) return shockWounds(state,alive[0])*2 <= getProfile(alive[0]).wounds;
   return alive.length*2 <= members.length;
 }
+let starterRoster;
+export function pendingCommandShock(state,pieces){
+  if(state.status!=='playing'||state.step!==0)return [];
+  // Stateless callers can still advance a starter game using its saved HP
+  // ledger. The table supplies its complete roster, including removed pieces.
+  if(!pieces){
+    starterRoster??=createTable().pieces;
+    pieces=starterRoster;
+  }
+  const groups=new Map();
+  for(const p of pieces){
+    if(p.faction!==state.active||!getProfile(p))continue;
+    const unit=groupId(state,p);
+    if(state.units?.[unit]?.shockChecked)continue;
+    if(!groups.has(unit))groups.set(unit,[]);
+    groups.get(unit).push(p);
+  }
+  const pending=[];
+  for(const [unit,members] of groups){
+    if(needsShock(state,members))pending.push({unit,model:members.find(p=>shockWounds(state,p)>0)});
+  }
+  return pending;
+}
 export function shockTest(state,members,random=Math.random) {
-  const alive=members.filter(p=>currentHP(state,p)>0);
+  const alive=members.filter(p=>shockWounds(state,p)>0);
   if (!alive.length) return null;
   const dice=[roll(6,random),roll(6,random)];
   const target=Math.min(...alive.map(p=>getProfile(p).leadership));
   return {dice,target,passed:dice[0]+dice[1]>=target};
+}
+export function resolveCommandShock(state,pieces,unit,random=Math.random){
+  const pending=pendingCommandShock(state,pieces).find(p=>p.unit===unit);
+  if(!pending)return null;
+  const result=shockTest(state,unitMembers(state,pieces,pending.model),random);
+  return {...result,state:changeUnit(state,pending.model,{shocked:!result.passed,shockChecked:true})};
 }
 export function adjustHP(state,piece,delta) {
   const hp = clamp(currentHP(state,piece)+delta,0,getProfile(piece).wounds);

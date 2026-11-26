@@ -30,7 +30,10 @@ export function selectOrder(state,key) {
   const p=state.patrol;
   if (state.status!=='playing' || state.step!==0) return null;
   if (key==='waaagh') {
-    if (state.active!=='orks' || p.waaaghUsed) return null;
+    // Waaagh! is a start-of-phase choice. Both a resolved shock test
+    // (including an automatic pass) and Rallying War Cry occur later.
+    if (state.active!=='orks' || p.waaaghUsed ||
+      Object.values(state.units??{}).some(unit=>unit.shockChecked||unit.rallied)) return null;
     return {...state,patrol:{...p,waaagh:2,waaaghUsed:true}};
   }
   if (!(key in doctrines) || state.active!=='marines' || p.doctrine || p.usedDoctrines.includes(key)) return null;
