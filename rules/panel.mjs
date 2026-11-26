@@ -473,6 +473,20 @@ export function mountRules(container,api) {
   }
   function refresh() {
     if (writing) return;
+    const control=document.activeElement;
+    const restore=control?.matches('[data-act],[data-field]')&&root.contains(control);
+    renderPanel();
+    if(!restore||control.isConnected||document.activeElement!==document.body||!container.checkVisibility())return;
+    const selector=Object.entries(control.dataset).map(([key,value])=>
+      '[data-'+key.replace(/[A-Z]/g,c=>'-'+c.toLowerCase())+'="'+CSS.escape(value)+'"]').join('');
+    const replacement=root.querySelector(selector);
+    if(replacement&&!replacement.disabled)replacement.focus({preventScroll:true});
+    if(document.activeElement===document.body){
+      container.focus({preventScroll:true});
+      if(container.parentElement.firstElementChild===container)container.parentElement.scrollTop=0;
+    }
+  }
+  function renderPanel() {
     const state=read();
     restoreMovementSelection(state);
     if(officialPreparing(state)){

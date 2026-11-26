@@ -102,28 +102,8 @@ function canRestoreFrom(stack){
   const from=game.rules?.formations?.stage,to=target.rules?.formations?.stage;
   return !(from==='handoff'&&to==='marines'||from==='orks'&&to==='handoff'||from==='revealed'&&to==='orks');
 }
-let battlePanelMode='',trainingReturn=null,lastRuleControl=null;
+let battlePanelMode='',trainingReturn=null;
 const battlePane=$('battle'),rulesPane=$('rules');
-document.addEventListener('focusin',event=>{
-  lastRuleControl=rulesPane.contains(event.target)&&event.target.matches('[data-act],[data-field]')?event.target:null;
-});
-// The rules panel replaces its controls after a decision. Keep keyboard focus
-// on the matching control, or the new decision region when that action ends.
-new MutationObserver(()=>{
-  if(!lastRuleControl||lastRuleControl.isConnected||battlePane.hidden||game.training||
-    document.activeElement!==document.body)return;
-  const old=lastRuleControl;
-  lastRuleControl=null;
-  const selector=Object.entries(old.dataset).map(([key,value])=>
-    '[data-'+key.replace(/[A-Z]/g,c=>'-'+c.toLowerCase())+'="'+CSS.escape(value)+'"]').join('');
-  const next=rulesPane.querySelector(selector);
-  if(next&&!next.disabled)next.focus({preventScroll:true});
-  else{
-    rulesPane.focus({preventScroll:true});
-    if(battlePane.firstElementChild===rulesPane)battlePane.scrollTop=0;
-  }
-}).observe(rulesPane,{childList:true,subtree:true});
-
 function syncBattlePanel(){
   const inBattle=officialPreparing(game.rules)||['playing','finished'].includes(game.rules?.status);
   const mode=game.training?'training-'+game.training.scenario:inBattle?'battle':'setup';
