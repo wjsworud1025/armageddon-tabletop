@@ -81,7 +81,8 @@ export function checkGretchinSight(tools){
 export function checkBarricadeSight(tools){
   return checkSightSamples(tools,[
     ['06-barricade-open-rail','barricade-1',.97,1.70,-.15,false],
-    ['06-barricade-crossbar','barricade-1',.97,1.94,-.15,true]
+    ['06-barricade-crossbar','barricade-1',.97,1.94,-.15,true],
+    ['06-barricade-perforation','barricade-1',1.035,2.15,-.15,true]
   ]);
 }
 
