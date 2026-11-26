@@ -1,6 +1,7 @@
 import {baseDistance} from './state.mjs';
 import {getProfile} from './rules/profiles.mjs';
 import {groupId} from './rules/battle.mjs';
+import {patrolTerrainPlacement} from './rules/patrol-terrain-placement.mjs';
 
 // Core Rules 03.01–04, 09.04–07, 13.06, 17.01, 21.03 and Different Move Characteristics.
 // Horizontal distances are in inches, yaw is in radians, elevation is base height in inches.
@@ -206,9 +207,10 @@ export function assessMove({game,pieces,origins={},paths={},type,advanceRoll=0,p
     if(distance>budget+EPS) fail('distance',[p.id],p.name+'의 누적 이동 거리가 허용 거리를 초과합니다.');
     models[p.id]={distance,limit:budget,end:pose(position)};
     ends.push(position);
-    if(phase==='finish' && type!=='remain' && position.elevation>EPS) {
-      if(p.kind==='wartrakk') fail('upper-floor',[p.id],'워트랙은 지형의 지상층 위에서 이동을 마칠 수 없습니다.');
-      else check('supported-floor',[p.id],'모델이 바닥에 안정적으로 서며 베이스가 가장자리 밖으로 나오지 않는지 확인하세요.');
+    if(phase==='finish' && type!=='remain' && position.elevation>0) {
+      const support=patrolTerrainPlacement(position,others);
+      if(support.error) fail(p.kind==='wartrakk'?'upper-floor':'unsupported-floor',[p.id],support.error);
+      else if(support.manual) check('supported-floor',[p.id],support.manual);
     }
   }
   if(phase!=='finish' || type==='remain') return result(null);
