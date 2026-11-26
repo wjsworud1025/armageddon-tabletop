@@ -556,7 +556,20 @@ $('save').onclick=()=>{const data=new Blob([JSON.stringify(snapshot(game),null,2
   const url=URL.createObjectURL(data),a=document.createElement('a');a.href=url;a.download='armageddon-table.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)};
 $('load').onclick=()=>$('file').click();
 $('file').onchange=async()=>{const file=$('file').files[0];try{if(file){if(file.size>2_000_000)throw Error('저장 파일이 너무 큽니다.');const result=restore(template,JSON.parse(await file.text()));checkpoint();game=result;select(null);changed();toast('전장을 불러왔습니다.')}}catch(e){toast(e.message)}finally{$('file').value=''}};
-$('reset').onclick=()=>$('question').showModal();$('question').onclose=()=>{if($('question').returnValue==='yes'){checkpoint();game=fresh();select(null);changed();scene?.home()}};
+const newGameDialog=$('question');
+function requestNewGame(){
+  newGameDialog.returnValue='';
+  newGameDialog.showModal();
+}
+$('reset').onclick=requestNewGame;
+newGameDialog.onclose=()=>{
+  if(newGameDialog.returnValue!=='yes')return;
+  checkpoint();
+  game=fresh();
+  select(null);
+  changed();
+  scene?.home();
+};
 document.addEventListener('keydown',e=>{if(e.target.closest('input,select,textarea,dialog')||$('question').open)return;
   if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){e.preventDefault();undo(e.shiftKey)}
   else if(e.key==='Escape'){setMode('pick');select(null)}
@@ -611,6 +624,7 @@ function rallyCommand(command,id,pose){
   if(command==='finish')toast(result.message);
 }
 const api={
+  requestNewGame,
   rallyCommand,
   inspectSight,exitSight,
   getTable:()=>game,
